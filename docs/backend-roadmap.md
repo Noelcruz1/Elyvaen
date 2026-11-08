@@ -19,7 +19,7 @@ Objetivo: cerrar el backend DAP antes del frontend. Sin Magisk y sin flashear ha
 - Controles ALSA internos `UAC2 Host Volume` y `UAC2 Host Mute`.
 - El daemon aplica ganancia/mute en punto fijo, sin tocar el PCM del kernel.
 - Aceptación: mover el volumen de la PC cambia el nivel interno; mute silencia sin cortar el flujo; sin denials.
-- Estado: en curso.
+- Estado: implementado offline; pendiente validación con host real.
 
 ### 2. Modo USB DAC automático
 

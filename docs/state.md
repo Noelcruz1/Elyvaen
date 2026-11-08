@@ -56,7 +56,8 @@ Fecha: 2026-11-08. Regla vigente: **no flashear nada hasta que el backend esté 
 
 - Daemon implementado en `src/uac2d.c`; compila estático arm64 con musl.
 - Kernel multifrecuencia: commit local `006ec6844`, parche `patches/kernel/0002-uac2-multirate.patch`; build `build-kernel-uac2-mr/` (Image + 58 módulos).
-- Daemon: rate probe, control ALSA `UAC2 Capture Rate`, reapertura al cambiar frecuencia y ring adaptativo para deriva (drop/silencio).
+- Feature Unit volumen/mute: commit local `21036cc3f`, parche `patches/kernel/0003-uac2-volume-mute.patch`; build `build-kernel-uac2-vol/` (Image + 58 módulos).
+- Daemon: rate probe, controles ALSA `UAC2 Capture Rate`/`UAC2 Host Volume`/`UAC2 Host Mute`, reapertura al cambiar frecuencia, ring adaptativo y ganancia Q15.
 - Self-test de conversión S16/S24_3/S32 pasa en x86_64, ASan/UBSan y `qemu-aarch64`.
 - Binario incluido en `payload/vendor/bin/hw/elyvaen-uac2d` (0755), etiquetado `hal_audio_default_exec`.
 - Config: `payload/system/etc/elyvaen/uac2.conf` (48 kHz, 24-bit, 2 canales por defecto).
@@ -68,5 +69,5 @@ Fecha: 2026-11-08. Regla vigente: **no flashear nada hasta que el backend esté 
 - **No se ha probado end-to-end**: ni el kernel UAC2 fijo ni el multifrecuencia están flasheados; el dispositivo no estaba conectado durante esta fase.
 - Pendiente: probar configfs real (`uac2.0`), tarjeta `UAC2_Gadget`, transición SELinux a `hal_audio_default`, conflicto con `UsbGadget`, y latencia/underruns.
 - SELinux resuelto sin Magisk: se reutiliza el dominio/exec type existente `hal_audio_default` del HAL de audio, que ya tiene acceso completo a `audio_device`; el binario va en vendor y se parchea `vendor_file_contexts`.
-- Pendiente de audio: validar que el host realmente envíe `SET_CUR`, que `c_srate` cambie, que el control ALSA lo refleje y que el ring no introduzca clics.
+- Pendiente de audio: validar que el host envíe `SET_CUR`, que `c_srate`/volumen/mute cambien, que el Feature Unit enumere y que el ring/ganancia no introduzcan clics.
 - No se flasheó ni se modificó el dispositivo en esta fase.
