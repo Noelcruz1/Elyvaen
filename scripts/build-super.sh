@@ -156,7 +156,7 @@ apply_payload() {
             *) dst="/$rest" ;;
         esac
         case "$rest" in
-            *.sh) mode=0100755 ;;
+            *.sh|bin/*) mode=0100755 ;;
             *) mode=0100644 ;;
         esac
         install_file "$img" "$src" "$dst" "$mode" "$ctx"

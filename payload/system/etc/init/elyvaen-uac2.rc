@@ -1,0 +1,31 @@
+service elyvaen-uac2d /system/bin/elyvaen-uac2d --config /system/etc/elyvaen/uac2.conf
+    class late_start
+    user root
+    group root audio system
+    disabled
+
+service elyvaen-usb-dac-on /system/bin/sh /system/bin/elyvaen-usb-dac.sh on
+    class late_start
+    user root
+    group root audio system
+    disabled
+    oneshot
+
+service elyvaen-usb-dac-off /system/bin/sh /system/bin/elyvaen-usb-dac.sh off
+    class late_start
+    user root
+    group root audio system
+    disabled
+    oneshot
+
+on property:sys.elyvaen.usbdac=1
+    start elyvaen-uac2d
+
+on property:sys.elyvaen.usbdac=0
+    stop elyvaen-uac2d
+
+on property:sys.elyvaen.usbdac.request=1
+    start elyvaen-usb-dac-on
+
+on property:sys.elyvaen.usbdac.request=0
+    start elyvaen-usb-dac-off
