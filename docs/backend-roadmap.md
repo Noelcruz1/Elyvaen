@@ -29,6 +29,7 @@ Objetivo: cerrar el backend DAP antes del frontend. Sin Magisk y sin flashear ha
 - Restaurar DAP al desconectar.
 - Aceptación: conectar PC activa el modo sin intervención; desconectar vuelve a la app; ADB sigue disponible.
 - Dependencias: servicio init, audio focus, `UsbGadget`.
+- Estado: implementado offline; pendiente validar liberación de PCM, ADB/MTP y resets del HAL USB.
 
 ### 3. Latencia/RT y estabilidad
 
