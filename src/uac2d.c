@@ -3,6 +3,7 @@
 #include <fcntl.h>
 #include <math.h>
 #include <poll.h>
+#include <sched.h>
 #include <signal.h>
 #include <stdarg.h>
 #include <stdint.h>
@@ -11,6 +12,8 @@
 #include <string.h>
 #include <strings.h>
 #include <sys/ioctl.h>
+#include <sys/mman.h>
+#include <sys/resource.h>
 #include <time.h>
 #include <unistd.h>
 #include <sound/asound.h>
@@ -49,6 +52,7 @@ struct opts {
     int playback_device;
     int capture_format;
     int playback_format;
+    int cpu;
     const char *config_path;
     const char *log_path;
     char log_path_buf[256];
@@ -904,6 +908,9 @@ static int run_bridge(struct opts *o)
     time_t next_rate_check;
     struct frame_ring ring;
     unsigned long long drops = 0;
+    unsigned long long xruns_in = 0;
+    unsigned long long xruns_out = 0;
+    unsigned long long silence_frames = 0;
     int host_volume = 0;
     int host_mute = 0;
     int32_t gain_q15 = 32768;
@@ -1072,7 +1079,9 @@ static int run_bridge(struct opts *o)
     gain_q15 = host_mute ? 0 : volume_gain_q15(host_volume);
 
     next_rate_check = time(NULL) + 1;
-    while (!stop_requested) {
+    {
+        time_t next_stats = time(NULL) + 60;
+        while (!stop_requested) {
         struct pollfd fds[2];
         int pr;
 
@@ -1097,6 +1106,12 @@ static int run_bridge(struct opts *o)
                 }
             }
             next_rate_check = time(NULL) + 1;
+            if (time(NULL) >= next_stats) {
+                log_msg("uac2d: stats drops=%llu xruns_in=%llu "
+                        "xruns_out=%llu silence=%llu\n",
+                        drops, xruns_in, xruns_out, silence_frames);
+                next_stats = time(NULL) + 60;
+            }
         }
 
         fds[0].fd = cap.fd;
@@ -1121,8 +1136,11 @@ static int run_bridge(struct opts *o)
                     ring_consume(&ring, w);
             } else {
                 w = pcm_write(&pb, silence, period);
+                if (w > 0)
+                    silence_frames += (unsigned long long)w;
             }
             if (w == -EPIPE) {
+                xruns_out++;
                 pcm_prepare(&pb);
                 pcm_start(&pb);
             } else if (w < 0 && w != -EAGAIN) {
@@ -1141,6 +1159,7 @@ static int run_bridge(struct opts *o)
                 apply_gain(pb_fmt, pbbuf, n, o->channels, gain_q15);
                 drops += (unsigned long long)ring_push(&ring, pbbuf, n);
             } else if (n == -EPIPE) {
+                xruns_in++;
                 pcm_prepare(&cap);
                 pcm_start(&cap);
             } else if (n < 0 && n != -EAGAIN) {
@@ -1159,8 +1178,11 @@ static int run_bridge(struct opts *o)
                     ring_consume(&ring, w);
             } else {
                 w = pcm_write(&pb, silence, period);
+                if (w > 0)
+                    silence_frames += (unsigned long long)w;
             }
             if (w == -EPIPE) {
+                xruns_out++;
                 pcm_prepare(&pb);
                 pcm_start(&pb);
             } else if (w < 0 && w != -EAGAIN) {
@@ -1168,6 +1190,7 @@ static int run_bridge(struct opts *o)
                 ret = w;
                 break;
             }
+        }
         }
     }
     if (drops)
@@ -1302,6 +1325,37 @@ static int self_test(void)
     return 0;
 }
 
+static void setup_realtime(int cpu)
+{
+    struct sched_param sp;
+    cpu_set_t set;
+
+    memset(&sp, 0, sizeof(sp));
+    sp.sched_priority = 80;
+    if (sched_setscheduler(0, SCHED_FIFO, &sp) < 0)
+        log_msg("uac2d: SCHED_FIFO unavailable: %s\n", strerror(errno));
+    else
+        log_msg("uac2d: SCHED_FIFO priority 80\n");
+
+    if (setpriority(PRIO_PROCESS, 0, -20) < 0)
+        log_msg("uac2d: setpriority failed: %s\n", strerror(errno));
+
+    if (mlockall(MCL_CURRENT | MCL_FUTURE) < 0)
+        log_msg("uac2d: mlockall failed: %s\n", strerror(errno));
+    else
+        log_msg("uac2d: memory locked\n");
+
+    if (cpu >= 0) {
+        CPU_ZERO(&set);
+        CPU_SET(cpu, &set);
+        if (sched_setaffinity(0, sizeof(set), &set) < 0)
+            log_msg("uac2d: affinity cpu %d failed: %s\n", cpu,
+                    strerror(errno));
+        else
+            log_msg("uac2d: affinity cpu %d\n", cpu);
+    }
+}
+
 static void usage(const char *argv0)
 {
     fprintf(stdout,
@@ -1318,6 +1372,7 @@ static void usage(const char *argv0)
             "  --playback-device N    internal PCM device (default 0)\n"
             "  --capture-format FMT   s16le, s24_3le, s24le or s32le\n"
             "  --playback-format FMT  s16le, s24_3le, s24le or s32le\n"
+            "  --cpu N                pin daemon to CPU N\n"
             "  --log PATH             append log to PATH\n"
             "  --self-test            run conversion self-test\n"
             "  --help                 show this help\n",
@@ -1390,6 +1445,8 @@ static int parse_args(struct opts *o, int argc, char **argv)
             o->capture_format = fmt_from_name(v);
         else if (!strcmp(a, "--playback-format"))
             o->playback_format = fmt_from_name(v);
+        else if (!strcmp(a, "--cpu") && parse_int(v, &o->cpu) == 0)
+            ;
         else if (!strcmp(a, "--log"))
             o->log_path = v;
         else {
@@ -1459,6 +1516,8 @@ static int load_config(struct opts *o, const char *path)
             o->capture_format = fmt_from_name(val);
         else if (!strcmp(key, "playback_format"))
             o->playback_format = fmt_from_name(val);
+        else if (!strcmp(key, "cpu"))
+            parse_int(val, &o->cpu);
         else if (!strcmp(key, "log")) {
             snprintf(o->log_path_buf, sizeof(o->log_path_buf), "%s", val);
             o->log_path = o->log_path_buf;
@@ -1485,6 +1544,7 @@ int main(int argc, char **argv)
     o.playback_device = 0;
     o.capture_format = -1;
     o.playback_format = -1;
+    o.cpu = -1;
     o.config_path = NULL;
 
     {
@@ -1503,7 +1563,8 @@ int main(int argc, char **argv)
     if (o.self_test)
         return self_test();
     if (o.channels < 1 || o.channels > 8 || o.rate < 8000 ||
-        o.rate > 384000 || o.periods < 2 || o.prefill_periods < 0) {
+        o.rate > 384000 || o.periods < 2 || o.prefill_periods < 0 ||
+        o.cpu < -1 || o.cpu > 31) {
         fprintf(stderr, "uac2d: invalid audio parameters\n");
         return 2;
     }
@@ -1518,6 +1579,8 @@ int main(int argc, char **argv)
     } else {
         log_fp = stderr;
     }
+
+    setup_realtime(o.cpu);
 
     signal(SIGTERM, on_signal);
     signal(SIGINT, on_signal);
