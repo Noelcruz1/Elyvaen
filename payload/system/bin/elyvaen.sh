@@ -12,6 +12,7 @@ if ! settings get global zen_mode >/dev/null 2>&1; then
     exit 1
 fi
 setprop sys.elyvaen.running 1
+setprop sys.elyvaen.usbdac.auto 1 >/dev/null 2>&1
 
 settings put system peak_refresh_rate 120 >/dev/null 2>&1
 settings put system min_refresh_rate 60 >/dev/null 2>&1
@@ -52,15 +53,17 @@ audio_tune() {
 
 audio_tune
 
-i=0
-while [ "$i" -lt 10 ]; do
-    TASK=$(dumpsys activity activities 2>/dev/null | sed -n 's/.*Task{[^#]*#\([0-9][0-9]*\).*A=[0-9]*:com\.mardous\.booming.*/\1/p' | head -1)
-    [ -n "$TASK" ] && break
-    am start -n com.mardous.booming/.MainActivity >/dev/null 2>&1
-    sleep 2
-    i=$((i+1))
-done
-[ -n "$TASK" ] && cmd activity task lock "$TASK" >/dev/null 2>&1
+if [ "$(getprop sys.elyvaen.usbdac)" != "1" ]; then
+    i=0
+    while [ "$i" -lt 10 ]; do
+        TASK=$(dumpsys activity activities 2>/dev/null | sed -n 's/.*Task{[^#]*#\([0-9][0-9]*\).*A=[0-9]*:com\.mardous\.booming.*/\1/p' | head -1)
+        [ -n "$TASK" ] && break
+        am start -n com.mardous.booming/.MainActivity >/dev/null 2>&1
+        sleep 2
+        i=$((i+1))
+    done
+    [ -n "$TASK" ] && cmd activity task lock "$TASK" >/dev/null 2>&1
+fi
 
 while true; do
     settings put global audio_safe_volume_state 2 >/dev/null 2>&1

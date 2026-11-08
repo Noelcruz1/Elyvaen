@@ -7,6 +7,7 @@ FUNC=$GADGET/functions/$FUNC_NAME
 CONF=${ELV_UAC2_CONF:-/system/etc/elyvaen/uac2.conf}
 DAEMON=elyvaen-uac2d
 PROP=sys.elyvaen.usbdac
+TRANSITION_PROP=sys.elyvaen.usbdac.transition
 
 conf_get() {
     [ -r "$CONF" ] || return 0
@@ -102,9 +103,34 @@ daemon_start() {
     fi
     sleep 1
     if ! pidof "$DAEMON" >/dev/null 2>&1; then
+        setprop "$PROP" 0
         echo "elyvaen-usb-dac: init service elyvaen-uac2d did not start" >&2
         return 1
     fi
+}
+
+pause_dap() {
+    if command -v cmd >/dev/null 2>&1; then
+        cmd media_session dispatch pause >/dev/null 2>&1 || true
+    fi
+    if command -v input >/dev/null 2>&1; then
+        input keyevent 127 >/dev/null 2>&1 || true
+    fi
+    sleep 1
+}
+
+resume_dap() {
+    if command -v am >/dev/null 2>&1; then
+        am start -n com.mardous.booming/.MainActivity >/dev/null 2>&1 || true
+    fi
+}
+
+begin_transition() {
+    setprop "$TRANSITION_PROP" 1
+}
+
+end_transition() {
+    setprop "$TRANSITION_PROP" 0
 }
 
 daemon_stop() {
@@ -149,7 +175,9 @@ enable_dac() {
         restore_udc
         return 1
     fi
+    pause_dap
     if ! daemon_start; then
+        resume_dap
         remove_function
         restore_udc
         return 1
@@ -165,6 +193,7 @@ disable_dac() {
         remove_function
         restore_udc
     fi
+    resume_dap
     echo "elyvaen-usb-dac: disabled"
 }
 
@@ -179,9 +208,22 @@ status_dac() {
 
 require_root
 case "${1:-}" in
-    on|enable|start) enable_dac ;;
-    off|disable|stop) disable_dac ;;
-    restart) disable_dac; enable_dac ;;
+    on|enable|start)
+        begin_transition
+        trap end_transition 0
+        enable_dac
+        ;;
+    off|disable|stop)
+        begin_transition
+        trap end_transition 0
+        disable_dac
+        ;;
+    restart)
+        begin_transition
+        trap end_transition 0
+        disable_dac
+        enable_dac
+        ;;
     status) status_dac ;;
     *)
         echo "usage: $0 {on|off|restart|status}" >&2
