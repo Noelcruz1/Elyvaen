@@ -55,6 +55,8 @@ Fecha: 2026-11-08. Regla vigente: **no flashear nada hasta que el backend esté 
 ## UAC2 userspace (2026-11-08)
 
 - Daemon implementado en `src/uac2d.c`; compila estático arm64 con musl.
+- Kernel multifrecuencia: commit local `006ec6844`, parche `patches/kernel/0002-uac2-multirate.patch`; build `build-kernel-uac2-mr/` (Image + 58 módulos).
+- Daemon: rate probe, control ALSA `UAC2 Capture Rate`, reapertura al cambiar frecuencia y ring adaptativo para deriva (drop/silencio).
 - Self-test de conversión S16/S24_3/S32 pasa en x86_64, ASan/UBSan y `qemu-aarch64`.
 - Binario incluido en `payload/vendor/bin/hw/elyvaen-uac2d` (0755), etiquetado `hal_audio_default_exec`.
 - Config: `payload/system/etc/elyvaen/uac2.conf` (48 kHz, 24-bit, 2 canales por defecto).
@@ -63,7 +65,8 @@ Fecha: 2026-11-08. Regla vigente: **no flashear nada hasta que el backend esté 
 - `scripts/build-super.sh` instala binarios de `vendor/bin` con modo 0755, etiqueta el daemon como `hal_audio_default_exec` y agrega la regla a `vendor_file_contexts`.
 - Imagen temporal `build-uac2d-images/work/` validó xattr `hal_audio_default_exec`, modo 0755 y regla de file_contexts. No se flasheó.
 - `scripts/build-uac2d.sh` compila host para self-test y arm64 estático; toolchain en `/workspace/Android/toolchains/aarch64-linux-musl-cross`.
-- **No se ha probado end-to-end**: el kernel UAC2 no está flasheado y el dispositivo no estaba conectado durante esta fase.
+- **No se ha probado end-to-end**: ni el kernel UAC2 fijo ni el multifrecuencia están flasheados; el dispositivo no estaba conectado durante esta fase.
 - Pendiente: probar configfs real (`uac2.0`), tarjeta `UAC2_Gadget`, transición SELinux a `hal_audio_default`, conflicto con `UsbGadget`, y latencia/underruns.
 - SELinux resuelto sin Magisk: se reutiliza el dominio/exec type existente `hal_audio_default` del HAL de audio, que ya tiene acceso completo a `audio_device`; el binario va en vendor y se parchea `vendor_file_contexts`.
+- Pendiente de audio: validar que el host realmente envíe `SET_CUR`, que `c_srate` cambie, que el control ALSA lo refleje y que el ring no introduzca clics.
 - No se flasheó ni se modificó el dispositivo en esta fase.

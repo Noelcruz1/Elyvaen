@@ -5,9 +5,12 @@
 - Rama local: `elyvaen-uac2` del source `Mxiier/kernel_motorola_cypfq`.
 - Commit: `17dbfeb76 config: enable UAC2 USB audio gadget`.
 - Defconfig: `CONFIG_USB_CONFIGFS_F_UAC2=y`, `CONFIG_USB_F_UAC2=y`, `CONFIG_USB_U_AUDIO=y`.
+- Multifrecuencia: commit `006ec6844` / `patches/kernel/0002-uac2-multirate.patch`.
+- El gadget anuncia 44.1, 48, 88.2, 96, 176.4 y 192 kHz; el host elige por `SET_CUR` y el kernel actualiza `params.c_srate`.
+- La tarjeta UAC2 expone el control ALSA de solo lectura `UAC2 Capture Rate` para que el daemon siga el cambio.
 - El driver quedó **built-in** en `Image`; no se generó `usb_f_uac2.ko`.
-- Build: `KERNEL_BUILD=build-kernel-uac2 JOBS=3 ./scripts/build-mxiier-kernel.sh`.
-- Vermagic: `5.4.259-perf+-cypfq-test-g17dbfeb76641 SMP preempt mod_unload aarch64`.
+- Build multifrecuencia validada: `KERNEL_BUILD=build-kernel-uac2-mr BRANCH=elyvaen-uac2 JOBS=3 LOCALVERSION=elyvaen-uac2-mr ./scripts/build-mxiier-kernel.sh`.
+- El build anterior de UAC2 fijo sigue en `build-kernel-uac2/`; el nuevo está en `build-kernel-uac2-mr/`.
 - `boot_uac2_magisk.img` ya existe en `build-uac2-test/`; no se ha flasheado.
 - El dispositivo sigue en el kernel/DAP validado anterior.
 
@@ -20,7 +23,9 @@ Topología del driver: `USB OUT -> ALSA capture` (audio que envía la PC) y `ALS
   - Detecta tarjetas por `/proc/asound/cards` y, si SELinux lo bloquea, por `SNDRV_CTL_IOCTL_CARD_INFO` en `/dev/snd/controlC*` (necesario en `hal_audio_default`).
   - Soporta `S24_3LE`, `S24_LE`, `S32_LE` y `S16_LE`, con conversión entre formatos; el códec interno usa `S24_LE`.
   - Prueba frecuencias 192/176.4/96/88.2/48/44.1/... hasta encontrar la que anuncia el gadget; no remuestrea.
-  - Buffer de 4 periodos, prefill de 2 periodos, recuperación de underrun/overrun.
+  - Lee `UAC2 Capture Rate` cada segundo y reabre el puente si el host cambia de frecuencia.
+  - Buffer circular adaptativo (objetivo 3 periodos) que descarta audio viejo si el reloj del host va más rápido o inserta silencio si va más lento.
+  - Prefill de 2 periodos y recuperación de underrun/overrun.
   - Reintenta si la tarjeta todavía no existe; se detiene con SIGTERM/SIGINT.
 - `payload/system/etc/elyvaen/uac2.conf`: frecuencia/canales que usa el script para configurar el gadget; el daemon tiene defaults y detecta la frecuencia real.
 - `payload/system/bin/elyvaen-usb-dac.sh`: crea `uac2.0` en el gadget `g1`, lo enlaza a la config activa, enlaza el UDC y arranca/para el daemon.
@@ -44,8 +49,8 @@ capture_format=s24_3le
 ```
 
 - 48 kHz es el valor seguro para la primera prueba.
-- Para 24/192 cambiar `rate=192000`; debe coincidir con `c_srate` del gadget. El script lee el archivo; el daemon detecta la frecuencia real y no necesita leerlo.
-- El gadget UAC2 de este kernel anuncia una sola frecuencia. Si la PC reproduce 44.1 kHz, el host remuestrea a la frecuencia del gadget; no es bit-perfect.
+- `rate` es la frecuencia inicial que el script pone en el gadget antes de que el host elija; el daemon detecta después la frecuencia real y reabre si cambia.
+- El host puede elegir 44.1/48/88.2/96/176.4/192 kHz sin que el gadget remuestree. La PC puede remuestrear si el archivo no coincide con la frecuencia elegida.
 - `playback_format` se deja automático: prueba `S24_3LE`, `S24_LE`, `S32_LE` y `S16_LE` en ese orden.
 - El códec interno (`q6asm/q6afe`) anuncia `S24_LE` y `S32_LE`; `S24_LE` conserva 24 bits reales.
 
@@ -59,6 +64,7 @@ capture_format=s24_3le
 - Genera `build-uac2d/elyvaen-uac2d` (arm64, static-pie, stripped) y lo copia a `payload/vendor/bin/hw/`.
 - El binario incluido pasó el self-test en x86_64 y bajo `qemu-aarch64`.
 - `scripts/build-super.sh` instala binarios de `vendor/bin` con modo 0755, les pone `hal_audio_default_exec` y agrega la regla a `vendor_file_contexts`.
+- El kernel multifrecuencia compila `Image`, 58 módulos y DTB/DTBO en `build-kernel-uac2-mr/`; no se flasheó.
 
 ## Activar/desactivar en el dispositivo
 
@@ -88,10 +94,10 @@ setprop sys.elyvaen.usbdac.request 0
 - Probar con el kernel UAC2 flasheado (no hacerlo hasta el final).
 - Confirmar la etiqueta del binario (`ls -Z`) y la regla en `/vendor/etc/selinux/vendor_file_contexts`.
 - Verificar que el nombre real de la función configfs sea `uac2.0` y que la tarjeta aparezca como `UAC2_Gadget`/`UAC2 PCM`.
-- Medir enumeración en Linux y Windows, 24/48 y 24/192, underruns y latencia.
+- Medir enumeración en Linux y Windows, selección de 44.1/48/88.2/96/176.4/192, cambios de frecuencia en caliente, underruns y latencia.
 - Confirmar que el gadget Android no reinicia el UAC2 al cambiar el estado USB.
 - Verificar en el dispositivo que el servicio transiciona a `hal_audio_default` y que no hay denials de `audio_device`; la política ya define `init -> hal_audio_default` y `hal_audio_server` tiene acceso ALSA completo. No se usa Magisk.
-- Evaluar deriva de reloj y, si hace falta, buffer adaptativo o resampler controlado.
+- Validar la corrección de deriva y ajustar target/capacidad del ring; si aparecen clics, añadir crossfade o resampler adaptativo.
 - No se ha flasheado ni modificado el dispositivo en esta fase.
 
 ## Matriz de prueba
