@@ -56,13 +56,14 @@ Fecha: 2026-11-08. Regla vigente: **no flashear nada hasta que el backend esté 
 
 - Daemon implementado en `src/uac2d.c`; compila estático arm64 con musl.
 - Self-test de conversión S16/S24_3/S32 pasa en x86_64, ASan/UBSan y `qemu-aarch64`.
-- Binario incluido en `payload/system/bin/elyvaen-uac2d` (0755).
+- Binario incluido en `payload/vendor/bin/hw/elyvaen-uac2d` (0755), etiquetado `hal_audio_default_exec`.
 - Config: `payload/system/etc/elyvaen/uac2.conf` (48 kHz, 24-bit, 2 canales por defecto).
 - Control del gadget: `payload/system/bin/elyvaen-usb-dac.sh` (`on|off|status|restart`).
-- Servicios init: `payload/system/etc/init/elyvaen-uac2.rc` (daemon + enable/disable).
-- `scripts/build-super.sh` ahora instala binarios de `system/bin` con modo 0755.
+- Servicios init: `payload/system/etc/init/elyvaen-uac2.rc` (daemon con `seclabel u:r:hal_audio_default:s0` + enable/disable).
+- `scripts/build-super.sh` instala binarios de `vendor/bin` con modo 0755, etiqueta el daemon como `hal_audio_default_exec` y agrega la regla a `vendor_file_contexts`.
+- Imagen temporal `build-uac2d-images/work/` validó xattr `hal_audio_default_exec`, modo 0755 y regla de file_contexts. No se flasheó.
 - `scripts/build-uac2d.sh` compila host para self-test y arm64 estático; toolchain en `/workspace/Android/toolchains/aarch64-linux-musl-cross`.
 - **No se ha probado end-to-end**: el kernel UAC2 no está flasheado y el dispositivo no estaba conectado durante esta fase.
-- Pendiente: probar configfs real (`uac2.0`), tarjeta `UAC2_Gadget`, permisos SELinux del servicio init, conflicto con `UsbGadget`, y latencia/underruns.
-- Hallazgo SELinux: la política stock `user` no muestra `allow init audio_device`; `hal_audio_server` sí tiene acceso ALSA completo y `audioserver` solo `read/write`. El servicio probablemente necesite un dominio/exec type propio o Magisk; no se debe pasar a permissive.
+- Pendiente: probar configfs real (`uac2.0`), tarjeta `UAC2_Gadget`, transición SELinux a `hal_audio_default`, conflicto con `UsbGadget`, y latencia/underruns.
+- SELinux resuelto sin Magisk: se reutiliza el dominio/exec type existente `hal_audio_default` del HAL de audio, que ya tiene acceso completo a `audio_device`; el binario va en vendor y se parchea `vendor_file_contexts`.
 - No se flasheó ni se modificó el dispositivo en esta fase.
