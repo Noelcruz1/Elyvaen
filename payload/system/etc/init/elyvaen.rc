@@ -1,0 +1,5 @@
+service elyvaen /system/bin/sh /system/bin/elyvaen.sh
+    class late_start
+    user root
+    group root system
+    oneshot

@@ -1,0 +1,6 @@
+id=cypfq_kiosk
+name=Cypfq Kiosk
+version=1.0
+versionCode=1
+author=opencode
+description=Fija Elyvaen DAP al arrancar con task lock de Android; escape con long-press Volumen+

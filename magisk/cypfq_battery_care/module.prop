@@ -1,0 +1,6 @@
+id=cypfq_battery_care
+name=Cypfq Battery Care
+version=1.1
+versionCode=11
+author=opencode
+description=Limita carga al 80 por ciento y reanuda al 78

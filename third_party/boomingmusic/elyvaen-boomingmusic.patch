@@ -1,0 +1,1938 @@
+diff --git a/app/src/main/AndroidManifest.xml b/app/src/main/AndroidManifest.xml
+index e4bc8f0..525f3a7 100644
+--- a/app/src/main/AndroidManifest.xml
++++ b/app/src/main/AndroidManifest.xml
+@@ -28,7 +28,10 @@
+         android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
+         android:minSdkVersion="34"/>
+     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
+-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
++        <uses-permission android:name="android.permission.REBOOT"/>
++    <uses-permission android:name="android.permission.SHUTDOWN"/>
++    <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS"/>
++<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+     <uses-permission android:name="android.permission.INTERNET"/>
+     <uses-permission android:name="android.permission.WAKE_LOCK"/>
+ 
+@@ -64,6 +67,7 @@
+ 
+                 <category android:name="android.intent.category.LAUNCHER"/>
+                 <category android:name="android.intent.category.APP_MUSIC"/>
++                <category android:name="android.intent.category.HOME"/>
+                 <category android:name="android.intent.category.DEFAULT"/>
+             </intent-filter>
+ 
+diff --git a/app/src/main/java/com/mardous/booming/MainActivity.kt b/app/src/main/java/com/mardous/booming/MainActivity.kt
+index fa6587f..33aab45 100644
+--- a/app/src/main/java/com/mardous/booming/MainActivity.kt
++++ b/app/src/main/java/com/mardous/booming/MainActivity.kt
+@@ -17,13 +17,18 @@
+ 
+ package com.mardous.booming
+ 
++import android.app.ActivityManager
+ import android.app.SearchManager
+ import android.content.Intent
+ import android.content.pm.ShortcutManager
+ import android.os.Bundle
++import android.view.KeyEvent
+ import android.provider.MediaStore
+ import androidx.annotation.OptIn
+ import androidx.core.content.getSystemService
++import androidx.core.view.WindowCompat
++import androidx.core.view.WindowInsetsCompat
++import androidx.core.view.WindowInsetsControllerCompat
+ import androidx.core.content.pm.ShortcutManagerCompat
+ import androidx.media3.common.MediaItem
+ import androidx.media3.common.util.UnstableApi
+@@ -33,6 +38,7 @@ import androidx.media3.session.SessionError
+ import androidx.media3.session.SessionResult
+ import androidx.navigation.fragment.NavHostFragment
+ import androidx.navigation.ui.setupWithNavController
++import androidx.preference.PreferenceManager
+ import com.google.android.material.dialog.MaterialAlertDialogBuilder
+ import com.google.common.util.concurrent.Futures
+ import com.google.common.util.concurrent.ListenableFuture
+@@ -57,7 +63,10 @@ import com.mardous.booming.ui.screen.library.search.SearchFragment
+ import com.mardous.booming.ui.screen.update.UpdateDialog
+ import com.mardous.booming.ui.screen.update.UpdateSearchResult
+ import com.mardous.booming.ui.screen.update.UpdateViewModel
++import com.mardous.booming.util.IGNORE_AUDIO_FOCUS
++import com.mardous.booming.util.PAUSE_ON_DISCONNECT
+ import com.mardous.booming.util.Preferences
++import com.mardous.booming.util.RESUME_ON_CONNECT
+ import org.koin.android.ext.android.inject
+ import org.koin.androidx.viewmodel.ext.android.viewModel
+ 
+@@ -68,10 +77,16 @@ class MainActivity : AbsSlidingMusicPanelActivity(), MediaController.Listener {
+ 
+     private val updateViewModel: UpdateViewModel by viewModel()
+     private val mediaEventBus: MediaEventBus by inject()
++    private var kioskPaused = false
+ 
+     override fun onCreate(savedInstanceState: Bundle?) {
+         super.onCreate(savedInstanceState)
+         title = null
++        applyDapSignaturePreset()
++        applyDapAuroraUx()
++        applyDapNoAutoplay()
++        applyDapAudioDefaults()
++        applyPreferredDisplayMode()
+ 
+         updateTabs()
+         setupNavigationController()
+@@ -84,7 +99,7 @@ class MainActivity : AbsSlidingMusicPanelActivity(), MediaController.Listener {
+ 
+     override fun onConnected(controller: MediaController) {
+         super.onConnected(controller)
+-        intent?.let { handlePlaybackIntent(it, true) }
++        intent?.let { handlePlaybackIntent(it) }
+     }
+ 
+     @OptIn(UnstableApi::class)
+@@ -109,10 +124,6 @@ class MainActivity : AbsSlidingMusicPanelActivity(), MediaController.Listener {
+                 SessionResult(SessionResult.RESULT_SUCCESS)
+             }
+ 
+-            Playback.EVENT_PLAYBACK_RESTORED -> {
+-                mediaEventBus.postEvent(MediaEvent.PlaybackRestored)
+-                SessionResult(SessionResult.RESULT_SUCCESS)
+-            }
+ 
+             else -> SessionResult(SessionError.ERROR_NOT_SUPPORTED)
+         }
+@@ -214,11 +225,11 @@ class MainActivity : AbsSlidingMusicPanelActivity(), MediaController.Listener {
+ 
+     override fun onNewIntent(intent: Intent) {
+         super.onNewIntent(intent)
+-        handlePlaybackIntent(intent, false)
++        handlePlaybackIntent(intent)
+     }
+ 
+     @Suppress("DEPRECATION")
+-    private fun handlePlaybackIntent(intent: Intent, canRestorePlayback: Boolean) {
++    private fun handlePlaybackIntent(intent: Intent) {
+         when (intent.action) {
+             ACTION_SHOW_CONTENT -> {
+                 intent.getStringExtra(EXTRA_CONTENT_TYPE)?.toEnum<ContentType>()?.let { type ->
+@@ -298,8 +309,6 @@ class MainActivity : AbsSlidingMusicPanelActivity(), MediaController.Listener {
+                             )
+                         }
+                         setIntent(Intent())
+-                    } else if (canRestorePlayback) {
+-                        playerViewModel.restorePlayback()
+                     }
+                     if (result.failed) {
+                         showToast(R.string.unplayable_file)
+@@ -342,6 +351,121 @@ class MainActivity : AbsSlidingMusicPanelActivity(), MediaController.Listener {
+         }
+     }
+ 
++    private fun applyDapSignaturePreset() {
++        val preferences = PreferenceManager.getDefaultSharedPreferences(this)
++        if (preferences.getBoolean("dap_signature_applied", false)) {
++            return
++        }
++        preferences.edit()
++            .putString("now_playing_screen", "Expressive")
++            .putString("player_expressive_color_scheme", "Blur")
++            .putBoolean("carousel_effect", true)
++            .putBoolean("now_playing_small_image", false)
++            .putInt("now_playing_corner_radius", 20)
++            .putBoolean("display_extra_info", true)
++            .putBoolean("display_album_title", true)
++            .putBoolean("black_theme", true)
++            .putBoolean("material_you", true)
++            .putString("general_theme", "black")
++            .putString("appbar_mode", "compact")
++            .putBoolean("adaptive_controls", true)
++            .putBoolean("squiggly_seek_bar", true)
++            .putInt("player_blur_radius", 30)
++            .putBoolean("ignore_audio_focus", true)
++            .putBoolean("resume_on_connect", false)
++            .putBoolean("pause_on_disconnect", true)
++            .putBoolean("dap_kiosk_enabled", true)
++            .putBoolean("dap_signature_applied", true)
++            .apply()
++    }
++
++    private fun applyDapAuroraUx() {
++        val preferences = PreferenceManager.getDefaultSharedPreferences(this)
++        if (!preferences.getBoolean("dap_aurora_applied", false)) {
++            preferences.edit()
++                .putBoolean("aurora_theme", true)
++                .putBoolean("material_you", false)
++                .putBoolean("black_theme", true)
++                .putString("general_theme", "black")
++                .putBoolean("dap_aurora_applied", true)
++                .apply()
++        }
++        if (!preferences.getBoolean("dap_aurora_player_applied", false)) {
++            preferences.edit()
++                .putString("player_expressive_color_scheme", "AppTheme")
++                .putString("player_default_color_scheme", "AppTheme")
++                .putBoolean("dap_aurora_player_applied", true)
++                .apply()
++        }
++    }
++
++    private fun applyDapNoAutoplay() {
++        val preferences = PreferenceManager.getDefaultSharedPreferences(this)
++        if (preferences.getBoolean("dap_no_autoplay_applied", false)) {
++            return
++        }
++        preferences.edit()
++            .putBoolean("resume_on_connect", false)
++            .putBoolean("resume_on_bluetooth_connect", false)
++            .putString("play_on_startup_mode", "never")
++            .putBoolean("dap_no_autoplay_applied", true)
++            .apply()
++    }
++
++    @Suppress("DEPRECATION")
++    private fun applyPreferredDisplayMode() {
++        val bestMode = windowManager.defaultDisplay.supportedModes
++            .maxByOrNull { it.refreshRate } ?: return
++        window.attributes = window.attributes.apply {
++            preferredDisplayModeId = bestMode.modeId
++        }
++    }
++
++    private fun applyDapAudioDefaults() {
++        val preferences = PreferenceManager.getDefaultSharedPreferences(this)
++        if (!preferences.getBoolean("dap_audio_defaults_applied", false)) {
++            preferences.edit()
++                .putBoolean(IGNORE_AUDIO_FOCUS, true)
++                .putBoolean(RESUME_ON_CONNECT, false)
++                .putBoolean(PAUSE_ON_DISCONNECT, true)
++                .putBoolean("dap_audio_defaults_applied", true)
++                .apply()
++        }
++    }
++
++    override fun onResume() {
++        super.onResume()
++        if (!kioskPaused && PreferenceManager.getDefaultSharedPreferences(this)
++                .getBoolean("dap_kiosk_enabled", false)) {
++            enterKioskFullscreen()
++        }
++    }
++
++    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
++        if (keyCode == KeyEvent.KEYCODE_VOLUME_UP && event.repeatCount >= 20) {
++            exitKioskMode()
++            return true
++        }
++        return super.onKeyDown(keyCode, event)
++    }
++
++    fun exitKioskMode() {
++        kioskPaused = true
++        if (getSystemService<ActivityManager>()?.isInLockTaskMode == true) {
++            stopLockTask()
++        }
++        WindowInsetsControllerCompat(window, window.decorView)
++            .show(WindowInsetsCompat.Type.systemBars())
++    }
++
++    private fun enterKioskFullscreen() {
++        WindowCompat.setDecorFitsSystemWindows(window, false)
++        WindowInsetsControllerCompat(window, window.decorView).apply {
++            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
++            hide(WindowInsetsCompat.Type.systemBars())
++        }
++    }
++
+     companion object {
+         const val ACTION_SHOW_CONTENT = "com.mardous.booming.action.SHOW_CONTENT"
+         const val EXTRA_CONTENT_TYPE = "com.mardous.booming.extra.CONTENT_TYPE"
+diff --git a/app/src/main/java/com/mardous/booming/core/model/MediaEvent.kt b/app/src/main/java/com/mardous/booming/core/model/MediaEvent.kt
+index 34231b7..7f19508 100644
+--- a/app/src/main/java/com/mardous/booming/core/model/MediaEvent.kt
++++ b/app/src/main/java/com/mardous/booming/core/model/MediaEvent.kt
+@@ -3,6 +3,5 @@ package com.mardous.booming.core.model
+ enum class MediaEvent {
+     MediaContentChanged,
+     FavoriteContentChanged,
+-    PlaybackRestored,
+     PlaybackStarted
+ }
+\ No newline at end of file
+diff --git a/app/src/main/java/com/mardous/booming/playback/Playback.kt b/app/src/main/java/com/mardous/booming/playback/Playback.kt
+index 15df65d..d0e6363 100644
+--- a/app/src/main/java/com/mardous/booming/playback/Playback.kt
++++ b/app/src/main/java/com/mardous/booming/playback/Playback.kt
+@@ -11,8 +11,6 @@ object Playback {
+     const val CYCLE_REPEAT = "$PACKAGE_NAME.command.repeat.cycle"
+     /** Action to toggle the current playing song as favorite */
+     const val TOGGLE_FAVORITE = "$PACKAGE_NAME.command.toggle_favorite"
+-    /** Action to restore the previous playback state */
+-    const val RESTORE_PLAYBACK = "$PACKAGE_NAME.command.restore_playback"
+     /** Action to set UnshuffledShuffleOrder as the new shuffle order */
+     const val SET_UNSHUFFLED_ORDER = "$PACKAGE_NAME.command.set.unshuffled_order"
+     /** Action to set the new stop position */
+@@ -27,6 +25,5 @@ object Playback {
+     // Custom events
+     const val EVENT_MEDIA_CONTENT_CHANGED = "$PACKAGE_NAME.event.media_content_changed"
+     const val EVENT_FAVORITE_CONTENT_CHANGED = "$PACKAGE_NAME.event.favorite_content_changed"
+-    const val EVENT_PLAYBACK_RESTORED = "$PACKAGE_NAME.event.playback_restored"
+     const val EVENT_PLAYBACK_STARTED = "$PACKAGE_NAME.event.playback_started"
+ }
+\ No newline at end of file
+diff --git a/app/src/main/java/com/mardous/booming/playback/PlaybackService.kt b/app/src/main/java/com/mardous/booming/playback/PlaybackService.kt
+index 88fc994..4e6f17d 100644
+--- a/app/src/main/java/com/mardous/booming/playback/PlaybackService.kt
++++ b/app/src/main/java/com/mardous/booming/playback/PlaybackService.kt
+@@ -87,8 +87,6 @@ import com.mardous.booming.util.ENABLE_HISTORY
+ import com.mardous.booming.util.IGNORE_AUDIO_FOCUS
+ import com.mardous.booming.util.MP3_INDEX_SEEKING
+ import com.mardous.booming.util.PAUSE_ON_ZERO_VOLUME
+-import com.mardous.booming.util.PLAY_ON_STARTUP_MODE
+-import com.mardous.booming.util.PlayOnStartupMode
+ import com.mardous.booming.util.Preferences
+ import com.mardous.booming.util.Preferences.requireString
+ import com.mardous.booming.util.QUEUE_NEXT_MODE
+@@ -396,7 +394,6 @@ class PlaybackService :
+             availableSessionCommands.add(SessionCommand(Playback.CYCLE_REPEAT, Bundle.EMPTY))
+             availableSessionCommands.add(SessionCommand(Playback.TOGGLE_SHUFFLE, Bundle.EMPTY))
+             availableSessionCommands.add(SessionCommand(Playback.TOGGLE_FAVORITE, Bundle.EMPTY))
+-            availableSessionCommands.add(SessionCommand(Playback.RESTORE_PLAYBACK, Bundle.EMPTY))
+             availableSessionCommands.add(SessionCommand(Playback.SET_UNSHUFFLED_ORDER, Bundle.EMPTY))
+             availableSessionCommands.add(SessionCommand(Playback.SET_STOP_POSITION, Bundle.EMPTY))
+         }
+@@ -616,30 +613,6 @@ class PlaybackService :
+                 SessionResult(SessionResult.RESULT_SUCCESS)
+             }
+ 
+-            Playback.RESTORE_PLAYBACK -> {
+-                val playOnStartupMode = preferences.requireString(PLAY_ON_STARTUP_MODE, PlayOnStartupMode.NEVER)
+-                if (playOnStartupMode != PlayOnStartupMode.NEVER) {
+-                    CallbackToFutureAdapter.getFuture { completer ->
+-                        persistentStorage.waitForRestoration {
+-                            if (!player.currentTimeline.isEmpty) {
+-                                mediaSession?.broadcastCustomCommand(
+-                                    SessionCommand(
+-                                        Playback.EVENT_PLAYBACK_RESTORED,
+-                                        Bundle.EMPTY
+-                                    ),
+-                                    Bundle.EMPTY
+-                                )
+-                                completer.set(SessionResult(SessionResult.RESULT_SUCCESS))
+-                            } else {
+-                                completer.setException(IllegalStateException("Timeline is empty"))
+-                            }
+-                        }
+-                    }
+-                } else {
+-                    Futures.immediateFuture(SessionResult(SessionError.ERROR_INVALID_STATE))
+-                }
+-            }
+-
+             Playback.SET_UNSHUFFLED_ORDER -> {
+                 hasSetUnshuffledOrder = true
+                 with(player.exoPlayer) { applyShuffleOrder(UnshuffledShuffleOrder(mediaItemCount)) }
+diff --git a/app/src/main/java/com/mardous/booming/playback/equalizer/EqualizerManager.kt b/app/src/main/java/com/mardous/booming/playback/equalizer/EqualizerManager.kt
+index 43ff086..7e4a661 100644
+--- a/app/src/main/java/com/mardous/booming/playback/equalizer/EqualizerManager.kt
++++ b/app/src/main/java/com/mardous/booming/playback/equalizer/EqualizerManager.kt
+@@ -535,14 +535,7 @@ class EqualizerManager(
+                     eqEngine?.setEnabled(true)
+                 }
+ 
+-                SessionType.External -> {
+-                    val intent = Intent(AudioEffect.ACTION_OPEN_AUDIO_EFFECT_CONTROL_SESSION)
+-                        .putExtra(AudioEffect.EXTRA_AUDIO_SESSION, newSession.id)
+-                        .putExtra(AudioEffect.EXTRA_PACKAGE_NAME, context.packageName)
+-                        .putExtra(AudioEffect.EXTRA_CONTENT_TYPE, AudioEffect.CONTENT_TYPE_MUSIC)
+-
+-                    context.sendBroadcast(intent)
+-                }
++                SessionType.External -> Unit
+             }
+         }
+     }
+diff --git a/app/src/main/java/com/mardous/booming/ui/component/base/AbsMainActivityFragment.kt b/app/src/main/java/com/mardous/booming/ui/component/base/AbsMainActivityFragment.kt
+index c716640..8204036 100644
+--- a/app/src/main/java/com/mardous/booming/ui/component/base/AbsMainActivityFragment.kt
++++ b/app/src/main/java/com/mardous/booming/ui/component/base/AbsMainActivityFragment.kt
+@@ -40,10 +40,6 @@ import com.mardous.booming.extensions.isLandscape
+ import com.mardous.booming.ui.screen.library.LibraryViewModel
+ import com.mardous.booming.ui.screen.player.PlayerViewModel
+ import com.mardous.booming.util.OPEN_ON_PLAY
+-import com.mardous.booming.util.PLAY_ON_STARTUP_MODE
+-import com.mardous.booming.util.PlayOnStartupMode
+-import com.mardous.booming.util.PlayOnStartupMode.Companion.WITH_EXPANDED_PLAYER
+-import com.mardous.booming.util.Preferences.requireString
+ import kotlinx.coroutines.launch
+ import org.koin.android.ext.android.inject
+ import org.koin.androidx.viewmodel.ext.android.activityViewModel
+@@ -72,12 +68,6 @@ abstract class AbsMainActivityFragment @JvmOverloads constructor(@LayoutRes layo
+                     when (it) {
+                         MediaEvent.FavoriteContentChanged -> onFavoriteContentChanged()
+                         MediaEvent.MediaContentChanged -> onMediaContentChanged()
+-                        MediaEvent.PlaybackRestored -> {
+-                            val mode = preferences.requireString(PLAY_ON_STARTUP_MODE, PlayOnStartupMode.NEVER)
+-                            if (mode == WITH_EXPANDED_PLAYER) {
+-                                mainActivity.expandPanel()
+-                            }
+-                        }
+                         MediaEvent.PlaybackStarted -> {
+                             if (preferences.getBoolean(OPEN_ON_PLAY, false)) {
+                                 mainActivity.expandPanel()
+diff --git a/app/src/main/java/com/mardous/booming/ui/screen/dap/DapAuroraHero.kt b/app/src/main/java/com/mardous/booming/ui/screen/dap/DapAuroraHero.kt
+new file mode 100644
+index 0000000..eb781e5
+--- /dev/null
++++ b/app/src/main/java/com/mardous/booming/ui/screen/dap/DapAuroraHero.kt
+@@ -0,0 +1,71 @@
++package com.mardous.booming.ui.screen.dap
++
++import androidx.compose.foundation.layout.Column
++import androidx.compose.foundation.layout.Row
++import androidx.compose.foundation.layout.Spacer
++import androidx.compose.foundation.layout.fillMaxWidth
++import androidx.compose.foundation.layout.height
++import androidx.compose.foundation.layout.padding
++import androidx.compose.foundation.layout.size
++import androidx.compose.foundation.shape.RoundedCornerShape
++import androidx.compose.material3.MaterialTheme
++import androidx.compose.material3.Text
++import androidx.compose.runtime.Composable
++import androidx.compose.ui.Alignment
++import androidx.compose.ui.Modifier
++import androidx.compose.ui.draw.clip
++import androidx.compose.ui.graphics.Color
++import androidx.compose.ui.text.font.FontWeight
++import androidx.compose.ui.unit.dp
++import androidx.compose.ui.unit.sp
++import com.mardous.booming.ui.component.compose.AnimatedEqBars
++import com.mardous.booming.ui.component.compose.decoration.animatedGradient
++import com.mardous.booming.ui.theme.AuroraGradient
++
++@Composable
++fun DapAuroraHero(
++    modifier: Modifier = Modifier,
++    isPlaying: Boolean = false,
++    showEq: Boolean = true
++) {
++    Column(
++        modifier = modifier
++            .fillMaxWidth()
++            .clip(RoundedCornerShape(28.dp))
++            .animatedGradient(AuroraGradient, isPlaying)
++            .padding(20.dp)
++    ) {
++        Row(
++            verticalAlignment = Alignment.CenterVertically,
++            modifier = Modifier.fillMaxWidth()
++        ) {
++            Column(modifier = Modifier.weight(1f)) {
++                Text(
++                    text = "CYPFQ DAP",
++                    style = MaterialTheme.typography.titleLarge,
++                    fontWeight = FontWeight.Bold,
++                    color = Color.White
++                )
++                Text(
++                    text = "AURORA",
++                    style = MaterialTheme.typography.labelSmall,
++                    fontWeight = FontWeight.SemiBold,
++                    letterSpacing = 2.sp,
++                    color = Color(0xFF5BE8D5)
++                )
++            }
++            if (showEq) {
++                AnimatedEqBars(
++                    color = Color.White,
++                    isPlaying = isPlaying,
++                    barCount = 5,
++                    barWidth = 3.dp,
++                    gap = 3.dp,
++                    modifier = Modifier.size(44.dp, 30.dp)
++                )
++            }
++        }
++        Spacer(Modifier.height(14.dp))
++        DapStatusStrip(modifier = Modifier.fillMaxWidth())
++    }
++}
+diff --git a/app/src/main/java/com/mardous/booming/ui/screen/dap/DapDashboardFragment.kt b/app/src/main/java/com/mardous/booming/ui/screen/dap/DapDashboardFragment.kt
+new file mode 100644
+index 0000000..bac299a
+--- /dev/null
++++ b/app/src/main/java/com/mardous/booming/ui/screen/dap/DapDashboardFragment.kt
+@@ -0,0 +1,42 @@
++package com.mardous.booming.ui.screen.dap
++
++import android.app.Dialog
++import android.os.Bundle
++import android.view.LayoutInflater
++import android.view.View
++import android.view.ViewGroup
++import androidx.compose.ui.platform.ComposeView
++import androidx.compose.ui.platform.ViewCompositionStrategy
++import com.google.android.material.bottomsheet.BottomSheetBehavior
++import com.google.android.material.bottomsheet.BottomSheetDialog
++import com.google.android.material.bottomsheet.BottomSheetDialogFragment
++import com.mardous.booming.extensions.isLandscape
++import com.mardous.booming.ui.theme.BoomingMusicTheme
++
++class DapDashboardFragment : BottomSheetDialogFragment() {
++
++    override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
++        val dialog = super.onCreateDialog(savedInstanceState)
++        if (isLandscape()) {
++            (dialog as? BottomSheetDialog)?.let {
++                it.behavior.state = BottomSheetBehavior.STATE_EXPANDED
++            }
++        }
++        return dialog
++    }
++
++    override fun onCreateView(
++        inflater: LayoutInflater,
++        container: ViewGroup?,
++        savedInstanceState: Bundle?
++    ): View {
++        return ComposeView(requireContext()).apply {
++            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
++            setContent {
++                BoomingMusicTheme {
++                    DapDashboardSheet()
++                }
++            }
++        }
++    }
++}
+diff --git a/app/src/main/java/com/mardous/booming/ui/screen/dap/DapDashboardSheet.kt b/app/src/main/java/com/mardous/booming/ui/screen/dap/DapDashboardSheet.kt
+new file mode 100644
+index 0000000..fdaf072
+--- /dev/null
++++ b/app/src/main/java/com/mardous/booming/ui/screen/dap/DapDashboardSheet.kt
+@@ -0,0 +1,470 @@
++package com.mardous.booming.ui.screen.dap
++
++import android.app.ActivityManager
++import android.os.PowerManager
++import android.content.Context
++import android.content.ContextWrapper
++import android.content.Intent
++import android.os.Environment
++import android.os.StatFs
++import android.provider.Settings
++import android.text.format.Formatter
++import androidx.compose.foundation.layout.Arrangement
++import androidx.compose.foundation.layout.Column
++import androidx.compose.foundation.layout.PaddingValues
++import androidx.compose.foundation.layout.Row
++import androidx.compose.foundation.layout.Spacer
++import androidx.compose.foundation.layout.fillMaxWidth
++import androidx.compose.foundation.layout.padding
++import androidx.compose.foundation.layout.size
++import androidx.compose.foundation.layout.width
++import androidx.compose.foundation.lazy.LazyColumn
++import androidx.compose.material3.AlertDialog
++import androidx.compose.material3.LinearProgressIndicator
++import androidx.compose.material3.MaterialTheme
++import androidx.compose.material3.OutlinedButton
++import androidx.compose.material3.Text
++import androidx.compose.material3.TextButton
++import androidx.compose.runtime.Composable
++import androidx.compose.runtime.collectAsState
++import androidx.compose.runtime.getValue
++import androidx.compose.runtime.mutableStateOf
++import androidx.compose.runtime.remember
++import androidx.compose.runtime.setValue
++import androidx.compose.ui.Alignment
++import androidx.compose.ui.Modifier
++import androidx.compose.ui.platform.LocalContext
++import androidx.compose.ui.res.stringResource
++import androidx.compose.ui.text.font.FontWeight
++import androidx.compose.ui.text.style.TextOverflow
++import androidx.compose.ui.unit.dp
++import com.mardous.booming.MainActivity
++import com.mardous.booming.R
++import com.mardous.booming.core.model.audiodevice.AudioDeviceType
++import com.mardous.booming.ui.component.compose.AnimatedEqBars
++import com.mardous.booming.ui.component.compose.BottomSheetDialogSurface
++import com.mardous.booming.ui.component.compose.ShapedText
++import com.mardous.booming.ui.component.compose.TitledCard
++import com.mardous.booming.ui.screen.equalizer.EqualizerViewModel
++import com.mardous.booming.ui.screen.player.PlayerViewModel
++import org.koin.compose.viewmodel.koinActivityViewModel
++import org.koin.compose.viewmodel.koinViewModel
++import java.util.Locale
++
++@Composable
++fun DapDashboardSheet(
++    equalizerViewModel: EqualizerViewModel = koinViewModel(),
++    playerViewModel: PlayerViewModel = koinActivityViewModel()
++) {
++    val context = LocalContext.current
++    val currentSong by playerViewModel.currentSongFlow.collectAsState()
++    val isPlaying by playerViewModel.isPlayingFlow.collectAsState()
++    val extraInfo by playerViewModel.extraInfoFlow.collectAsState()
++    val outputDevice by equalizerViewModel.audioDevice.collectAsState()
++    val bitPerfectState by equalizerViewModel.bitPerfectState.collectAsState()
++    val battery = rememberBatteryInfo()
++    val storage = rememberStorageInfo()
++    val hasSong = currentSong.id != -1L
++    var pendingPowerAction by remember { mutableStateOf<PowerAction?>(null) }
++    var kioskActive by remember {
++        mutableStateOf(
++            context.getSystemService(ActivityManager::class.java)?.isInLockTaskMode == true
++        )
++    }
++
++    BottomSheetDialogSurface(
++        title = { Text(text = stringResource(R.string.dap_dashboard)) }
++    ) {
++        LazyColumn(
++            modifier = Modifier.fillMaxWidth(),
++            verticalArrangement = Arrangement.spacedBy(16.dp),
++            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 16.dp)
++        ) {
++            item {
++                DapStatusStrip(modifier = Modifier.fillMaxWidth())
++            }
++
++            item {
++                TitledCard(
++                    title = stringResource(R.string.dap_now_playing),
++                    modifier = Modifier.fillMaxWidth()
++                ) { contentPadding ->
++                    Column(
++                        verticalArrangement = Arrangement.spacedBy(4.dp),
++                        modifier = Modifier.padding(contentPadding)
++                    ) {
++                        Row(verticalAlignment = Alignment.CenterVertically) {
++                            Text(
++                                text = if (hasSong) currentSong.title else stringResource(R.string.dap_no_track),
++                                style = MaterialTheme.typography.titleMedium,
++                                fontWeight = FontWeight.SemiBold,
++                                maxLines = 1,
++                                overflow = TextOverflow.Ellipsis,
++                                modifier = Modifier.weight(1f)
++                            )
++                            if (hasSong) {
++                                AnimatedEqBars(
++                                    color = MaterialTheme.colorScheme.primary,
++                                    isPlaying = isPlaying,
++                                    barCount = 4,
++                                    barWidth = 3.dp,
++                                    gap = 3.dp,
++                                    modifier = Modifier.size(34.dp, 24.dp)
++                                )
++                            }
++                        }
++                        if (hasSong) {
++                            Text(
++                                text = currentSong.artistName,
++                                style = MaterialTheme.typography.bodyMedium,
++                                color = MaterialTheme.colorScheme.onSurfaceVariant,
++                                maxLines = 1,
++                                overflow = TextOverflow.Ellipsis
++                            )
++                        }
++                        extraInfo?.let {
++                            Text(
++                                text = it,
++                                style = MaterialTheme.typography.bodySmall,
++                                color = MaterialTheme.colorScheme.onSurfaceVariant,
++                                maxLines = 2,
++                                overflow = TextOverflow.Ellipsis
++                            )
++                        }
++                    }
++                }
++            }
++
++            item {
++                TitledCard(
++                    title = stringResource(R.string.dap_audio_output),
++                    modifier = Modifier.fillMaxWidth()
++                ) { contentPadding ->
++                    Column(
++                        verticalArrangement = Arrangement.spacedBy(8.dp),
++                        modifier = Modifier.padding(contentPadding)
++                    ) {
++                        Text(
++                            text = outputDevice.getDeviceName(context),
++                            style = MaterialTheme.typography.titleMedium,
++                            maxLines = 1,
++                            overflow = TextOverflow.Ellipsis
++                        )
++                        if (bitPerfectState.isActive) {
++                            Text(
++                                text = "${bitPerfectState.encodingLabel} · ${bitPerfectState.sampleRateLabel}",
++                                style = MaterialTheme.typography.bodySmall,
++                                color = MaterialTheme.colorScheme.onSurfaceVariant
++                            )
++                        }
++                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
++                            if (outputDevice.type == AudioDeviceType.Headset) {
++                                ShapedText(
++                                    text = stringResource(R.string.dap_lohifi),
++                                    containerColor = MaterialTheme.colorScheme.primaryContainer,
++                                    style = MaterialTheme.typography.bodySmall
++                                )
++                            }
++                            ShapedText(
++                                text = stringResource(R.string.dap_pure_audio),
++                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
++                                style = MaterialTheme.typography.bodySmall
++                            )
++                        }
++                    }
++                }
++            }
++
++            item {
++                TitledCard(
++                    title = stringResource(R.string.dap_battery),
++                    modifier = Modifier.fillMaxWidth()
++                ) { contentPadding ->
++                    Column(
++                        verticalArrangement = Arrangement.spacedBy(8.dp),
++                        modifier = Modifier.padding(contentPadding)
++                    ) {
++                        Row(
++                            verticalAlignment = Alignment.CenterVertically,
++                            modifier = Modifier.fillMaxWidth()
++                        ) {
++                            Text(
++                                text = "${battery.level}%",
++                                style = MaterialTheme.typography.headlineSmall,
++                                fontWeight = FontWeight.Bold
++                            )
++                            Spacer(Modifier.width(12.dp))
++                            Text(
++                                text = stringResource(
++                                    if (battery.charging) R.string.dap_charging else R.string.dap_discharging
++                                ),
++                                style = MaterialTheme.typography.bodyMedium,
++                                color = MaterialTheme.colorScheme.onSurfaceVariant
++                            )
++                        }
++                        LinearProgressIndicator(
++                            progress = { battery.level / 100f },
++                            modifier = Modifier.fillMaxWidth()
++                        )
++                        Row(
++                            horizontalArrangement = Arrangement.spacedBy(8.dp),
++                            verticalAlignment = Alignment.CenterVertically
++                        ) {
++                            Text(
++                                text = stringResource(
++                                    R.string.dap_battery_temp,
++                                    String.format(Locale.US, "%.1f", battery.temperatureC)
++                                ),
++                                style = MaterialTheme.typography.bodySmall,
++                                color = MaterialTheme.colorScheme.onSurfaceVariant
++                            )
++                            ShapedText(
++                                text = stringResource(R.string.dap_battery_care),
++                                containerColor = MaterialTheme.colorScheme.tertiaryContainer,
++                                style = MaterialTheme.typography.bodySmall
++                            )
++                        }
++                    }
++                }
++            }
++
++            item {
++                TitledCard(
++                    title = stringResource(R.string.dap_storage),
++                    modifier = Modifier.fillMaxWidth()
++                ) { contentPadding ->
++                    Column(
++                        verticalArrangement = Arrangement.spacedBy(8.dp),
++                        modifier = Modifier.padding(contentPadding)
++                    ) {
++                        Text(
++                            text = stringResource(
++                                R.string.dap_storage_free,
++                                Formatter.formatFileSize(context, storage.free),
++                                Formatter.formatFileSize(context, storage.total)
++                            ),
++                            style = MaterialTheme.typography.bodyMedium
++                        )
++                        LinearProgressIndicator(
++                            progress = {
++                                if (storage.total > 0) {
++                                    (storage.total - storage.free).toFloat() / storage.total
++                                } else {
++                                    0f
++                                }
++                            },
++                            modifier = Modifier.fillMaxWidth()
++                        )
++                    }
++                }
++            }
++
++            item {
++                TitledCard(
++                    title = stringResource(R.string.dap_quick_access),
++                    modifier = Modifier.fillMaxWidth()
++                ) { contentPadding ->
++                    Column(
++                        verticalArrangement = Arrangement.spacedBy(8.dp),
++                        modifier = Modifier.padding(contentPadding)
++                    ) {
++                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
++                            QuickAccessButton(
++                                label = stringResource(R.string.dap_wifi),
++                                action = Settings.ACTION_WIFI_SETTINGS,
++                                modifier = Modifier.weight(1f)
++                            )
++                            QuickAccessButton(
++                                label = stringResource(R.string.dap_bluetooth),
++                                action = Settings.ACTION_BLUETOOTH_SETTINGS,
++                                modifier = Modifier.weight(1f)
++                            )
++                        }
++                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
++                            QuickAccessButton(
++                                label = stringResource(R.string.dap_sound),
++                                action = Settings.ACTION_SOUND_SETTINGS,
++                                modifier = Modifier.weight(1f)
++                            )
++                            QuickAccessButton(
++                                label = stringResource(R.string.dap_display),
++                                action = Settings.ACTION_DISPLAY_SETTINGS,
++                                modifier = Modifier.weight(1f)
++                            )
++                        }
++                        OutlinedButton(
++                            onClick = { captureScreenshot() },
++                            modifier = Modifier.fillMaxWidth()
++                        ) {
++                            Text(text = stringResource(R.string.dap_screenshot))
++                        }
++                    }
++                }
++            }
++
++            item {
++                TitledCard(
++                    title = stringResource(R.string.dap_power),
++                    modifier = Modifier.fillMaxWidth()
++                ) { contentPadding ->
++                    Row(
++                        horizontalArrangement = Arrangement.spacedBy(8.dp),
++                        modifier = Modifier.padding(contentPadding)
++                    ) {
++                        OutlinedButton(
++                            onClick = { pendingPowerAction = PowerAction.Shutdown },
++                            modifier = Modifier.weight(1f)
++                        ) {
++                            Text(text = stringResource(R.string.dap_power_off))
++                        }
++                        OutlinedButton(
++                            onClick = { pendingPowerAction = PowerAction.Reboot },
++                            modifier = Modifier.weight(1f)
++                        ) {
++                            Text(text = stringResource(R.string.dap_reboot))
++                        }
++                    }
++                }
++            }
++
++            item {
++                TitledCard(
++                    title = stringResource(R.string.dap_kiosk),
++                    modifier = Modifier.fillMaxWidth()
++                ) { contentPadding ->
++                    Column(
++                        verticalArrangement = Arrangement.spacedBy(8.dp),
++                        modifier = Modifier.padding(contentPadding)
++                    ) {
++                        Text(
++                            text = stringResource(
++                                if (kioskActive) R.string.dap_kiosk_active else R.string.dap_kiosk_inactive
++                            ),
++                            style = MaterialTheme.typography.bodyMedium,
++                            color = MaterialTheme.colorScheme.onSurfaceVariant
++                        )
++                        if (kioskActive) {
++                            OutlinedButton(
++                                onClick = {
++                                    context.findMainActivity()?.exitKioskMode()
++                                    kioskActive = false
++                                },
++                                modifier = Modifier.fillMaxWidth()
++                            ) {
++                                Text(text = stringResource(R.string.dap_exit_kiosk))
++                            }
++                        }
++                    }
++                }
++            }
++        }
++    }
++
++    pendingPowerAction?.let { action ->
++        AlertDialog(
++            onDismissRequest = { pendingPowerAction = null },
++            title = {
++                Text(
++                    text = stringResource(
++                        if (action == PowerAction.Shutdown) {
++                            R.string.dap_power_off_confirm
++                        } else {
++                            R.string.dap_reboot_confirm
++                        }
++                    )
++                )
++            },
++            text = { Text(text = stringResource(R.string.dap_power)) },
++            confirmButton = {
++                TextButton(
++                    onClick = {
++                        executePowerAction(context, action)
++                        pendingPowerAction = null
++                    }
++                ) {
++                    Text(text = stringResource(R.string.dap_confirm))
++                }
++            },
++            dismissButton = {
++                TextButton(onClick = { pendingPowerAction = null }) {
++                    Text(text = stringResource(R.string.dap_cancel))
++                }
++            }
++        )
++    }
++}
++
++@Composable
++private fun QuickAccessButton(label: String, action: String, modifier: Modifier) {
++    val context = LocalContext.current
++    OutlinedButton(
++        onClick = {
++            runCatching {
++                context.startActivity(
++                    Intent(action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
++                )
++            }
++        },
++        modifier = modifier
++    ) {
++        Text(text = label, maxLines = 1, overflow = TextOverflow.Ellipsis)
++    }
++}
++
++private data class StorageInfo(val free: Long, val total: Long)
++
++@Composable
++private fun rememberStorageInfo(): StorageInfo = remember {
++    runCatching {
++        val stat = StatFs(Environment.getExternalStorageDirectory().absolutePath)
++        StorageInfo(stat.availableBytes, stat.totalBytes)
++    }.getOrDefault(StorageInfo(0L, 0L))
++}
++
++private fun captureScreenshot() {
++    Thread {
++        val filename = "cypfq_${System.currentTimeMillis()}.png"
++        val command = "mkdir -p /sdcard/Pictures/Screenshots && " +
++                "screencap -p /sdcard/Pictures/Screenshots/$filename"
++        runCatching {
++            Runtime.getRuntime().exec(arrayOf("su", "-c", command)).waitFor()
++        }
++    }.start()
++}
++
++private enum class PowerAction { Shutdown, Reboot }
++
++private fun executePowerAction(context: Context, action: PowerAction) {
++    val accepted = runCatching {
++        if (action == PowerAction.Reboot) {
++            context.getSystemService(PowerManager::class.java)?.reboot(null)
++            true
++        } else {
++            context.startActivity(
++                Intent("android.intent.action.ACTION_REQUEST_SHUTDOWN")
++                    .putExtra("android.intent.extra.KEY_CONFIRM", false)
++                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
++            )
++            true
++        }
++    }.getOrDefault(false)
++    if (!accepted) {
++        val command = if (action == PowerAction.Shutdown) "reboot -p" else "reboot"
++        Thread {
++            runCatching {
++                Runtime.getRuntime().exec(arrayOf("su", "-c", command)).waitFor()
++            }
++        }.start()
++    }
++}
++
++private fun Context.findMainActivity(): MainActivity? {
++    var current = this
++    while (current is ContextWrapper) {
++        if (current is MainActivity) {
++            return current
++        }
++        current = current.baseContext
++    }
++    return current as? MainActivity
++}
+diff --git a/app/src/main/java/com/mardous/booming/ui/screen/dap/DapStatus.kt b/app/src/main/java/com/mardous/booming/ui/screen/dap/DapStatus.kt
+new file mode 100644
+index 0000000..b0b2fb2
+--- /dev/null
++++ b/app/src/main/java/com/mardous/booming/ui/screen/dap/DapStatus.kt
+@@ -0,0 +1,239 @@
++package com.mardous.booming.ui.screen.dap
++
++import android.bluetooth.BluetoothAdapter
++import android.bluetooth.BluetoothManager
++import android.content.BroadcastReceiver
++import android.content.Context
++import android.content.Intent
++import android.content.IntentFilter
++import android.net.ConnectivityManager
++import android.net.Network
++import android.net.NetworkCapabilities
++import android.os.BatteryManager
++import android.provider.Settings
++import androidx.annotation.DrawableRes
++import androidx.compose.foundation.layout.Arrangement
++import androidx.compose.foundation.layout.Row
++import androidx.compose.foundation.layout.fillMaxWidth
++import androidx.compose.foundation.layout.size
++import androidx.compose.material3.Icon
++import androidx.compose.material3.MaterialTheme
++import androidx.compose.material3.Text
++import androidx.compose.runtime.Composable
++import androidx.compose.runtime.DisposableEffect
++import androidx.compose.runtime.LaunchedEffect
++import androidx.compose.runtime.getValue
++import androidx.compose.runtime.mutableStateOf
++import androidx.compose.runtime.remember
++import androidx.compose.runtime.setValue
++import androidx.compose.ui.Alignment
++import androidx.compose.ui.Modifier
++import androidx.compose.ui.platform.LocalContext
++import androidx.compose.ui.res.painterResource
++import androidx.compose.ui.res.stringResource
++import androidx.compose.ui.text.font.FontWeight
++import androidx.compose.ui.unit.dp
++import androidx.core.content.ContextCompat
++import com.mardous.booming.R
++import kotlinx.coroutines.delay
++import java.time.LocalTime
++import java.time.format.DateTimeFormatter
++
++@Composable
++fun DapStatusStrip(modifier: Modifier = Modifier) {
++    val time = rememberClock()
++    val wifiConnected = rememberWifiConnected()
++    val bluetoothEnabled = rememberBluetoothEnabled()
++    val battery = rememberBatteryInfo()
++
++    Row(
++        verticalAlignment = Alignment.CenterVertically,
++        horizontalArrangement = Arrangement.SpaceBetween,
++        modifier = modifier.fillMaxWidth()
++    ) {
++        Text(
++            text = time,
++            style = MaterialTheme.typography.titleMedium,
++            fontWeight = FontWeight.SemiBold
++        )
++        Row(
++            verticalAlignment = Alignment.CenterVertically,
++            horizontalArrangement = Arrangement.spacedBy(12.dp)
++        ) {
++            StatusIcon(
++                iconRes = R.drawable.ic_network_wifi_24dp,
++                active = wifiConnected,
++                contentDescription = stringResource(R.string.dap_wifi)
++            )
++            StatusIcon(
++                iconRes = R.drawable.ic_media_bluetooth_on_24dp,
++                active = bluetoothEnabled,
++                contentDescription = stringResource(R.string.dap_bluetooth)
++            )
++            Icon(
++                painter = painterResource(R.drawable.ic_battery_std_24dp),
++                contentDescription = stringResource(R.string.dap_battery),
++                tint = if (battery.charging) {
++                    MaterialTheme.colorScheme.primary
++                } else {
++                    MaterialTheme.colorScheme.onSurfaceVariant
++                },
++                modifier = Modifier.size(18.dp)
++            )
++            Text(
++                text = "${battery.level}%",
++                style = MaterialTheme.typography.bodyMedium,
++                color = MaterialTheme.colorScheme.onSurfaceVariant
++            )
++        }
++    }
++}
++
++@Composable
++private fun StatusIcon(
++    @DrawableRes iconRes: Int,
++    active: Boolean,
++    contentDescription: String
++) {
++    Icon(
++        painter = painterResource(iconRes),
++        contentDescription = contentDescription,
++        tint = if (active) {
++            MaterialTheme.colorScheme.primary
++        } else {
++            MaterialTheme.colorScheme.onSurfaceVariant
++        },
++        modifier = Modifier.size(18.dp)
++    )
++}
++
++@Composable
++private fun rememberClock(): String {
++    var time by remember { mutableStateOf(currentTime()) }
++    LaunchedEffect(Unit) {
++        while (true) {
++            time = currentTime()
++            delay(1_000)
++        }
++    }
++    return time
++}
++
++private fun currentTime(): String =
++    LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
++
++@Composable
++private fun rememberWifiConnected(): Boolean {
++    val context = LocalContext.current
++    var connected by remember { mutableStateOf(isWifiConnected(context)) }
++    DisposableEffect(context) {
++        val connectivityManager = context.getSystemService(ConnectivityManager::class.java)
++        val callback = object : ConnectivityManager.NetworkCallback() {
++            override fun onAvailable(network: Network) {
++                connected = isWifiConnected(context)
++            }
++
++            override fun onLost(network: Network) {
++                connected = isWifiConnected(context)
++            }
++
++            override fun onCapabilitiesChanged(
++                network: Network,
++                networkCapabilities: NetworkCapabilities
++            ) {
++                connected = networkCapabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
++            }
++        }
++        runCatching { connectivityManager?.registerDefaultNetworkCallback(callback) }
++        onDispose {
++            runCatching { connectivityManager?.unregisterNetworkCallback(callback) }
++        }
++    }
++    return connected
++}
++
++private fun isWifiConnected(context: Context): Boolean {
++    val connectivityManager = context.getSystemService(ConnectivityManager::class.java) ?: return false
++    val capabilities = connectivityManager.getNetworkCapabilities(connectivityManager.activeNetwork)
++        ?: return false
++    return capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
++}
++
++@Composable
++private fun rememberBluetoothEnabled(): Boolean {
++    val context = LocalContext.current
++    var enabled by remember { mutableStateOf(isBluetoothEnabled(context)) }
++    DisposableEffect(context) {
++        val receiver = object : BroadcastReceiver() {
++            override fun onReceive(context: Context, intent: Intent) {
++                val state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)
++                enabled = when (state) {
++                    BluetoothAdapter.STATE_ON -> true
++                    BluetoothAdapter.STATE_OFF -> false
++                    else -> isBluetoothEnabled(context)
++                }
++            }
++        }
++        val filter = IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED)
++        ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_EXPORTED)
++        onDispose { context.unregisterReceiver(receiver) }
++    }
++    return enabled
++}
++
++private fun isBluetoothEnabled(context: Context): Boolean {
++    val manager = context.getSystemService(BluetoothManager::class.java)
++    val adapterEnabled = runCatching { manager?.adapter?.isEnabled }.getOrNull()
++    if (adapterEnabled != null) {
++        return adapterEnabled
++    }
++    return runCatching {
++        Settings.Global.getInt(context.contentResolver, "bluetooth_on", 0) == 1
++    }.getOrDefault(false)
++}
++
++internal data class BatteryInfo(
++    val level: Int,
++    val charging: Boolean,
++    val temperatureC: Float
++)
++
++@Composable
++internal fun rememberBatteryInfo(): BatteryInfo {
++    val context = LocalContext.current
++    var batteryInfo by remember {
++        mutableStateOf(
++            readBatteryInfo(
++                context.registerReceiver(
++                    null,
++                    IntentFilter(Intent.ACTION_BATTERY_CHANGED)
++                )
++            )
++        )
++    }
++    DisposableEffect(context) {
++        val receiver = object : BroadcastReceiver() {
++            override fun onReceive(context: Context, intent: Intent) {
++                batteryInfo = readBatteryInfo(intent)
++            }
++        }
++        val filter = IntentFilter(Intent.ACTION_BATTERY_CHANGED)
++        ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_EXPORTED)
++        onDispose { context.unregisterReceiver(receiver) }
++    }
++    return batteryInfo
++}
++
++private fun readBatteryInfo(intent: Intent?): BatteryInfo {
++    val level = intent?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
++    val scale = intent?.getIntExtra(BatteryManager.EXTRA_SCALE, 100) ?: 100
++    val status = intent?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1
++    val temperature = intent?.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, 0) ?: 0
++    val percentage = if (level >= 0 && scale > 0) level * 100 / scale else 0
++    return BatteryInfo(
++        level = percentage.coerceIn(0, 100),
++        charging = status == BatteryManager.BATTERY_STATUS_CHARGING ||
++                status == BatteryManager.BATTERY_STATUS_FULL,
++        temperatureC = temperature / 10f
++    )
++}
+diff --git a/app/src/main/java/com/mardous/booming/ui/screen/library/home/HomeFragment.kt b/app/src/main/java/com/mardous/booming/ui/screen/library/home/HomeFragment.kt
+index a54a1e6..a7f0c8d 100644
+--- a/app/src/main/java/com/mardous/booming/ui/screen/library/home/HomeFragment.kt
++++ b/app/src/main/java/com/mardous/booming/ui/screen/library/home/HomeFragment.kt
+@@ -46,6 +46,7 @@ import com.mardous.booming.extensions.requestView
+ import com.mardous.booming.extensions.topLevelTransition
+ import com.mardous.booming.ui.IScrollHelper
+ import com.mardous.booming.ui.component.base.AbsMainActivityFragment
++import com.mardous.booming.ui.screen.dap.DapDashboardFragment
+ import com.mardous.booming.ui.theme.BoomingMusicTheme
+ import com.mardous.booming.util.Preferences
+ import kotlinx.coroutines.Dispatchers
+@@ -127,6 +128,9 @@ class HomeFragment : AbsMainActivityFragment(), IScrollHelper {
+                         onSettingsClick = {
+                             findNavController().navigate(R.id.nav_settings)
+                         },
++                        onDashboardClick = {
++                            DapDashboardFragment().show(childFragmentManager, "DAP_DASHBOARD")
++                        },
+                         scrollToTopTrigger = scrollToTopTrigger,
+                         onScrollToTopDone = { scrollToTopTrigger = false },
+                     )
+diff --git a/app/src/main/java/com/mardous/booming/ui/screen/library/home/HomeScreen.kt b/app/src/main/java/com/mardous/booming/ui/screen/library/home/HomeScreen.kt
+index df29eae..91b1583 100644
+--- a/app/src/main/java/com/mardous/booming/ui/screen/library/home/HomeScreen.kt
++++ b/app/src/main/java/com/mardous/booming/ui/screen/library/home/HomeScreen.kt
+@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.fillMaxSize
+ import androidx.compose.foundation.layout.only
+ import androidx.compose.foundation.layout.padding
+ import androidx.compose.foundation.lazy.LazyColumn
++import androidx.compose.foundation.gestures.detectTapGestures
+ import androidx.compose.foundation.lazy.items
+ import androidx.compose.foundation.lazy.rememberLazyListState
+ import androidx.compose.material3.CircularProgressIndicator
+@@ -41,6 +42,7 @@ import androidx.compose.runtime.remember
+ import androidx.compose.ui.Alignment
+ import androidx.compose.ui.Modifier
+ import androidx.compose.ui.input.nestedscroll.nestedScroll
++import androidx.compose.ui.input.pointer.pointerInput
+ import androidx.compose.ui.platform.LocalContext
+ import androidx.compose.ui.platform.LocalDensity
+ import androidx.compose.ui.res.painterResource
+@@ -52,6 +54,7 @@ import androidx.compose.ui.text.withStyle
+ import androidx.compose.ui.unit.dp
+ import androidx.lifecycle.compose.collectAsStateWithLifecycle
+ import androidx.preference.PreferenceManager
++import com.mardous.booming.MainActivity
+ import com.mardous.booming.R
+ import com.mardous.booming.core.model.LibraryMargin
+ import com.mardous.booming.data.model.Album
+@@ -67,8 +70,10 @@ import com.mardous.booming.ui.component.compose.menu.TopAppBarMenu
+ import com.mardous.booming.ui.component.compose.rememberTopAppBarScrollBehavior
+ import com.mardous.booming.ui.component.views.TopAppBarLayout
+ import com.mardous.booming.ui.screen.library.LibraryViewModel
++import com.mardous.booming.ui.screen.player.PlayerViewModel
+ import com.mardous.booming.util.APPBAR_MODE
+ import com.mardous.booming.util.AppBarMode
++import com.mardous.booming.ui.screen.dap.DapAuroraHero
+ import org.koin.compose.viewmodel.koinActivityViewModel
+ import org.koin.compose.viewmodel.koinViewModel
+ 
+@@ -89,15 +94,18 @@ fun HomeScreen(
+     onOpenSuggestion: (Suggestion) -> Unit,
+     onSearchClick: () -> Unit,
+     onSettingsClick: () -> Unit,
++    onDashboardClick: () -> Unit,
+     scrollToTopTrigger: Boolean = false,
+     onScrollToTopDone: () -> Unit = {},
+     homeViewModel: HomeViewModel = koinViewModel(),
+-    libraryViewModel: LibraryViewModel = koinActivityViewModel()
++    libraryViewModel: LibraryViewModel = koinActivityViewModel(),
++    playerViewModel: PlayerViewModel = koinActivityViewModel()
+ ) {
+     val context = LocalContext.current
+     val density = LocalDensity.current
+ 
+     val uiState by homeViewModel.uiState.collectAsStateWithLifecycle()
++    val isPlaying by playerViewModel.isPlayingFlow.collectAsStateWithLifecycle()
+     val miniPlayerMargin by libraryViewModel.getMiniPlayerMargin().observeAsState(LibraryMargin(0))
+ 
+     val listState = rememberLazyListState()
+@@ -126,23 +134,33 @@ fun HomeScreen(
+             BoomingMusicTopAppBar(
+                 title = {
+                     Text(
++                        modifier = Modifier.pointerInput(Unit) {
++                            detectTapGestures(onLongPress = {
++                                (context as? MainActivity)?.exitKioskMode()
++                            })
++                        },
+                         text = buildAnnotatedString {
+                             withStyle(
+                                 style = SpanStyle(color = MaterialTheme.colorScheme.onSurface)
+-                            ) { append("Booming") }
++                            ) { append("Cypfq") }
+                             append(" ")
+                             withStyle(
+                                 style = SpanStyle(
+                                     color = MaterialTheme.colorScheme.primary,
+                                     fontWeight = FontWeight.SemiBold
+                                 )
+-                            ) { append("Music") }
++                            ) { append("DAP") }
+                         }
+                     )
+                 },
+                 actions = {
+                     TopAppBarMenu(
+                         items = listOf(
++                            MenuItem.Button.Action(
++                                icon = painterResource(R.drawable.ic_equalizer_24dp),
++                                text = stringResource(R.string.dap_dashboard),
++                                onClick = onDashboardClick
++                            ),
+                             MenuItem.Button.Action(
+                                 icon = painterResource(R.drawable.ic_search_24dp),
+                                 text = stringResource(R.string.search_label),
+@@ -192,6 +210,12 @@ fun HomeScreen(
+                         modifier = Modifier.fillMaxSize(),
+                         contentPadding = PaddingValues(bottom = bottomContentPadding)
+                     ) {
++                        item {
++                            DapAuroraHero(
++                                isPlaying = isPlaying,
++                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
++                            )
++                        }
+                         item { HomeTopActions(onActionClick = onActionClick) }
+                         items(currentState.suggestions) { suggestion ->
+                             SuggestionSection(
+diff --git a/app/src/main/java/com/mardous/booming/ui/screen/other/MiniPlayerFragment.kt b/app/src/main/java/com/mardous/booming/ui/screen/other/MiniPlayerFragment.kt
+index cead872..c217cc1 100644
+--- a/app/src/main/java/com/mardous/booming/ui/screen/other/MiniPlayerFragment.kt
++++ b/app/src/main/java/com/mardous/booming/ui/screen/other/MiniPlayerFragment.kt
+@@ -26,6 +26,7 @@ import android.view.View
+ import androidx.core.view.isVisible
+ import androidx.fragment.app.Fragment
+ import coil3.request.Disposable
++import com.mardous.booming.MainActivity
+ import com.mardous.booming.R
+ import com.mardous.booming.coil.songImage
+ import com.mardous.booming.core.model.player.ProgressState
+@@ -65,11 +66,16 @@ class MiniPlayerFragment : Fragment(R.layout.fragment_mini_player),
+         }
+ 
+     private var disposable: Disposable? = null
++    private var isFling = false
+ 
+     @SuppressLint("ClickableViewAccessibility")
+     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+         super.onViewCreated(view, savedInstanceState)
+         _binding = FragmentMiniPlayerBinding.bind(view)
++        view.setOnLongClickListener {
++            (activity as? MainActivity)?.exitKioskMode()
++            true
++        }
+         binding.progressBar.installWavyAnimatorCleanup()
+         viewLifecycleOwner.launchAndRepeatWithViewLifecycle {
+             playerViewModel.currentSongFlow.collect { currentSong ->
+@@ -102,7 +108,20 @@ class MiniPlayerFragment : Fragment(R.layout.fragment_mini_player),
+         setUpButtons()
+         setUpProgressStyle()
+         view.setOnTouchListener { _, event ->
+-            Preferences.miniPlayerSwipeToSkip && flingPlayBackController.onTouchEvent(event)
++            if (!Preferences.miniPlayerSwipeToSkip) {
++                return@setOnTouchListener false
++            }
++            if (event.action == MotionEvent.ACTION_DOWN) {
++                isFling = false
++            }
++            flingPlayBackController.onTouchEvent(event)
++            if (event.action == MotionEvent.ACTION_UP) {
++                val consumed = isFling
++                isFling = false
++                consumed
++            } else {
++                false
++            }
+         }
+     }
+ 
+@@ -181,9 +200,11 @@ class MiniPlayerFragment : Fragment(R.layout.fragment_mini_player),
+             override fun onFling(e1: MotionEvent?, e2: MotionEvent, velocityX: Float, velocityY: Float): Boolean {
+                 if (abs(velocityX) > abs(velocityY)) {
+                     if (velocityX < 0) {
++                        isFling = true
+                         playerViewModel.seekToNext()
+                         return true
+                     } else if (velocityX > 0) {
++                        isFling = true
+                         playerViewModel.seekToPrevious()
+                         return true
+                     }
+diff --git a/app/src/main/java/com/mardous/booming/ui/screen/player/PlayerViewModel.kt b/app/src/main/java/com/mardous/booming/ui/screen/player/PlayerViewModel.kt
+index 25634e3..b2a3dc0 100644
+--- a/app/src/main/java/com/mardous/booming/ui/screen/player/PlayerViewModel.kt
++++ b/app/src/main/java/com/mardous/booming/ui/screen/player/PlayerViewModel.kt
+@@ -532,21 +532,6 @@ class PlayerViewModel(
+         mediaController?.removeMediaItem(position.getIndexForPosition(positionToRemove))
+     }
+ 
+-    fun restorePlayback() = viewModelScope.launch {
+-        mediaController?.let { controller ->
+-            if (!controller.playWhenReady) {
+-                val resultFuture = controller.sendCustomCommand(
+-                    SessionCommand(Playback.RESTORE_PLAYBACK, Bundle.EMPTY),
+-                    Bundle.EMPTY
+-                )
+-                val result = runCatching { resultFuture.await() }
+-                    .getOrDefault(SessionResult(SessionError.ERROR_UNKNOWN))
+-                if (result.resultCode == SessionResult.RESULT_SUCCESS) {
+-                    controller.playWhenReady = true
+-                }
+-            }
+-        }
+-    }
+ 
+     fun generatePlayerScheme(
+         context: Context,
+diff --git a/app/src/main/java/com/mardous/booming/ui/screen/sound/SoundSettingsScreen.kt b/app/src/main/java/com/mardous/booming/ui/screen/sound/SoundSettingsScreen.kt
+index 937fcfe..08d6f80 100644
+--- a/app/src/main/java/com/mardous/booming/ui/screen/sound/SoundSettingsScreen.kt
++++ b/app/src/main/java/com/mardous/booming/ui/screen/sound/SoundSettingsScreen.kt
+@@ -59,6 +59,7 @@ import androidx.compose.ui.unit.LayoutDirection
+ import androidx.compose.ui.unit.dp
+ import com.mardous.booming.R
+ import com.mardous.booming.core.model.audiodevice.AudioDevice
++import com.mardous.booming.core.model.audiodevice.AudioDeviceType
+ import com.mardous.booming.core.model.audiodevice.BitPerfectState
+ import com.mardous.booming.extensions.hasR
+ import com.mardous.booming.ui.component.compose.BottomSheetDialogSurface
+@@ -82,6 +83,7 @@ fun SoundSettingsSheet(
+     val bitPerfectState by viewModel.bitPerfectState.collectAsState()
+ 
+     val soundSettings by viewModel.soundSettings.collectAsState()
++    val equalizerSettings by viewModel.equalizerSettings.collectAsState()
+ 
+     val volume = soundSettings.volume
+     val bitPerfect = soundSettings.bitPerfect
+@@ -129,6 +131,7 @@ fun SoundSettingsSheet(
+                 AudioDeviceInfo(
+                     outputDevice = outputDevice,
+                     bitPerfectState = bitPerfectState,
++                    eqEnabled = equalizerSettings.eqState.enabled,
+                     onClick = { viewModel.showOutputDeviceSelector(context) }
+                 )
+             }
+@@ -536,6 +539,7 @@ fun SoundSettingsSheet(
+ private fun AudioDeviceInfo(
+     outputDevice: AudioDevice,
+     bitPerfectState: BitPerfectState,
++    eqEnabled: Boolean,
+     onClick: () -> Unit
+ ) {
+     Card(
+@@ -601,6 +605,27 @@ private fun AudioDeviceInfo(
+                         style = MaterialTheme.typography.bodySmall
+                     )
+                 }
++
++                if (outputDevice.type == AudioDeviceType.Headset) {
++                    ShapedText(
++                        text = stringResource(R.string.dap_internal_dac_info),
++                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
++                        style = MaterialTheme.typography.bodySmall,
++                        modifier = Modifier.padding(top = 4.dp)
++                    )
++                    ShapedText(
++                        text = stringResource(
++                            if (eqEnabled) R.string.dap_eq_on else R.string.dap_eq_off
++                        ),
++                        containerColor = if (eqEnabled) {
++                            MaterialTheme.colorScheme.errorContainer
++                        } else {
++                            MaterialTheme.colorScheme.surfaceContainerHighest
++                        },
++                        style = MaterialTheme.typography.bodySmall,
++                        modifier = Modifier.padding(top = 4.dp)
++                    )
++                }
+             }
+         }
+     }
+diff --git a/app/src/main/java/com/mardous/booming/ui/theme/AuroraTheme.kt b/app/src/main/java/com/mardous/booming/ui/theme/AuroraTheme.kt
+new file mode 100644
+index 0000000..159169b
+--- /dev/null
++++ b/app/src/main/java/com/mardous/booming/ui/theme/AuroraTheme.kt
+@@ -0,0 +1,72 @@
++package com.mardous.booming.ui.theme
++
++import androidx.compose.material3.darkColorScheme
++import androidx.compose.material3.lightColorScheme
++import androidx.compose.ui.graphics.Color
++
++val AuroraGradient = listOf(
++    Color(0xFF02070D),
++    Color(0xFF07383D),
++    Color(0xFF2D174E),
++    Color(0xFF7A2D5B)
++)
++
++val AuroraDarkScheme = darkColorScheme(
++    primary = Color(0xFF5BE8D5),
++    onPrimary = Color(0xFF003731),
++    primaryContainer = Color(0xFF005147),
++    onPrimaryContainer = Color(0xFFA9FFF2),
++    secondary = Color(0xFFC9BAFF),
++    onSecondary = Color(0xFF2C1B5B),
++    secondaryContainer = Color(0xFF443276),
++    onSecondaryContainer = Color(0xFFE9DDFF),
++    tertiary = Color(0xFFFFB86B),
++    onTertiary = Color(0xFF4A2800),
++    tertiaryContainer = Color(0xFF6A3C00),
++    onTertiaryContainer = Color(0xFFFFDCBE),
++    error = Color(0xFFFFB4AB),
++    onError = Color(0xFF690005),
++    errorContainer = Color(0xFF93000A),
++    onErrorContainer = Color(0xFFFFDAD6),
++    background = Color(0xFF02070D),
++    onBackground = Color(0xFFE4F5F2),
++    surface = Color(0xFF02070D),
++    onSurface = Color(0xFFE4F5F2),
++    surfaceVariant = Color(0xFF17312F),
++    onSurfaceVariant = Color(0xFFB4CCC8),
++    outline = Color(0xFF6F8A86),
++    outlineVariant = Color(0xFF2A4744),
++    inverseSurface = Color(0xFFE4F5F2),
++    inverseOnSurface = Color(0xFF113330),
++    inversePrimary = Color(0xFF00695C),
++    surfaceDim = Color(0xFF02070D),
++    surfaceBright = Color(0xFF1B3437),
++    surfaceContainerLowest = Color(0xFF000000),
++    surfaceContainerLow = Color(0xFF071416),
++    surfaceContainer = Color(0xFF0B1D20),
++    surfaceContainerHigh = Color(0xFF12282B),
++    surfaceContainerHighest = Color(0xFF1B3437)
++)
++
++val AuroraLightScheme = lightColorScheme(
++    primary = Color(0xFF00695C),
++    onPrimary = Color.White,
++    primaryContainer = Color(0xFF9CF2E5),
++    onPrimaryContainer = Color(0xFF00201C),
++    secondary = Color(0xFF5A4A8A),
++    onSecondary = Color.White,
++    secondaryContainer = Color(0xFFE7DEFF),
++    onSecondaryContainer = Color(0xFF1B0F3F),
++    tertiary = Color(0xFF875200),
++    onTertiary = Color.White,
++    tertiaryContainer = Color(0xFFFFDCBE),
++    onTertiaryContainer = Color(0xFF2D1600),
++    background = Color(0xFFF4FBFA),
++    onBackground = Color(0xFF151D1C),
++    surface = Color(0xFFF4FBFA),
++    onSurface = Color(0xFF151D1C),
++    surfaceVariant = Color(0xFFD5E7E3),
++    onSurfaceVariant = Color(0xFF3F4947),
++    outline = Color(0xFF6F7977),
++    outlineVariant = Color(0xFFBEC9C6)
++)
+diff --git a/app/src/main/java/com/mardous/booming/ui/theme/Theme.kt b/app/src/main/java/com/mardous/booming/ui/theme/Theme.kt
+index f4ad27c..4f2449f 100644
+--- a/app/src/main/java/com/mardous/booming/ui/theme/Theme.kt
++++ b/app/src/main/java/com/mardous/booming/ui/theme/Theme.kt
+@@ -96,11 +96,14 @@ private val darkScheme = darkColorScheme(
+ fun BoomingMusicTheme(
+     darkTheme: Boolean = isSystemInDarkTheme(),
+     blackTheme: Boolean = Preferences.blackTheme,
++    auroraTheme: Boolean = Preferences.isAuroraTheme,
+     dynamicColor: Boolean = Preferences.isMaterialYouTheme,
+     customFont: Boolean = Preferences.isCustomFont,
+     content: @Composable () -> Unit
+ ) {
+     var colorScheme = when {
++        auroraTheme -> if (darkTheme) AuroraDarkScheme else AuroraLightScheme
++
+         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+             val context = LocalContext.current
+             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+diff --git a/app/src/main/java/com/mardous/booming/util/Preferences.kt b/app/src/main/java/com/mardous/booming/util/Preferences.kt
+index cff6371..d37892f 100644
+--- a/app/src/main/java/com/mardous/booming/util/Preferences.kt
++++ b/app/src/main/java/com/mardous/booming/util/Preferences.kt
+@@ -110,6 +110,9 @@ object Preferences : KoinComponent {
+     val isMaterialYouTheme: Boolean
+         get() = preferences.getBoolean(MATERIAL_YOU, hasS())
+ 
++    val isAuroraTheme: Boolean
++        get() = preferences.getBoolean(AURORA_THEME, false)
++
+     val isCustomFont: Boolean
+         get() = preferences.getBoolean(USE_CUSTOM_FONT, true)
+ 
+@@ -493,13 +496,6 @@ interface AppBarMode {
+     }
+ }
+ 
+-interface PlayOnStartupMode {
+-    companion object {
+-        const val NEVER = "never"
+-        const val WITH_MINIMIZED_PLAYER = "with_minimized_player"
+-        const val WITH_EXPANDED_PLAYER = "with_expanded_player"
+-    }
+-}
+ 
+ interface SelectedShuffleMode {
+     companion object {
+@@ -542,6 +538,7 @@ interface UpdateSearchMode {
+ 
+ const val BLACK_THEME = "black_theme"
+ const val MATERIAL_YOU = "material_you"
++const val AURORA_THEME = "aurora_theme"
+ const val USE_CUSTOM_FONT = "use_custom_font"
+ const val APPBAR_MODE = "appbar_mode"
+ const val GENERAL_THEME = "general_theme"
+@@ -584,7 +581,6 @@ const val PREFER_ALBUM_ARTIST_NAME = "prefer_album_artist_name_on_np"
+ const val REWIND_WITH_BACK = "rewind_with_back"
+ const val SEEK_INTERVAL = "seek_interval"
+ const val QUEUE_NEXT_MODE = "queue_next_mode"
+-const val PLAY_ON_STARTUP_MODE = "play_on_startup_mode"
+ const val ON_SONG_CLICK_ACTION = "on_song_click_action"
+ const val ON_CLEAR_QUEUE_ACTION = "on_clear_queue_action"
+ const val PLAY_OPTION_ALWAYS_VISIBLE = "play_option_always_visible"
+diff --git a/app/src/main/res/drawable/dap_foreground.xml b/app/src/main/res/drawable/dap_foreground.xml
+new file mode 100644
+index 0000000..2d0331e
+--- /dev/null
++++ b/app/src/main/res/drawable/dap_foreground.xml
+@@ -0,0 +1,8 @@
++<vector xmlns:android="http://schemas.android.com/apk/res/android"
++    android:width="108dp"
++    android:height="108dp"
++    android:viewportWidth="108"
++    android:viewportHeight="108">
++    <path android:fillColor="#FF5252" android:pathData="M38,26 L38,82 L82,54 Z"/>
++    <path android:fillColor="#FFFFFF" android:pathData="M20,24 L32,24 L32,84 L20,84 Z"/>
++</vector>
+diff --git a/app/src/main/res/drawable/dap_monochrome.xml b/app/src/main/res/drawable/dap_monochrome.xml
+new file mode 100644
+index 0000000..0db5b68
+--- /dev/null
++++ b/app/src/main/res/drawable/dap_monochrome.xml
+@@ -0,0 +1,8 @@
++<vector xmlns:android="http://schemas.android.com/apk/res/android"
++    android:width="108dp"
++    android:height="108dp"
++    android:viewportWidth="108"
++    android:viewportHeight="108">
++    <path android:fillColor="#FFFFFFFF" android:pathData="M38,26 L38,82 L82,54 Z"/>
++    <path android:fillColor="#FFFFFFFF" android:pathData="M20,24 L32,24 L32,84 L20,84 Z"/>
++</vector>
+diff --git a/app/src/main/res/drawable/ic_battery_std_24dp.xml b/app/src/main/res/drawable/ic_battery_std_24dp.xml
+new file mode 100644
+index 0000000..3cccd44
+--- /dev/null
++++ b/app/src/main/res/drawable/ic_battery_std_24dp.xml
+@@ -0,0 +1,9 @@
++<vector xmlns:android="http://schemas.android.com/apk/res/android"
++    android:width="24dp"
++    android:height="24dp"
++    android:viewportWidth="24"
++    android:viewportHeight="24">
++    <path
++        android:fillColor="#FFFFFFFF"
++        android:pathData="M15.67,4H14V2h-4v2H8.33C7.6,4 7,4.6 7,5.33v15.33C7,21.4 7.6,22 8.33,22h7.33c0.74,0 1.34,-0.6 1.34,-1.33V5.33C17,4.6 16.4,4 15.67,4zM13,18h-2v-2h2v2zM13,14h-2V8h2v6z" />
++</vector>
+diff --git a/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml b/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
+index 081998b..9fcb66a 100644
+--- a/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
++++ b/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
+@@ -1,6 +1,6 @@
+ <?xml version="1.0" encoding="utf-8"?>
+ <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+     <background android:drawable="@color/ic_launcher_background"/>
+-    <foreground android:drawable="@mipmap/ic_launcher_foreground"/>
+-    <monochrome android:drawable="@drawable/ic_launcher_monochrome"/>
++    <foreground android:drawable="@drawable/dap_foreground"/>
++    <monochrome android:drawable="@drawable/dap_monochrome"/>
+ </adaptive-icon>
+\ No newline at end of file
+diff --git a/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml b/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
+index 081998b..9fcb66a 100644
+--- a/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
++++ b/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
+@@ -1,6 +1,6 @@
+ <?xml version="1.0" encoding="utf-8"?>
+ <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+     <background android:drawable="@color/ic_launcher_background"/>
+-    <foreground android:drawable="@mipmap/ic_launcher_foreground"/>
+-    <monochrome android:drawable="@drawable/ic_launcher_monochrome"/>
++    <foreground android:drawable="@drawable/dap_foreground"/>
++    <monochrome android:drawable="@drawable/dap_monochrome"/>
+ </adaptive-icon>
+\ No newline at end of file
+diff --git a/app/src/main/res/values-es-rES/strings.xml b/app/src/main/res/values-es-rES/strings.xml
+index 4403170..21ca01d 100644
+--- a/app/src/main/res/values-es-rES/strings.xml
++++ b/app/src/main/res/values-es-rES/strings.xml
+@@ -419,6 +419,39 @@
+     <string name="loudness_enhancer">Amplificador</string>
+     <string name="sound_settings">Configuración de sonido</string>
+     <string name="listening_on">Escuchando en</string>
++    <string name="dap_dashboard">Panel DAP</string>
++    <string name="dap_now_playing">Reproduciendo</string>
++    <string name="dap_no_track">Sin reproducción</string>
++    <string name="dap_audio_output">Salida de audio</string>
++    <string name="dap_lohifi">LOHIFI</string>
++    <string name="dap_pure_audio">Pure Audio · sin DSP</string>
++    <string name="dap_battery">Batería</string>
++    <string name="dap_charging">Cargando</string>
++    <string name="dap_discharging">En batería</string>
++    <string name="dap_battery_temp">%1$s °C</string>
++    <string name="dap_battery_care">Cuidado de batería 80%</string>
++    <string name="dap_storage">Almacenamiento</string>
++    <string name="dap_storage_free">%1$s libres de %2$s</string>
++    <string name="dap_screenshot">Captura de pantalla</string>
++    <string name="dap_quick_access">Accesos rápidos</string>
++    <string name="dap_wifi">Wi-Fi</string>
++    <string name="dap_bluetooth">Bluetooth</string>
++    <string name="dap_sound">Sonido</string>
++    <string name="dap_display">Pantalla</string>
++    <string name="dap_power">Energía</string>
++    <string name="dap_power_off">Apagar</string>
++    <string name="dap_reboot">Reiniciar</string>
++    <string name="dap_power_off_confirm">¿Apagar el DAP?</string>
++    <string name="dap_reboot_confirm">¿Reiniciar el DAP?</string>
++    <string name="dap_confirm">Confirmar</string>
++    <string name="dap_cancel">Cancelar</string>
++    <string name="dap_kiosk">Kiosco</string>
++    <string name="dap_kiosk_active">DAP fijado</string>
++    <string name="dap_kiosk_inactive">Sin fijar</string>
++    <string name="dap_exit_kiosk">Salir del kiosco</string>
++    <string name="dap_internal_dac_info">DAC interno · 24-bit / 192 kHz · LOHIFI</string>
++    <string name="dap_eq_off">EQ off · sin DSP</string>
++    <string name="dap_eq_on">EQ on · DSP activo</string>
+     <string name="casting_to">Proyectando en</string>
+     <string name="volume_label">Volumen</string>
+     <string name="reset_balance">Restablecer equilibrio</string>
+diff --git a/app/src/main/res/values-es-rUS/strings.xml b/app/src/main/res/values-es-rUS/strings.xml
+index 20207d0..db46496 100644
+--- a/app/src/main/res/values-es-rUS/strings.xml
++++ b/app/src/main/res/values-es-rUS/strings.xml
+@@ -426,6 +426,39 @@
+     <string name="loudness_enhancer">Amplificador</string>
+     <string name="sound_settings">Ajustes de sonido</string>
+     <string name="listening_on">Escuchando en</string>
++    <string name="dap_dashboard">Panel DAP</string>
++    <string name="dap_now_playing">Reproduciendo</string>
++    <string name="dap_no_track">Sin reproducción</string>
++    <string name="dap_audio_output">Salida de audio</string>
++    <string name="dap_lohifi">LOHIFI</string>
++    <string name="dap_pure_audio">Pure Audio · sin DSP</string>
++    <string name="dap_battery">Batería</string>
++    <string name="dap_charging">Cargando</string>
++    <string name="dap_discharging">En batería</string>
++    <string name="dap_battery_temp">%1$s °C</string>
++    <string name="dap_battery_care">Cuidado de batería 80%</string>
++    <string name="dap_storage">Almacenamiento</string>
++    <string name="dap_storage_free">%1$s libres de %2$s</string>
++    <string name="dap_screenshot">Captura de pantalla</string>
++    <string name="dap_quick_access">Accesos rápidos</string>
++    <string name="dap_wifi">Wi-Fi</string>
++    <string name="dap_bluetooth">Bluetooth</string>
++    <string name="dap_sound">Sonido</string>
++    <string name="dap_display">Pantalla</string>
++    <string name="dap_power">Energía</string>
++    <string name="dap_power_off">Apagar</string>
++    <string name="dap_reboot">Reiniciar</string>
++    <string name="dap_power_off_confirm">¿Apagar el DAP?</string>
++    <string name="dap_reboot_confirm">¿Reiniciar el DAP?</string>
++    <string name="dap_confirm">Confirmar</string>
++    <string name="dap_cancel">Cancelar</string>
++    <string name="dap_kiosk">Kiosco</string>
++    <string name="dap_kiosk_active">DAP fijado</string>
++    <string name="dap_kiosk_inactive">Sin fijar</string>
++    <string name="dap_exit_kiosk">Salir del kiosco</string>
++    <string name="dap_internal_dac_info">DAC interno · 24-bit / 192 kHz · LOHIFI</string>
++    <string name="dap_eq_off">EQ off · sin DSP</string>
++    <string name="dap_eq_on">EQ on · DSP activo</string>
+     <string name="casting_to">Transmitiendo a</string>
+     <string name="volume_label">Volumen</string>
+     <string name="reset_balance">Restablecer balance</string>
+diff --git a/app/src/main/res/values/arrays.xml b/app/src/main/res/values/arrays.xml
+index c2f15cd..194d195 100644
+--- a/app/src/main/res/values/arrays.xml
++++ b/app/src/main/res/values/arrays.xml
+@@ -87,17 +87,7 @@
+         <item>delete</item>
+     </string-array>
+ 
+-    <string-array name="pref_play_on_startup_entries">
+-        <item>@string/play_on_startup_mode_never</item>
+-        <item>@string/play_on_startup_mode_minimized</item>
+-        <item>@string/play_on_startup_mode_expanded</item>
+-    </string-array>
+ 
+-    <string-array name="pref_play_on_startup_values">
+-        <item>never</item>
+-        <item>with_minimized_player</item>
+-        <item>with_expanded_player</item>
+-    </string-array>
+ 
+     <string-array name="pref_lyrics_background_effect_entries">
+         <item>@string/lyrics_background_gradient</item>
+diff --git a/app/src/main/res/values/colors.xml b/app/src/main/res/values/colors.xml
+index 714d712..50147f7 100644
+--- a/app/src/main/res/values/colors.xml
++++ b/app/src/main/res/values/colors.xml
+@@ -19,7 +19,7 @@
+     <color name="fifty_percent_black_overlay">#88000000</color>
+     <color name="eighty_percent_black_overlay">#D0000000</color>
+ 
+-    <color name="ic_launcher_background">#ffffff</color>
++    <color name="ic_launcher_background">#0B0B10</color>
+ 
+     <color name="app_shortcut_default_foreground">#2D276A</color>
+     <color name="app_shortcut_default_background">@color/ic_launcher_background</color>
+diff --git a/app/src/main/res/values/donottranslate.xml b/app/src/main/res/values/donottranslate.xml
+index 966d4eb..cbd3364 100644
+--- a/app/src/main/res/values/donottranslate.xml
++++ b/app/src/main/res/values/donottranslate.xml
+@@ -1,9 +1,9 @@
+ <?xml version="1.0" encoding="utf-8"?>
+ <resources>
+     <!-- The name that identifies the app -->
+-	<string name="app_name" translatable="false">Booming Music</string>
++	<string name="app_name" translatable="false">DAP</string>
+     <!-- The name used in app title bars and other internal places -->
+-    <string name="app_title" translatable="false">Booming Music</string>
++    <string name="app_title" translatable="false">DAP</string>
+ 
+ 	<string name="mardous" translatable="false">Christians Martínez A.</string>
+ 
+diff --git a/app/src/main/res/values/strings.xml b/app/src/main/res/values/strings.xml
+index aafb4db..c17cfb2 100644
+--- a/app/src/main/res/values/strings.xml
++++ b/app/src/main/res/values/strings.xml
+@@ -524,6 +524,39 @@
+     <string name="sound_settings">Sound settings</string>
+     <string name="advanced_settings">Advanced settings</string>
+     <string name="listening_on">Listening on</string>
++    <string name="dap_dashboard">DAP Dashboard</string>
++    <string name="dap_now_playing">Now playing</string>
++    <string name="dap_no_track">Nothing playing</string>
++    <string name="dap_audio_output">Audio output</string>
++    <string name="dap_lohifi">LOHIFI</string>
++    <string name="dap_pure_audio">Pure Audio · no DSP</string>
++    <string name="dap_battery">Battery</string>
++    <string name="dap_charging">Charging</string>
++    <string name="dap_discharging">On battery</string>
++    <string name="dap_battery_temp">%1$s °C</string>
++    <string name="dap_battery_care">Battery care 80%</string>
++    <string name="dap_storage">Storage</string>
++    <string name="dap_storage_free">%1$s free of %2$s</string>
++    <string name="dap_screenshot">Screenshot</string>
++    <string name="dap_quick_access">Quick access</string>
++    <string name="dap_wifi">Wi-Fi</string>
++    <string name="dap_bluetooth">Bluetooth</string>
++    <string name="dap_sound">Sound</string>
++    <string name="dap_display">Display</string>
++    <string name="dap_power">Power</string>
++    <string name="dap_power_off">Power off</string>
++    <string name="dap_reboot">Reboot</string>
++    <string name="dap_power_off_confirm">Power off the DAP?</string>
++    <string name="dap_reboot_confirm">Reboot the DAP?</string>
++    <string name="dap_confirm">Confirm</string>
++    <string name="dap_cancel">Cancel</string>
++    <string name="dap_kiosk">Kiosk</string>
++    <string name="dap_kiosk_active">DAP pinned</string>
++    <string name="dap_kiosk_inactive">Not pinned</string>
++    <string name="dap_exit_kiosk">Exit kiosk</string>
++    <string name="dap_internal_dac_info">Internal DAC · 24-bit / 192 kHz · LOHIFI</string>
++    <string name="dap_eq_off">EQ off · no DSP</string>
++    <string name="dap_eq_on">EQ on · DSP active</string>
+     <string name="casting_to">Casting to</string>
+     <string name="volume_label">Volume</string>
+     <string name="reset_balance">Reset balance</string>
+diff --git a/app/src/main/res/xml/preferences_screen_playback.xml b/app/src/main/res/xml/preferences_screen_playback.xml
+index 4ea0720..4656292 100644
+--- a/app/src/main/res/xml/preferences_screen_playback.xml
++++ b/app/src/main/res/xml/preferences_screen_playback.xml
+@@ -3,16 +3,6 @@
+     xmlns:android="http://schemas.android.com/apk/res/android"
+     xmlns:app="http://schemas.android.com/apk/res-auto">
+ 
+-    <ListPreference
+-        app:iconSpaceReserved="true"
+-        app:title="@string/play_on_startup_title"
+-        app:useSimpleSummaryProvider="true"
+-        app:entries="@array/pref_play_on_startup_entries"
+-        app:entryValues="@array/pref_play_on_startup_values"
+-        app:defaultValue="never"
+-        app:layout="@layout/list_item_view"
+-        app:key="play_on_startup_mode"/>
+-
+     <PreferenceCategory
+         app:title="@string/playing_queue_label"
+         app:layout="@layout/preference_category_title">
+diff --git a/gradle.properties b/gradle.properties
+index 7f6a169..b86a37e 100644
+--- a/gradle.properties
++++ b/gradle.properties
+@@ -20,3 +20,4 @@ android.r8.strictFullModeForKeepRules=false
+ kotlin.code.style=official
+ # Enabled parallel sync for Gradle 9.4+
+ org.gradle.tooling.parallel=true
++org.gradle.java.installations.paths=/usr/lib/jvm/java-21-openjdk
+diff --git a/gradlew b/gradlew
+old mode 100644
+new mode 100755

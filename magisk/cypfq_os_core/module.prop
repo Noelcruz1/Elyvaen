@@ -1,0 +1,6 @@
+id=cypfq_os_core
+name=Elyvaen Core
+version=1.0
+versionCode=1
+author=opencode
+description=Núcleo systemless: 120Hz, 0.5x, schedutil, AOT, DND y volumen seguro off

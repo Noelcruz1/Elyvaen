@@ -1,0 +1,17 @@
+build/
+kernel-sources/
+*.raw
+*.raw.img
+*.img
+*.simg
+*.sparse
+*.sparse.img
+*.tar
+*.tar.gz
+*.log
+*.tmp
+core.*
+*.zip
+!payload/product/media/*.zip
+.DS_Store
+build-kernel/

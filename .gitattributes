@@ -1,0 +1,9 @@
+*.apk binary
+*.zip binary
+*.png binary
+*.jpg binary
+*.img binary
+*.ko binary
+*.patch text eol=lf
+*.sh text eol=lf
+*.md text eol=lf
