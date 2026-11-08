@@ -27,7 +27,7 @@ find_cross_cc() {
 mkdir -p "$OUT" "$ROOT/payload/vendor/bin/hw"
 
 HOST_CC=${HOST_CC:-cc}
-$HOST_CC -O2 -Wall -Wextra -Werror -o "$HOST_BIN" "$SRC"
+$HOST_CC -O2 -Wall -Wextra -Werror -o "$HOST_BIN" "$SRC" -lm
 "$HOST_BIN" --self-test
 
 CROSS_CC=$(find_cross_cc) || {
@@ -38,7 +38,7 @@ CROSS_CC=$(find_cross_cc) || {
 }
 
 "$CROSS_CC" -static -O2 -Wall -Wextra -Werror -s \
-    -o "$BIN" "$SRC"
+    -o "$BIN" "$SRC" -lm
 cp "$BIN" "$PAYLOAD_BIN"
 chmod 0755 "$PAYLOAD_BIN"
 

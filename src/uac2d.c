@@ -1,6 +1,7 @@
 #define _GNU_SOURCE
 #include <errno.h>
 #include <fcntl.h>
+#include <math.h>
 #include <poll.h>
 #include <signal.h>
 #include <stdarg.h>
@@ -496,7 +497,7 @@ static int scan_cards(struct card_info *cards, int max_cards)
     return scan_control_cards(cards, max_cards);
 }
 
-static int uac2_control_rate(int card)
+static int uac2_control_value(int card, const char *name, int *value)
 {
     char path[64];
     struct snd_ctl_elem_value val;
@@ -509,14 +510,117 @@ static int uac2_control_rate(int card)
         return -errno;
     memset(&val, 0, sizeof(val));
     val.id.iface = SNDRV_CTL_ELEM_IFACE_MIXER;
-    snprintf((char *)val.id.name, sizeof(val.id.name), "UAC2 Capture Rate");
+    snprintf((char *)val.id.name, sizeof(val.id.name), "%s", name);
     if (ioctl(fd, SNDRV_CTL_IOCTL_ELEM_READ, &val) < 0) {
         ret = -errno;
     } else {
-        ret = (int)val.value.integer.value[0];
+        *value = (int)val.value.integer.value[0];
+        ret = 0;
     }
     close(fd);
     return ret;
+}
+
+static int uac2_control_rate(int card)
+{
+    int value = 0;
+
+    if (uac2_control_value(card, "UAC2 Capture Rate", &value) < 0)
+        return -1;
+    return value;
+}
+
+static int32_t volume_gain_q15(int volume)
+{
+    double db;
+    double gain;
+    int32_t result;
+
+    if (volume >= 0)
+        return 32768;
+    db = (double)volume / 256.0;
+    gain = pow(10.0, db / 20.0);
+    if (gain < 0.0)
+        gain = 0.0;
+    if (gain > 1.0)
+        gain = 1.0;
+    result = (int32_t)(gain * 32768.0 + 0.5);
+    return result;
+}
+
+static void apply_gain(int fmt, uint8_t *buf, int frames, int channels,
+                       int32_t gain)
+{
+    int samples = frames * channels;
+    int i;
+
+    if (gain == 32768)
+        return;
+    if (gain <= 0) {
+        memset(buf, 0, (size_t)samples * (size_t)fmt_bytes(fmt));
+        return;
+    }
+
+    for (i = 0; i < samples; i++) {
+        if (fmt == FMT_S16) {
+            int16_t v = (int16_t)((uint16_t)buf[i * 2] |
+                                  ((uint16_t)buf[i * 2 + 1] << 8));
+            int32_t out = (int32_t)(((int64_t)v * gain) >> 15);
+            if (out > 32767)
+                out = 32767;
+            if (out < -32768)
+                out = -32768;
+            buf[i * 2] = (uint8_t)((uint16_t)(int16_t)out);
+            buf[i * 2 + 1] = (uint8_t)(((uint16_t)(int16_t)out) >> 8);
+        } else if (fmt == FMT_S24_3) {
+            uint8_t *p = buf + i * 3;
+            uint32_t u = (uint32_t)p[0] | ((uint32_t)p[1] << 8) |
+                         ((uint32_t)p[2] << 16);
+            int32_t v = ((int32_t)(u << 8)) >> 8;
+            int32_t out = (int32_t)(((int64_t)v * gain) >> 15);
+            uint32_t o;
+            if (out > 8388607)
+                out = 8388607;
+            if (out < -8388608)
+                out = -8388608;
+            o = (uint32_t)out;
+            p[0] = (uint8_t)o;
+            p[1] = (uint8_t)(o >> 8);
+            p[2] = (uint8_t)(o >> 16);
+        } else if (fmt == FMT_S24_4) {
+            uint8_t *p = buf + i * 4;
+            uint32_t u = (uint32_t)p[0] | ((uint32_t)p[1] << 8) |
+                         ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
+            int32_t v = ((int32_t)(u << 8)) >> 8;
+            int32_t out = (int32_t)(((int64_t)v * gain) >> 15);
+            uint32_t o;
+            if (out > 8388607)
+                out = 8388607;
+            if (out < -8388608)
+                out = -8388608;
+            o = (uint32_t)out;
+            p[0] = (uint8_t)o;
+            p[1] = (uint8_t)(o >> 8);
+            p[2] = (uint8_t)(o >> 16);
+            p[3] = (uint8_t)(o >> 24);
+        } else {
+            uint8_t *p = buf + i * 4;
+            uint32_t u = (uint32_t)p[0] | ((uint32_t)p[1] << 8) |
+                         ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
+            int32_t v = (int32_t)u;
+            int64_t out = ((int64_t)v * gain) >> 15;
+            uint32_t o;
+            if (out > 2147483647LL)
+                out = 2147483647LL;
+            if (out < -2147483648LL)
+                out = -2147483648LL;
+            o = (uint32_t)(int32_t)out;
+            p[0] = (uint8_t)o;
+            p[1] = (uint8_t)(o >> 8);
+            p[2] = (uint8_t)(o >> 16);
+            p[3] = (uint8_t)(o >> 24);
+        }
+    }
 }
 
 static int find_uac2_card(const struct card_info *cards, int count)
@@ -800,6 +904,9 @@ static int run_bridge(struct opts *o)
     time_t next_rate_check;
     struct frame_ring ring;
     unsigned long long drops = 0;
+    int host_volume = 0;
+    int host_mute = 0;
+    int32_t gain_q15 = 32768;
     uint8_t *capbuf = NULL;
     uint8_t *pbbuf = NULL;
     uint8_t *silence = NULL;
@@ -958,6 +1065,12 @@ static int run_bridge(struct opts *o)
     pcm_start(&pb);
     pcm_start(&cap);
 
+    if (uac2_control_value(cap.card, "UAC2 Host Volume", &host_volume) < 0)
+        host_volume = 0;
+    if (uac2_control_value(cap.card, "UAC2 Host Mute", &host_mute) < 0)
+        host_mute = 0;
+    gain_q15 = host_mute ? 0 : volume_gain_q15(host_volume);
+
     next_rate_check = time(NULL) + 1;
     while (!stop_requested) {
         struct pollfd fds[2];
@@ -970,6 +1083,18 @@ static int run_bridge(struct opts *o)
                         cap.rate, live_rate);
                 ret = UAC2_RATE_CHANGED;
                 break;
+            }
+            if (uac2_control_value(cap.card, "UAC2 Host Volume",
+                                   &host_volume) == 0 &&
+                uac2_control_value(cap.card, "UAC2 Host Mute",
+                                   &host_mute) == 0) {
+                int32_t new_gain = host_mute ? 0 :
+                                   volume_gain_q15(host_volume);
+                if (new_gain != gain_q15) {
+                    log_msg("uac2d: host volume=%d mute=%d gain=%d\n",
+                            host_volume, host_mute, new_gain);
+                    gain_q15 = new_gain;
+                }
             }
             next_rate_check = time(NULL) + 1;
         }
@@ -1013,6 +1138,7 @@ static int run_bridge(struct opts *o)
             if (n > 0) {
                 convert_frames(capbuf, cap_fmt, pbbuf, pb_fmt, n,
                                o->channels);
+                apply_gain(pb_fmt, pbbuf, n, o->channels, gain_q15);
                 drops += (unsigned long long)ring_push(&ring, pbbuf, n);
             } else if (n == -EPIPE) {
                 pcm_prepare(&cap);
