@@ -51,3 +51,18 @@ Fecha: 2026-11-08. Regla vigente: **no flashear nada hasta que el backend esté 
 1. Trabajar solo offline/build/commits.
 2. Completar backend: kernel release, UAC2 userspace, latencia/performance, pruebas estáticas.
 3. Solo al final: un único flash de la ROM terminada, con rollback listo.
+
+## UAC2 userspace (2026-11-08)
+
+- Daemon implementado en `src/uac2d.c`; compila estático arm64 con musl.
+- Self-test de conversión S16/S24_3/S32 pasa en x86_64, ASan/UBSan y `qemu-aarch64`.
+- Binario incluido en `payload/system/bin/elyvaen-uac2d` (0755).
+- Config: `payload/system/etc/elyvaen/uac2.conf` (48 kHz, 24-bit, 2 canales por defecto).
+- Control del gadget: `payload/system/bin/elyvaen-usb-dac.sh` (`on|off|status|restart`).
+- Servicios init: `payload/system/etc/init/elyvaen-uac2.rc` (daemon + enable/disable).
+- `scripts/build-super.sh` ahora instala binarios de `system/bin` con modo 0755.
+- `scripts/build-uac2d.sh` compila host para self-test y arm64 estático; toolchain en `/workspace/Android/toolchains/aarch64-linux-musl-cross`.
+- **No se ha probado end-to-end**: el kernel UAC2 no está flasheado y el dispositivo no estaba conectado durante esta fase.
+- Pendiente: probar configfs real (`uac2.0`), tarjeta `UAC2_Gadget`, permisos SELinux del servicio init, conflicto con `UsbGadget`, y latencia/underruns.
+- Hallazgo SELinux: la política stock `user` no muestra `allow init audio_device`; `hal_audio_server` sí tiene acceso ALSA completo y `audioserver` solo `read/write`. El servicio probablemente necesite un dominio/exec type propio o Magisk; no se debe pasar a permissive.
+- No se flasheó ni se modificó el dispositivo en esta fase.
