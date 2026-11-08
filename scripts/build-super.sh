@@ -24,7 +24,7 @@ need e2fsck
 need e2rm
 need dumpe2fs
 need lpdump
-need img2simg
+need python3
 need sha256sum
 need stat
 need find
@@ -220,7 +220,7 @@ build_super() {
     done
     lpdump "$OUT_DIR/super.raw.img" > "$OUT_DIR/lpdump-elyvaen.txt" 2>/dev/null || die "lpdump nuevo fallo"
     log "==> Generando imagen sparse"
-    img2simg "$OUT_DIR/super.raw.img" "$OUT_DIR/super.sparse.img"
+    python3 "$ROOT/scripts/raw-to-sparse.py" "$OUT_DIR/super.raw.img" "$OUT_DIR/super.sparse.img"
     ln -sf super.sparse.img "$OUT_DIR/super.img"
     sha256sum "$OUT_DIR/super.sparse.img" > "$OUT_DIR/super.sparse.sha256"
     sha256sum "$WORK"/*.img > "$OUT_DIR/images.sha256"
