@@ -34,13 +34,13 @@ El branch `nokernelsu` además tiene configuraciones de rendimiento (LTO/ThinLTO
 
 ## Estado de UAC2
 
-El defconfig actual tiene:
+El defconfig ya tiene, en la rama local `elyvaen-uac2`:
 
 ```
-# CONFIG_USB_CONFIGFS_F_UAC2 is not set
+CONFIG_USB_CONFIGFS_F_UAC2=y
 ```
 
-El driver está presente. Para el objetivo DAC USB hay que:
+El driver está compilado dentro del `Image` (no como módulo). Para completar el objetivo DAC USB hay que:
 
 1. Añadir `CONFIG_USB_CONFIGFS_F_UAC2=y` al defconfig.
 2. Compilar kernel y módulos juntos.
