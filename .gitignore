@@ -15,3 +15,6 @@ core.*
 !payload/product/media/*.zip
 .DS_Store
 build-kernel/
+
+build-*/
+out/
