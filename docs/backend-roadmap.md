@@ -37,6 +37,7 @@ Objetivo: cerrar el backend DAP antes del frontend. Sin Magisk y sin flashear ha
 - Ajuste de periodos/prefill con métricas de underrun y jitter.
 - Aceptación: sin underruns en 30 min a 48/192 kHz; latencia estable.
 - Dependencias: daemon, permisos del dominio.
+- Estado: implementado offline (SCHED_FIFO, mlockall, afinidad opcional, métricas); pendiente validar permisos y estabilidad en dispositivo.
 
 ### 4. Calidad del ring de deriva
 

@@ -59,6 +59,7 @@ Fecha: 2026-11-08. Regla vigente: **no flashear nada hasta que el backend esté 
 - Feature Unit volumen/mute: commit local `21036cc3f`, parche `patches/kernel/0003-uac2-volume-mute.patch`; build `build-kernel-uac2-vol/` (Image + 58 módulos).
 - Daemon: rate probe, controles ALSA `UAC2 Capture Rate`/`UAC2 Host Volume`/`UAC2 Host Mute`, reapertura al cambiar frecuencia, ring adaptativo y ganancia Q15.
 - Modo USB automático: `elyvaen-usb-auto.sh`, pausa de media, activación/desactivación UAC2, reparación del enlace y `sys.elyvaen.usbdac.auto`.
+- Daemon RT: `SCHED_FIFO` 80, `nice -20`, `mlockall`, afinidad opcional (`--cpu`) y métricas de drops/xruns/silencio.
 - Self-test de conversión S16/S24_3/S32 pasa en x86_64, ASan/UBSan y `qemu-aarch64`.
 - Binario incluido en `payload/vendor/bin/hw/elyvaen-uac2d` (0755), etiquetado `hal_audio_default_exec`.
 - Config: `payload/system/etc/elyvaen/uac2.conf` (48 kHz, 24-bit, 2 canales por defecto).
@@ -70,5 +71,5 @@ Fecha: 2026-11-08. Regla vigente: **no flashear nada hasta que el backend esté 
 - **No se ha probado end-to-end**: ni el kernel UAC2 fijo ni el multifrecuencia están flasheados; el dispositivo no estaba conectado durante esta fase.
 - Pendiente: probar configfs real (`uac2.0`), tarjeta `UAC2_Gadget`, transición SELinux a `hal_audio_default`, liberación del PCM al pausar la app, ADB/MTP tras el reenganche, resets de `UsbGadget`, y latencia/underruns.
 - SELinux resuelto sin Magisk: se reutiliza el dominio/exec type existente `hal_audio_default` del HAL de audio, que ya tiene acceso completo a `audio_device`; el binario va en vendor y se parchea `vendor_file_contexts`.
-- Pendiente de audio: validar que el host envíe `SET_CUR`, que `c_srate`/volumen/mute cambien, que el Feature Unit enumere y que el ring/ganancia no introduzcan clics.
+- Pendiente de audio: validar `SET_CUR`, Feature Unit, ring/ganancia, permisos de `SCHED_FIFO`/`mlockall`, ADB/MTP y liberación del PCM.
 - No se flasheó ni se modificó el dispositivo en esta fase.

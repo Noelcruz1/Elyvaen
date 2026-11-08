@@ -27,6 +27,8 @@ Topología del driver: `USB OUT -> ALSA capture` (audio que envía la PC) y `ALS
   - Lee `UAC2 Capture Rate` cada segundo y reabre el puente si el host cambia de frecuencia.
   - Buffer circular adaptativo (objetivo 3 periodos) que descarta audio viejo si el reloj del host va más rápido o inserta silencio si va más lento.
   - Lee `UAC2 Host Volume`/`UAC2 Host Mute` y aplica ganancia en punto fijo (Q15) antes del ring.
+  - Intenta `SCHED_FIFO` 80, `nice -20`, `mlockall` y afinidad opcional con `--cpu N`.
+  - Métricas cada 60 s: drops, xruns de captura/playback y frames de silencio.
   - Prefill de 2 periodos y recuperación de underrun/overrun.
   - Reintenta si la tarjeta todavía no existe; se detiene con SIGTERM/SIGINT.
 - `payload/system/etc/elyvaen/uac2.conf`: frecuencia/canales que usa el script para configurar el gadget; el daemon tiene defaults y detecta la frecuencia real.
