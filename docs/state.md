@@ -60,6 +60,7 @@ Fecha: 2026-11-08. Regla vigente: **no flashear nada hasta que el backend esté 
 - Daemon: rate probe, controles ALSA `UAC2 Capture Rate`/`UAC2 Host Volume`/`UAC2 Host Mute`, reapertura al cambiar frecuencia, ring adaptativo y ganancia Q15.
 - Modo USB automático: `elyvaen-usb-auto.sh`, pausa de media, activación/desactivación UAC2, reparación del enlace y `sys.elyvaen.usbdac.auto`.
 - Daemon RT: `SCHED_FIFO` 80, `nice -20`, `mlockall`, afinidad opcional (`--cpu`) y métricas de drops/xruns/silencio.
+- Crossfade de 64 frames en discontinuidades del ring; pendiente validación auditiva.
 - Self-test de conversión S16/S24_3/S32 pasa en x86_64, ASan/UBSan y `qemu-aarch64`.
 - Binario incluido en `payload/vendor/bin/hw/elyvaen-uac2d` (0755), etiquetado `hal_audio_default_exec`.
 - Config: `payload/system/etc/elyvaen/uac2.conf` (48 kHz, 24-bit, 2 canales por defecto).

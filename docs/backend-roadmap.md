@@ -45,6 +45,7 @@ Objetivo: cerrar el backend DAP antes del frontend. Sin Magisk y sin flashear ha
 - Evitar clics en sesiones largas.
 - Aceptación: sin clics audibles en 1 h con relojes distintos; drop/insert medido.
 - Dependencias: ring actual.
+- Estado: implementado offline (crossfade de 64 frames); pendiente validación auditiva y, si hace falta, resampler adaptativo.
 
 ### 5. Release del kernel
 
