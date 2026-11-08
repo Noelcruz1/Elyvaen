@@ -21,6 +21,7 @@
 #define MAX_CARDS 16
 #define MAX_CARD_NAME 64
 #define MAX_PATH 128
+#define UAC2_RATE_CHANGED (-2000)
 
 enum {
     FMT_S16 = 0,
@@ -495,6 +496,29 @@ static int scan_cards(struct card_info *cards, int max_cards)
     return scan_control_cards(cards, max_cards);
 }
 
+static int uac2_control_rate(int card)
+{
+    char path[64];
+    struct snd_ctl_elem_value val;
+    int fd;
+    int ret;
+
+    snprintf(path, sizeof(path), "/dev/snd/controlC%d", card);
+    fd = open(path, O_RDWR | O_CLOEXEC);
+    if (fd < 0)
+        return -errno;
+    memset(&val, 0, sizeof(val));
+    val.id.iface = SNDRV_CTL_ELEM_IFACE_MIXER;
+    snprintf((char *)val.id.name, sizeof(val.id.name), "UAC2 Capture Rate");
+    if (ioctl(fd, SNDRV_CTL_IOCTL_ELEM_READ, &val) < 0) {
+        ret = -errno;
+    } else {
+        ret = (int)val.value.integer.value[0];
+    }
+    close(fd);
+    return ret;
+}
+
 static int find_uac2_card(const struct card_info *cards, int count)
 {
     int i;
@@ -637,31 +661,110 @@ static int write_all(struct stream *pb, const void *buf, int frames)
     return done;
 }
 
-static int read_data(struct stream *cap, void *buf, int frames)
+struct frame_ring {
+    uint8_t *data;
+    int capacity;
+    int frame_bytes;
+    int read_frame;
+    int write_frame;
+    int fill;
+    int target;
+};
+
+static int ring_init(struct frame_ring *r, int capacity, int frame_bytes,
+                     int target)
+{
+    memset(r, 0, sizeof(*r));
+    r->data = calloc((size_t)capacity, (size_t)frame_bytes);
+    if (!r->data)
+        return -ENOMEM;
+    r->capacity = capacity;
+    r->frame_bytes = frame_bytes;
+    r->target = target;
+    if (r->target < 1)
+        r->target = 1;
+    if (r->target > capacity)
+        r->target = capacity;
+    return 0;
+}
+
+static int ring_drop(struct frame_ring *r, int frames)
+{
+    if (frames <= 0)
+        return 0;
+    if (frames > r->fill)
+        frames = r->fill;
+    r->read_frame = (r->read_frame + frames) % r->capacity;
+    r->fill -= frames;
+    return frames;
+}
+
+static int ring_push(struct frame_ring *r, const uint8_t *src, int frames)
+{
+    int dropped = 0;
+    int first;
+
+    if (frames <= 0)
+        return 0;
+    if (frames > r->capacity) {
+        src += (size_t)(frames - r->capacity) * (size_t)r->frame_bytes;
+        frames = r->capacity;
+    }
+    while (r->fill + frames > r->capacity) {
+        ring_drop(r, 1);
+        dropped++;
+    }
+    first = frames;
+    if (first > r->capacity - r->write_frame)
+        first = r->capacity - r->write_frame;
+    memcpy(r->data + (size_t)r->write_frame * (size_t)r->frame_bytes, src,
+           (size_t)first * (size_t)r->frame_bytes);
+    if (frames > first) {
+        memcpy(r->data, src + (size_t)first * (size_t)r->frame_bytes,
+               (size_t)(frames - first) * (size_t)r->frame_bytes);
+    }
+    r->write_frame = (r->write_frame + frames) % r->capacity;
+    r->fill += frames;
+    if (r->fill > r->target) {
+        dropped += ring_drop(r, r->fill - r->target);
+    }
+    return dropped;
+}
+
+static int ring_peek(struct frame_ring *r, uint8_t *dst, int frames)
 {
     int n;
-    while (!stop_requested) {
-        n = pcm_read(cap, buf, frames);
-        if (n > 0)
-            return n;
-        if (n == 0)
-            return 0;
-        if (n == -EAGAIN) {
-            int w = wait_fd(cap->fd, POLLIN, 1000);
-            if (w == 0)
-                continue;
-            if (w < 0)
-                return w;
-            continue;
-        }
-        if (n == -EPIPE) {
-            pcm_prepare(cap);
-            pcm_start(cap);
-            continue;
-        }
-        return n;
+    int first;
+
+    if (frames <= 0)
+        return 0;
+    n = frames < r->fill ? frames : r->fill;
+    first = n;
+    if (first > r->capacity - r->read_frame)
+        first = r->capacity - r->read_frame;
+    memcpy(dst, r->data + (size_t)r->read_frame * (size_t)r->frame_bytes,
+           (size_t)first * (size_t)r->frame_bytes);
+    if (n > first) {
+        memcpy(dst + (size_t)first * (size_t)r->frame_bytes, r->data,
+               (size_t)(n - first) * (size_t)r->frame_bytes);
     }
-    return 0;
+    return n;
+}
+
+static void ring_consume(struct frame_ring *r, int frames)
+{
+    if (frames <= 0)
+        return;
+    if (frames > r->fill)
+        frames = r->fill;
+    r->read_frame = (r->read_frame + frames) % r->capacity;
+    r->fill -= frames;
+}
+
+static void ring_free(struct frame_ring *r)
+{
+    free(r->data);
+    r->data = NULL;
 }
 
 static int prefill_silence(struct stream *pb, int frames)
@@ -694,11 +797,16 @@ static int run_bridge(struct opts *o)
     int max_frame_bytes;
     int period;
     int prefill;
+    time_t next_rate_check;
+    struct frame_ring ring;
+    unsigned long long drops = 0;
     uint8_t *capbuf = NULL;
     uint8_t *pbbuf = NULL;
+    uint8_t *silence = NULL;
 
     memset(&cap, 0, sizeof(cap));
     memset(&pb, 0, sizeof(pb));
+    memset(&ring, 0, sizeof(ring));
     cap.fd = -1;
     pb.fd = -1;
 
@@ -772,6 +880,10 @@ static int run_bridge(struct opts *o)
     }
     cap_bytes = cap.bytes_per_frame;
     period = cap.period_frames;
+    if (cap_bytes <= 0 || period <= 0) {
+        close(cap.fd);
+        return -EINVAL;
+    }
 
     ret = open_pcm(&pb, pb_card, o->playback_device, 0, o->rate,
                    o->channels, o->periods, period, o->playback_format,
@@ -783,6 +895,11 @@ static int run_bridge(struct opts *o)
         return ret;
     }
     pb_bytes = pb.bytes_per_frame;
+    if (pb_bytes <= 0) {
+        close(cap.fd);
+        close(pb.fd);
+        return -EINVAL;
+    }
     max_frame_bytes = cap_bytes > pb_bytes ? cap_bytes : pb_bytes;
 
     prefill = o->prefill_periods * period;
@@ -791,10 +908,14 @@ static int run_bridge(struct opts *o)
 
     capbuf = malloc((size_t)period * (size_t)cap_bytes);
     pbbuf = malloc((size_t)period * (size_t)max_frame_bytes);
-    if (!capbuf || !pbbuf) {
+    silence = calloc((size_t)period, (size_t)pb_bytes);
+    if (!capbuf || !pbbuf || !silence ||
+        ring_init(&ring, period * 8, pb_bytes, period * 3) < 0) {
         log_msg("uac2d: out of memory\n");
         free(capbuf);
         free(pbbuf);
+        free(silence);
+        ring_free(&ring);
         close(cap.fd);
         close(pb.fd);
         return -ENOMEM;
@@ -837,22 +958,94 @@ static int run_bridge(struct opts *o)
     pcm_start(&pb);
     pcm_start(&cap);
 
+    next_rate_check = time(NULL) + 1;
     while (!stop_requested) {
-        int got = read_data(&cap, capbuf, period);
-        int written;
-        if (got < 0) {
-            log_msg("uac2d: capture read: %s\n", strerror(-got));
+        struct pollfd fds[2];
+        int pr;
+
+        if (time(NULL) >= next_rate_check) {
+            int live_rate = uac2_control_rate(cap.card);
+            if (live_rate > 0 && live_rate != cap.rate) {
+                log_msg("uac2d: host rate changed %d -> %d, reopening\n",
+                        cap.rate, live_rate);
+                ret = UAC2_RATE_CHANGED;
+                break;
+            }
+            next_rate_check = time(NULL) + 1;
+        }
+
+        fds[0].fd = cap.fd;
+        fds[0].events = POLLIN;
+        fds[0].revents = 0;
+        fds[1].fd = pb.fd;
+        fds[1].events = POLLOUT;
+        fds[1].revents = 0;
+        pr = poll(fds, 2, 20);
+        if (pr < 0) {
+            if (errno == EINTR)
+                continue;
+            ret = -errno;
             break;
         }
-        if (got == 0)
+        if (pr == 0) {
+            int n = ring_peek(&ring, pbbuf, period);
+            int w;
+            if (n > 0) {
+                w = pcm_write(&pb, pbbuf, n);
+                if (w > 0)
+                    ring_consume(&ring, w);
+            } else {
+                w = pcm_write(&pb, silence, period);
+            }
+            if (w == -EPIPE) {
+                pcm_prepare(&pb);
+                pcm_start(&pb);
+            } else if (w < 0 && w != -EAGAIN) {
+                log_msg("uac2d: playback write: %s\n", strerror(-w));
+                ret = w;
+                break;
+            }
             continue;
-        convert_frames(capbuf, cap_fmt, pbbuf, pb_fmt, got, o->channels);
-        written = write_all(&pb, pbbuf, got);
-        if (written < 0) {
-            log_msg("uac2d: playback write: %s\n", strerror(-written));
-            break;
+        }
+
+        if (fds[0].revents & (POLLIN | POLLERR | POLLHUP)) {
+            int n = pcm_read(&cap, capbuf, period);
+            if (n > 0) {
+                convert_frames(capbuf, cap_fmt, pbbuf, pb_fmt, n,
+                               o->channels);
+                drops += (unsigned long long)ring_push(&ring, pbbuf, n);
+            } else if (n == -EPIPE) {
+                pcm_prepare(&cap);
+                pcm_start(&cap);
+            } else if (n < 0 && n != -EAGAIN) {
+                log_msg("uac2d: capture read: %s\n", strerror(-n));
+                ret = n;
+                break;
+            }
+        }
+
+        if (fds[1].revents & (POLLOUT | POLLERR | POLLHUP)) {
+            int n = ring_peek(&ring, pbbuf, period);
+            int w;
+            if (n > 0) {
+                w = pcm_write(&pb, pbbuf, n);
+                if (w > 0)
+                    ring_consume(&ring, w);
+            } else {
+                w = pcm_write(&pb, silence, period);
+            }
+            if (w == -EPIPE) {
+                pcm_prepare(&pb);
+                pcm_start(&pb);
+            } else if (w < 0 && w != -EAGAIN) {
+                log_msg("uac2d: playback write: %s\n", strerror(-w));
+                ret = w;
+                break;
+            }
         }
     }
+    if (drops)
+        log_msg("uac2d: drift drop frames=%llu\n", drops);
 
     pcm_drop(&pb);
     pcm_drop(&cap);
@@ -862,7 +1055,9 @@ out:
     close(pb.fd);
     free(capbuf);
     free(pbbuf);
-    return 0;
+    free(silence);
+    ring_free(&ring);
+    return ret;
 }
 
 static int self_test(void)
@@ -944,6 +1139,39 @@ static int self_test(void)
         }
     }
 
+    {
+        struct frame_ring r;
+        uint8_t src[4 * 4];
+        uint8_t dst[4 * 4];
+        int j;
+
+        if (ring_init(&r, 4, 4, 2) < 0)
+            return 1;
+        for (j = 0; j < 4; j++) {
+            src[j * 4] = (uint8_t)j;
+            src[j * 4 + 1] = (uint8_t)(j + 10);
+            src[j * 4 + 2] = (uint8_t)(j + 20);
+            src[j * 4 + 3] = (uint8_t)(j + 30);
+        }
+        if (ring_push(&r, src, 4) != 2) {
+            log_msg("uac2d: self-test ring drop failed\n");
+            ring_free(&r);
+            return 1;
+        }
+        if (ring_peek(&r, dst, 2) != 2 || dst[0] != 2 || dst[4] != 3) {
+            log_msg("uac2d: self-test ring data failed\n");
+            ring_free(&r);
+            return 1;
+        }
+        ring_consume(&r, 2);
+        if (r.fill != 0) {
+            log_msg("uac2d: self-test ring consume failed\n");
+            ring_free(&r);
+            return 1;
+        }
+        ring_free(&r);
+    }
+
     log_msg("uac2d: self-test ok\n");
     return 0;
 }
@@ -991,6 +1219,8 @@ static int parse_args(struct opts *o, int argc, char **argv)
     for (i = 1; i < argc; i++) {
         const char *a = argv[i];
         const char *v = NULL;
+        if (!a)
+            continue;
         if (!strcmp(a, "--help") || !strcmp(a, "-h")) {
             usage(argv[0]);
             exit(0);
@@ -1171,7 +1401,9 @@ int main(int argc, char **argv)
         ret = run_bridge(&o);
         if (stop_requested)
             break;
-        if (ret < 0)
+        if (ret == UAC2_RATE_CHANGED)
+            log_msg("uac2d: reopening for new host rate\n");
+        else if (ret < 0)
             log_msg("uac2d: bridge unavailable (%s), retrying\n",
                     strerror(-ret));
         msleep(1000);
