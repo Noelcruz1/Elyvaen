@@ -102,15 +102,8 @@ daemon_start() {
     fi
     sleep 1
     if ! pidof "$DAEMON" >/dev/null 2>&1; then
-        if command -v nohup >/dev/null 2>&1; then
-            nohup /system/bin/elyvaen-uac2d \
-                --config /system/etc/elyvaen/uac2.conf \
-                >>/data/local/tmp/elyvaen-uac2d.log 2>&1 &
-        else
-            /system/bin/elyvaen-uac2d \
-                --config /system/etc/elyvaen/uac2.conf \
-                >>/data/local/tmp/elyvaen-uac2d.log 2>&1 &
-        fi
+        echo "elyvaen-usb-dac: init service elyvaen-uac2d did not start" >&2
+        return 1
     fi
 }
 
@@ -156,7 +149,11 @@ enable_dac() {
         restore_udc
         return 1
     fi
-    daemon_start
+    if ! daemon_start; then
+        remove_function
+        restore_udc
+        return 1
+    fi
     echo "elyvaen-usb-dac: enabled rate=$rate channels=$channels format=$fmt udc=$udc"
 }
 

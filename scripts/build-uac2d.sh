@@ -6,7 +6,7 @@ SRC="$ROOT/src/uac2d.c"
 OUT=${UAC2D_BUILD:-$ROOT/build-uac2d}
 BIN="$OUT/elyvaen-uac2d"
 HOST_BIN="$OUT/elyvaen-uac2d-host"
-PAYLOAD_BIN="$ROOT/payload/system/bin/elyvaen-uac2d"
+PAYLOAD_BIN="$ROOT/payload/vendor/bin/hw/elyvaen-uac2d"
 
 find_cross_cc() {
     if [ -n "${CROSS_CC:-}" ]; then
@@ -24,7 +24,7 @@ find_cross_cc() {
     command -v aarch64-linux-musl-gcc 2>/dev/null || return 1
 }
 
-mkdir -p "$OUT" "$ROOT/payload/system/bin"
+mkdir -p "$OUT" "$ROOT/payload/vendor/bin/hw"
 
 HOST_CC=${HOST_CC:-cc}
 $HOST_CC -O2 -Wall -Wextra -Werror -o "$HOST_BIN" "$SRC"

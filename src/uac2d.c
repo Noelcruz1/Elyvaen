@@ -14,7 +14,6 @@
 #include <unistd.h>
 #include <sound/asound.h>
 
-#define DEFAULT_CONFIG "/system/etc/elyvaen/uac2.conf"
 #define DEFAULT_RATE 48000
 #define DEFAULT_CHANNELS 2
 #define DEFAULT_PERIODS 4
@@ -451,6 +450,31 @@ static int parse_card_line(const char *line, struct card_info *out)
     return 0;
 }
 
+static int scan_control_cards(struct card_info *cards, int max_cards)
+{
+    int card;
+    int count = 0;
+
+    for (card = 0; card < 32 && count < max_cards; card++) {
+        char path[64];
+        struct snd_ctl_card_info info;
+        int fd;
+        snprintf(path, sizeof(path), "/dev/snd/controlC%d", card);
+        fd = open(path, O_RDONLY | O_CLOEXEC);
+        if (fd < 0)
+            continue;
+        memset(&info, 0, sizeof(info));
+        if (ioctl(fd, SNDRV_CTL_IOCTL_CARD_INFO, &info) == 0) {
+            cards[count].number = card;
+            snprintf(cards[count].name, sizeof(cards[count].name), "%s %s",
+                     (const char *)info.id, (const char *)info.name);
+            count++;
+        }
+        close(fd);
+    }
+    return count;
+}
+
 static int scan_cards(struct card_info *cards, int max_cards)
 {
     FILE *f;
@@ -458,15 +482,17 @@ static int scan_cards(struct card_info *cards, int max_cards)
     int count = 0;
 
     f = fopen("/proc/asound/cards", "r");
-    if (!f)
-        return -errno;
-    while (count < max_cards && fgets(line, sizeof(line), f)) {
-        struct card_info ci;
-        if (parse_card_line(line, &ci) == 0)
-            cards[count++] = ci;
+    if (f) {
+        while (count < max_cards && fgets(line, sizeof(line), f)) {
+            struct card_info ci;
+            if (parse_card_line(line, &ci) == 0)
+                cards[count++] = ci;
+        }
+        fclose(f);
     }
-    fclose(f);
-    return count;
+    if (count > 0)
+        return count;
+    return scan_control_cards(cards, max_cards);
 }
 
 static int find_uac2_card(const struct card_info *cards, int count)
@@ -710,13 +736,39 @@ static int run_bridge(struct opts *o)
             period = 32;
     }
 
-    ret = open_pcm(&cap, cap_card, o->capture_device, 1, o->rate,
-                   o->channels, o->periods, period, o->capture_format,
-                   &cap_fmt);
-    if (ret < 0) {
-        log_msg("uac2d: cannot open capture card %d device %d: %s\n",
-                cap_card, o->capture_device, strerror(-ret));
-        return ret;
+    {
+        int rates[] = { o->rate, 192000, 176400, 96000, 88200, 48000,
+                        44100, 32000, 24000, 22050, 16000, 8000 };
+        int rate_count = (int)(sizeof(rates) / sizeof(rates[0]));
+        int r;
+        int opened = 0;
+        ret = -EINVAL;
+        for (r = 0; r < rate_count && !opened; r++) {
+            int candidate = rates[r];
+            int k;
+            int duplicate = 0;
+            if (candidate < 8000 || candidate > 384000)
+                continue;
+            for (k = 0; k < r; k++) {
+                if (rates[k] == candidate)
+                    duplicate = 1;
+            }
+            if (duplicate)
+                continue;
+            ret = open_pcm(&cap, cap_card, o->capture_device, 1, candidate,
+                           o->channels, o->periods, period, o->capture_format,
+                           &cap_fmt);
+            if (ret == 0) {
+                o->rate = candidate;
+                opened = 1;
+                break;
+            }
+        }
+        if (!opened) {
+            log_msg("uac2d: cannot open capture card %d device %d: %s\n",
+                    cap_card, o->capture_device, strerror(-ret));
+            return ret;
+        }
     }
     cap_bytes = cap.bytes_per_frame;
     period = cap.period_frames;
@@ -1077,7 +1129,7 @@ int main(int argc, char **argv)
     o.playback_device = 0;
     o.capture_format = -1;
     o.playback_format = -1;
-    o.config_path = DEFAULT_CONFIG;
+    o.config_path = NULL;
 
     {
         int i;
@@ -1088,7 +1140,7 @@ int main(int argc, char **argv)
             }
         }
     }
-    if (access(o.config_path, R_OK) == 0)
+    if (o.config_path && access(o.config_path, R_OK) == 0)
         load_config(&o, o.config_path);
     if (parse_args(&o, argc, argv) < 0)
         return 2;

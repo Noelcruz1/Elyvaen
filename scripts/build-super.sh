@@ -51,6 +51,13 @@ ctx_for() {
     esac
 }
 
+file_ctx_for() {
+    case "$1:$2" in
+        vendor:/bin/hw/elyvaen-uac2d) echo "u:object_r:hal_audio_default_exec:s0" ;;
+        *) ctx_for "$1" ;;
+    esac
+}
+
 dbg() {
     debugfs -w -R "$1" "$2" >/dev/null 2>&1
 }
@@ -89,8 +96,9 @@ install_file() {
     src=$2
     dst=$3
     mode=$4
-    ctx=$5
-    ensure_dir "$img" "$ctx" "$(dirname "$dst")"
+    file_ctx=$5
+    dir_ctx=${6:-$file_ctx}
+    ensure_dir "$img" "$dir_ctx" "$(dirname "$dst")"
     if exists "$img" "$dst"; then
         dbg "rm \"$dst\"" "$img" || true
     fi
@@ -98,7 +106,7 @@ install_file() {
     dbg "sif \"$dst\" mode $mode" "$img" || true
     dbg "sif \"$dst\" uid 0" "$img" || true
     dbg "sif \"$dst\" gid 0" "$img" || true
-    dbg "ea_set \"$dst\" security.selinux $ctx\\0" "$img" || true
+    dbg "ea_set \"$dst\" security.selinux $file_ctx\\0" "$img" || true
 }
 
 prepare_images() {
@@ -150,19 +158,33 @@ apply_payload() {
         section=${rel%%/*}
         rest=${rel#*/}
         img=$(img_for "$section")
-        ctx=$(ctx_for "$section")
+        dir_ctx=$(ctx_for "$section")
         case "$section" in
             system) dst="/system/$rest" ;;
             *) dst="/$rest" ;;
         esac
+        ctx=$(file_ctx_for "$section" "$dst")
         case "$rest" in
             *.sh|bin/*) mode=0100755 ;;
             *) mode=0100644 ;;
         esac
-        install_file "$img" "$src" "$dst" "$mode" "$ctx"
+        install_file "$img" "$src" "$dst" "$mode" "$ctx" "$dir_ctx"
         count=$((count + 1))
     done < "$file_list"
     log "   archivos integrados: $count"
+    patch_vendor_file_contexts
+}
+
+patch_vendor_file_contexts() {
+    log "==> Etiquetando binario UAC2 en vendor_file_contexts"
+    img=$(img_for vendor)
+    tmp="$OUT_DIR/vendor_file_contexts"
+    dbgq "dump \"/etc/selinux/vendor_file_contexts\" \"$tmp\"" "$img" >/dev/null || die "no se pudo extraer vendor_file_contexts"
+    [ -s "$tmp" ] || die "vendor_file_contexts vacio"
+    if ! grep -q 'elyvaen-uac2d' "$tmp"; then
+        printf '/(vendor|system/vendor)/bin/hw/elyvaen-uac2d u:object_r:hal_audio_default_exec:s0\n' >> "$tmp"
+    fi
+    install_file "$img" "$tmp" "/etc/selinux/vendor_file_contexts" 0100644 "u:object_r:file_contexts_file:s0" "u:object_r:file_contexts_file:s0"
 }
 
 patch_build_prop() {

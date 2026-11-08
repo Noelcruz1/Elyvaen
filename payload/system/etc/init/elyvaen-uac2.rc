@@ -1,7 +1,8 @@
-service elyvaen-uac2d /system/bin/elyvaen-uac2d --config /system/etc/elyvaen/uac2.conf
+service elyvaen-uac2d /vendor/bin/hw/elyvaen-uac2d
     class late_start
     user root
     group root audio system
+    seclabel u:r:hal_audio_default:s0
     disabled
 
 service elyvaen-usb-dac-on /system/bin/sh /system/bin/elyvaen-usb-dac.sh on
