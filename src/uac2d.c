@@ -26,6 +26,8 @@
 #define MAX_CARD_NAME 64
 #define MAX_PATH 128
 #define UAC2_RATE_CHANGED (-2000)
+#define FADE_FRAMES 64
+#define MAX_CHANNELS 8
 
 enum {
     FMT_S16 = 0,
@@ -739,6 +741,124 @@ static void convert_frames(const void *src, int src_fmt, void *dst, int dst_fmt,
     }
 }
 
+static int32_t clip_sample(int fmt, int64_t value)
+{
+    if (fmt == FMT_S16) {
+        if (value > 32767)
+            return 32767;
+        if (value < -32768)
+            return -32768;
+        return (int32_t)value;
+    }
+    if (fmt == FMT_S24_3 || fmt == FMT_S24_4) {
+        if (value > 8388607)
+            return 8388607;
+        if (value < -8388608)
+            return -8388608;
+        return (int32_t)value;
+    }
+    if (value > 2147483647LL)
+        return 2147483647;
+    if (value < -2147483648LL)
+        return (-2147483647 - 1);
+    return (int32_t)value;
+}
+
+static int32_t read_sample(int fmt, const uint8_t *p)
+{
+    if (fmt == FMT_S16) {
+        return (int32_t)(int16_t)((uint16_t)p[0] | ((uint16_t)p[1] << 8));
+    }
+    if (fmt == FMT_S24_3) {
+        uint32_t u = (uint32_t)p[0] | ((uint32_t)p[1] << 8) |
+                     ((uint32_t)p[2] << 16);
+        return ((int32_t)(u << 8)) >> 8;
+    }
+    if (fmt == FMT_S24_4) {
+        uint32_t u = (uint32_t)p[0] | ((uint32_t)p[1] << 8) |
+                     ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
+        return ((int32_t)(u << 8)) >> 8;
+    }
+    {
+        uint32_t u = (uint32_t)p[0] | ((uint32_t)p[1] << 8) |
+                     ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
+        return (int32_t)u;
+    }
+}
+
+static void write_sample(int fmt, uint8_t *p, int32_t value)
+{
+    uint32_t u = (uint32_t)value;
+
+    if (fmt == FMT_S16) {
+        p[0] = (uint8_t)u;
+        p[1] = (uint8_t)(u >> 8);
+    } else if (fmt == FMT_S24_3) {
+        p[0] = (uint8_t)u;
+        p[1] = (uint8_t)(u >> 8);
+        p[2] = (uint8_t)(u >> 16);
+    } else {
+        p[0] = (uint8_t)u;
+        p[1] = (uint8_t)(u >> 8);
+        p[2] = (uint8_t)(u >> 16);
+        p[3] = (uint8_t)(u >> 24);
+    }
+}
+
+static void crossfade_data(int fmt, int channels, int frames, uint8_t *buf,
+                           int32_t *last, int *fade)
+{
+    int bpf = fmt_bytes(fmt);
+    int i;
+    int c;
+
+    for (i = 0; i < frames; i++) {
+        for (c = 0; c < channels; c++) {
+            uint8_t *p = buf + ((size_t)i * channels + c) * (size_t)bpf;
+            int32_t next = read_sample(fmt, p);
+            int32_t out = next;
+            if (*fade > 0) {
+                double alpha = 1.0 - (double)*fade / (double)FADE_FRAMES;
+                int64_t mixed = (int64_t)last[c] +
+                    (int64_t)((double)((int64_t)next - last[c]) * alpha);
+                out = clip_sample(fmt, mixed);
+            }
+            write_sample(fmt, p, out);
+            last[c] = out;
+        }
+        if (*fade > 0)
+            (*fade)--;
+    }
+}
+
+static void fill_silence_fade(int fmt, int channels, int frames, uint8_t *buf,
+                              int32_t *last, int *fade)
+{
+    int bpf = fmt_bytes(fmt);
+    int i;
+    int c;
+
+    memset(buf, 0, (size_t)frames * channels * (size_t)bpf);
+    if (*fade <= 0)
+        *fade = FADE_FRAMES;
+    for (i = 0; i < frames; i++) {
+        for (c = 0; c < channels; c++) {
+            uint8_t *p = buf + ((size_t)i * channels + c) * (size_t)bpf;
+            int32_t out = 0;
+            if (*fade > 0) {
+                double alpha = 1.0 - (double)*fade / (double)FADE_FRAMES;
+                out = clip_sample(fmt, (int64_t)((double)last[c] *
+                                                 (1.0 - alpha)));
+            }
+            write_sample(fmt, p, out);
+            last[c] = out;
+        }
+        if (*fade > 0)
+            (*fade)--;
+    }
+    *fade = FADE_FRAMES;
+}
+
 static int write_all(struct stream *pb, const void *buf, int frames)
 {
     const uint8_t *p = buf;
@@ -914,6 +1034,8 @@ static int run_bridge(struct opts *o)
     int host_volume = 0;
     int host_mute = 0;
     int32_t gain_q15 = 32768;
+    int32_t last_sample[MAX_CHANNELS] = { 0 };
+    int fade_remaining = 0;
     uint8_t *capbuf = NULL;
     uint8_t *pbbuf = NULL;
     uint8_t *silence = NULL;
@@ -1071,6 +1193,7 @@ static int run_bridge(struct opts *o)
     }
     pcm_start(&pb);
     pcm_start(&cap);
+    fade_remaining = FADE_FRAMES;
 
     if (uac2_control_value(cap.card, "UAC2 Host Volume", &host_volume) < 0)
         host_volume = 0;
@@ -1131,10 +1254,14 @@ static int run_bridge(struct opts *o)
             int n = ring_peek(&ring, pbbuf, period);
             int w;
             if (n > 0) {
+                crossfade_data(pb_fmt, o->channels, n, pbbuf, last_sample,
+                               &fade_remaining);
                 w = pcm_write(&pb, pbbuf, n);
                 if (w > 0)
                     ring_consume(&ring, w);
             } else {
+                fill_silence_fade(pb_fmt, o->channels, period, silence,
+                                  last_sample, &fade_remaining);
                 w = pcm_write(&pb, silence, period);
                 if (w > 0)
                     silence_frames += (unsigned long long)w;
@@ -1157,7 +1284,13 @@ static int run_bridge(struct opts *o)
                 convert_frames(capbuf, cap_fmt, pbbuf, pb_fmt, n,
                                o->channels);
                 apply_gain(pb_fmt, pbbuf, n, o->channels, gain_q15);
-                drops += (unsigned long long)ring_push(&ring, pbbuf, n);
+                {
+                    int dropped = ring_push(&ring, pbbuf, n);
+                    if (dropped > 0) {
+                        drops += (unsigned long long)dropped;
+                        fade_remaining = FADE_FRAMES;
+                    }
+                }
             } else if (n == -EPIPE) {
                 xruns_in++;
                 pcm_prepare(&cap);
@@ -1173,10 +1306,14 @@ static int run_bridge(struct opts *o)
             int n = ring_peek(&ring, pbbuf, period);
             int w;
             if (n > 0) {
+                crossfade_data(pb_fmt, o->channels, n, pbbuf, last_sample,
+                               &fade_remaining);
                 w = pcm_write(&pb, pbbuf, n);
                 if (w > 0)
                     ring_consume(&ring, w);
             } else {
+                fill_silence_fade(pb_fmt, o->channels, period, silence,
+                                  last_sample, &fade_remaining);
                 w = pcm_write(&pb, silence, period);
                 if (w > 0)
                     silence_frames += (unsigned long long)w;
