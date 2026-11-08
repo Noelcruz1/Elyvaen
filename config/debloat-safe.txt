@@ -95,3 +95,4 @@ system_ext /app/DciStatsService
 system_ext /app/NFWLocationAttribution
 system_ext /app/VirtualUiccPayment_st
 system_ext /app/FMRadioService
+system_ext /priv-app/Launcher3QuickStep
