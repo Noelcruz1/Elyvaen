@@ -1,0 +1,262 @@
+From 006ec684453b9b8c67568f2a01e819e712163996 Mon Sep 17 00:00:00 2001
+From: Elyvaen <elyvaen@users.noreply.github.com>
+Date: Sun, 8 Nov 2026 21:31:33 +0000
+Subject: [PATCH] uac2: support 44.1-192k rates and expose current rate
+
+---
+ drivers/usb/gadget/function/f_uac2.c  | 120 +++++++++++++++++++-------
+ drivers/usb/gadget/function/u_audio.c |  40 +++++++++
+ 2 files changed, 127 insertions(+), 33 deletions(-)
+
+diff --git a/drivers/usb/gadget/function/f_uac2.c b/drivers/usb/gadget/function/f_uac2.c
+index cb40feb3c..64a7785b9 100644
+--- a/drivers/usb/gadget/function/f_uac2.c
++++ b/drivers/usb/gadget/function/f_uac2.c
+@@ -16,6 +16,10 @@
+ 
+ /* Keep everyone on toes */
+ #define USB_XFERS	8
++#define UAC2_MAX_RATE	192000
++static const u32 uac2_rates[] = {
++	44100, 48000, 88200, 96000, 176400, 192000
++};
+ /* UAC2 spec: 4.1 Audio Channel Cluster Descriptor */
+ #define UAC2_CHANNEL_MASK 0x07FFFFFF
+ 
+@@ -140,8 +144,8 @@ static struct uac_clock_source_descriptor in_clk_src_desc = {
+ 
+ 	.bDescriptorSubtype = UAC2_CLOCK_SOURCE,
+ 	/* .bClockID = DYNAMIC */
+-	.bmAttributes = UAC_CLOCK_SOURCE_TYPE_INT_FIXED,
+-	.bmControls = (CONTROL_RDONLY << CLK_FREQ_CTRL),
++	.bmAttributes = UAC_CLOCK_SOURCE_TYPE_INT_PROG,
++	.bmControls = (CONTROL_RDWR << CLK_FREQ_CTRL),
+ 	.bAssocTerminal = 0,
+ };
+ 
+@@ -152,8 +156,8 @@ static struct uac_clock_source_descriptor out_clk_src_desc = {
+ 
+ 	.bDescriptorSubtype = UAC2_CLOCK_SOURCE,
+ 	/* .bClockID = DYNAMIC */
+-	.bmAttributes = UAC_CLOCK_SOURCE_TYPE_INT_FIXED,
+-	.bmControls = (CONTROL_RDONLY << CLK_FREQ_CTRL),
++	.bmAttributes = UAC_CLOCK_SOURCE_TYPE_INT_PROG,
++	.bmControls = (CONTROL_RDWR << CLK_FREQ_CTRL),
+ 	.bAssocTerminal = 0,
+ };
+ 
+@@ -524,7 +528,7 @@ static int set_ep_max_packet_size(const struct f_uac2_opts *uac2_opts,
+ 		ssize = uac2_opts->p_ssize;
+ 	} else {
+ 		chmask = uac2_opts->c_chmask;
+-		srate = uac2_opts->c_srate;
++		srate = UAC2_MAX_RATE;
+ 		ssize = uac2_opts->c_ssize;
+ 	}
+ 
+@@ -1009,41 +1013,34 @@ static int
+ in_rq_range(struct usb_function *fn, const struct usb_ctrlrequest *cr)
+ {
+ 	struct usb_request *req = fn->config->cdev->req;
+-	struct g_audio *agdev = func_to_g_audio(fn);
+-	struct f_uac2_opts *opts;
+ 	u16 w_length = le16_to_cpu(cr->wLength);
+ 	u16 w_index = le16_to_cpu(cr->wIndex);
+ 	u16 w_value = le16_to_cpu(cr->wValue);
+ 	u8 entity_id = (w_index >> 8) & 0xff;
+ 	u8 control_selector = w_value >> 8;
+-	struct cntrl_range_lay3 r;
++	u8 buf[2 + ARRAY_SIZE(uac2_rates) * 12];
++	__le16 n;
++	__le32 v;
+ 	int value = -EOPNOTSUPP;
+-	int p_srate, c_srate;
+-
+-	opts = g_audio_to_uac2_opts(agdev);
+-	p_srate = opts->p_srate;
+-	c_srate = opts->c_srate;
++	int i;
+ 
+-	if (control_selector == UAC2_CS_CONTROL_SAM_FREQ) {
+-		if (entity_id == USB_IN_CLK_ID)
+-			r.dMIN = cpu_to_le32(p_srate);
+-		else if (entity_id == USB_OUT_CLK_ID)
+-			r.dMIN = cpu_to_le32(c_srate);
+-		else
+-			return -EOPNOTSUPP;
+-
+-		r.dMAX = r.dMIN;
+-		r.dRES = 0;
+-		r.wNumSubRanges = cpu_to_le16(1);
++	if (control_selector != UAC2_CS_CONTROL_SAM_FREQ)
++		return -EOPNOTSUPP;
++	if (entity_id != USB_IN_CLK_ID && entity_id != USB_OUT_CLK_ID)
++		return -EOPNOTSUPP;
+ 
+-		value = min_t(unsigned, w_length, sizeof r);
+-		memcpy(req->buf, &r, value);
+-	} else {
+-		dev_err(&agdev->gadget->dev,
+-			"%s:%d control_selector=%d TODO!\n",
+-			__func__, __LINE__, control_selector);
++	n = cpu_to_le16(ARRAY_SIZE(uac2_rates));
++	memcpy(buf, &n, sizeof(n));
++	for (i = 0; i < ARRAY_SIZE(uac2_rates); i++) {
++		v = cpu_to_le32(uac2_rates[i]);
++		memcpy(buf + 2 + i * 12, &v, sizeof(v));
++		memcpy(buf + 6 + i * 12, &v, sizeof(v));
++		v = 0;
++		memcpy(buf + 10 + i * 12, &v, sizeof(v));
+ 	}
+ 
++	value = min_t(unsigned, w_length, sizeof(buf));
++	memcpy(req->buf, buf, value);
+ 	return value;
+ }
+ 
+@@ -1058,17 +1055,74 @@ ac_rq_in(struct usb_function *fn, const struct usb_ctrlrequest *cr)
+ 		return -EOPNOTSUPP;
+ }
+ 
++static struct f_uac2 *uac2_rate_pending;
++static u8 uac2_rate_entity;
++static void (*uac2_rate_orig_complete)(struct usb_ep *ep, struct usb_request *req);
++
++static bool uac2_rate_valid(u32 rate)
++{
++	int i;
++
++	for (i = 0; i < ARRAY_SIZE(uac2_rates); i++)
++		if (rate == uac2_rates[i])
++			return true;
++	return false;
++}
++
++static void uac2_rate_complete(struct usb_ep *ep, struct usb_request *req)
++{
++	struct f_uac2 *uac2 = uac2_rate_pending;
++	void (*orig)(struct usb_ep *ep, struct usb_request *req) = uac2_rate_orig_complete;
++
++	uac2_rate_pending = NULL;
++	uac2_rate_orig_complete = NULL;
++
++	if (uac2 && req->status == 0 && req->actual >= sizeof(__le32)) {
++		__le32 raw;
++		u32 rate;
++		struct g_audio *agdev = &uac2->g_audio;
++		struct f_uac2_opts *opts = g_audio_to_uac2_opts(agdev);
++
++		memcpy(&raw, req->buf, sizeof(raw));
++		rate = le32_to_cpu(raw);
++		if (uac2_rate_valid(rate)) {
++			if (uac2_rate_entity == USB_OUT_CLK_ID) {
++				agdev->params.c_srate = rate;
++				opts->c_srate = rate;
++			} else if (uac2_rate_entity == USB_IN_CLK_ID) {
++				agdev->params.p_srate = rate;
++				opts->p_srate = rate;
++			}
++		}
++	}
++
++	req->complete = orig;
++	if (orig)
++		orig(ep, req);
++}
++
+ static int
+ out_rq_cur(struct usb_function *fn, const struct usb_ctrlrequest *cr)
+ {
++	struct f_uac2 *uac2 = func_to_uac2(fn);
++	struct usb_composite_dev *cdev = fn->config->cdev;
++	struct usb_request *req = cdev->req;
+ 	u16 w_length = le16_to_cpu(cr->wLength);
++	u16 w_index = le16_to_cpu(cr->wIndex);
+ 	u16 w_value = le16_to_cpu(cr->wValue);
++	u8 entity_id = (w_index >> 8) & 0xff;
+ 	u8 control_selector = w_value >> 8;
+ 
+-	if (control_selector == UAC2_CS_CONTROL_SAM_FREQ)
+-		return w_length;
++	if (control_selector != UAC2_CS_CONTROL_SAM_FREQ)
++		return -EOPNOTSUPP;
++	if (w_length < sizeof(__le32))
++		return -EOPNOTSUPP;
+ 
+-	return -EOPNOTSUPP;
++	uac2_rate_pending = uac2;
++	uac2_rate_entity = entity_id;
++	uac2_rate_orig_complete = req->complete;
++	req->complete = uac2_rate_complete;
++	return w_length;
+ }
+ 
+ static int
+diff --git a/drivers/usb/gadget/function/u_audio.c b/drivers/usb/gadget/function/u_audio.c
+index 53b30de16..f1c69cecd 100644
+--- a/drivers/usb/gadget/function/u_audio.c
++++ b/drivers/usb/gadget/function/u_audio.c
+@@ -16,6 +16,7 @@
+ #include <sound/core.h>
+ #include <sound/pcm.h>
+ #include <sound/pcm_params.h>
++#include <sound/control.h>
+ 
+ #include "u_audio.h"
+ 
+@@ -499,6 +500,34 @@ void u_audio_stop_playback(struct g_audio *audio_dev)
+ }
+ EXPORT_SYMBOL_GPL(u_audio_stop_playback);
+ 
++static int uac_capture_rate_info(struct snd_kcontrol *kcontrol,
++				 struct snd_ctl_elem_info *uinfo)
++{
++	uinfo->type = SNDRV_CTL_ELEM_TYPE_INTEGER;
++	uinfo->count = 1;
++	uinfo->value.integer.min = 8000;
++	uinfo->value.integer.max = 192000;
++	uinfo->value.integer.step = 1;
++	return 0;
++}
++
++static int uac_capture_rate_get(struct snd_kcontrol *kcontrol,
++				struct snd_ctl_elem_value *ucontrol)
++{
++	struct snd_uac_chip *uac = snd_kcontrol_chip(kcontrol);
++
++	ucontrol->value.integer.value[0] = uac->audio_dev->params.c_srate;
++	return 0;
++}
++
++static const struct snd_kcontrol_new uac_capture_rate_ctl = {
++	.iface = SNDRV_CTL_ELEM_IFACE_MIXER,
++	.name = "UAC2 Capture Rate",
++	.access = SNDRV_CTL_ELEM_ACCESS_READ,
++	.info = uac_capture_rate_info,
++	.get = uac_capture_rate_get,
++};
++
+ int g_audio_setup(struct g_audio *g_audio, const char *pcm_name,
+ 					const char *card_name)
+ {
+@@ -594,6 +623,17 @@ int g_audio_setup(struct g_audio *g_audio, const char *pcm_name,
+ 	strlcpy(card->shortname, card_name, sizeof(card->shortname));
+ 	sprintf(card->longname, "%s %i", card_name, card->dev->id);
+ 
++	{
++		struct snd_kcontrol *kctl = snd_ctl_new1(&uac_capture_rate_ctl, uac);
++		if (!kctl) {
++			err = -ENOMEM;
++			goto snd_fail;
++		}
++		err = snd_ctl_add(card, kctl);
++		if (err < 0)
++			goto snd_fail;
++	}
++
+ 	snd_pcm_lib_preallocate_pages_for_all(pcm, SNDRV_DMA_TYPE_CONTINUOUS,
+ 		snd_dma_continuous_data(GFP_KERNEL), 0, BUFF_SIZE_MAX);
+ 
+-- 
+2.54.0
+
