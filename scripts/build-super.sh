@@ -11,6 +11,13 @@ PAYLOAD="$ROOT/payload"
 CONFIG="$ROOT/config"
 MODE=${1:-all}
 
+TOOLS_BIN=${TOOLS_BIN:-/workspace/Android/tools/bin}
+case ":$PATH:" in
+    *":$TOOLS_BIN:"*) ;;
+    *) PATH="$TOOLS_BIN:$PATH" ;;
+esac
+export PATH
+
 log() { printf '%s\n' "$*"; }
 warn() { printf 'WARN: %s\n' "$*" >&2; }
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }

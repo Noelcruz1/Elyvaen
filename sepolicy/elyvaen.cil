@@ -5,5 +5,5 @@
 (allow hal_audio_default hal_audio_default (capability (dac_override)))
 (allow priv_app shell_data_file (dir (search getattr)))
 (allow priv_app shell_data_file (fifo_file (open read getattr ioctl)))
-(allow hal_audio_default shell_data_file (file (create open read write getattr)))
+(allow hal_audio_default shell_data_file (file (create open read write getattr setattr)))
 (allow priv_app shell_data_file (file (open read getattr)))

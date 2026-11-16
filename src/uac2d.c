@@ -2263,8 +2263,22 @@ static int write_fifo_all(int fd, const void *buf, size_t len)
         ssize_t n = write(fd, p, len);
 
         if (n < 0) {
-            if (errno == EINTR)
+            if (errno == EINTR && !stop_requested)
                 continue;
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                struct pollfd pfd;
+
+                pfd.fd = fd;
+                pfd.events = POLLOUT;
+                pfd.revents = 0;
+                if (poll(&pfd, 1, 200) < 0 && errno != EINTR)
+                    return -errno;
+                if (pfd.revents & (POLLERR | POLLHUP | POLLNVAL))
+                    return -EPIPE;
+                if (stop_requested)
+                    return -EINTR;
+                continue;
+            }
             return -errno;
         }
         p += n;
