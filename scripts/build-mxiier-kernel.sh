@@ -19,9 +19,21 @@ if ! dirname --version 2>/dev/null | grep -q 'GNU coreutils'; then
     exit 1
 fi
 
-if [ ! -d "$SRC/.git" ]; then
+if [ ! -f "$SRC/Makefile" ]; then
     mkdir -p "$(dirname "$SRC")"
     git clone --depth 1 --branch "$BRANCH" https://github.com/Mxiier/kernel_motorola_cypfq.git "$SRC"
+fi
+
+# El árbol del kernel vive fuera de Git (tamaño); sus cambios están en
+# patches/kernel/. Aplica los patches que falten tanto a un clon fresco
+# como a un árbol de trabajo plano.
+if [ -d "$ROOT/patches/kernel" ]; then
+    for p in "$ROOT"/patches/kernel/*.patch; do
+        [ -f "$p" ] || continue
+        if ! git -C "$SRC" apply --reverse --check "$p" >/dev/null 2>&1; then
+            git -C "$SRC" apply "$p"
+        fi
+    done
 fi
 
 cd "$SRC"
