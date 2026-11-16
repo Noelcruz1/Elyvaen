@@ -2,63 +2,94 @@
 
 ## Objetivo
 
-Convertir el teléfono en DAC USB al conectar un host de datos, sin perder ADB/MTP y volviendo al DAP al desconectar.
+Convertir el teléfono en DAC USB al conectar un host de datos, sin perder ADB y
+sin Magisk, SELinux permisivo ni servicios basados en shell.
 
-## Implementación
+## Implementación (2026-11-15)
 
-- `payload/system/bin/elyvaen-usb-auto.sh`: monitor init cada 2 s.
-- `payload/system/bin/elyvaen-usb-dac.sh`: activa/desactiva UAC2, pausa/reanuda la app y mantiene el gadget Android.
-- `payload/system/etc/init/elyvaen-uac2.rc`: servicio `elyvaen-usb-auto` y arranque en boot.
-- `payload/system/bin/elyvaen.sh`: guarda de arranque de la app cuando UAC2 está activo.
+El diseño anterior con `/system/bin/sh` fue descartado: SELinux impide que init
+ejecute `shell_exec` y que `vendor_qti_init_shell` ejecute toybox. El modo USB
+ahora lo gestiona un binario nativo.
 
-## Detección
-
-- Lee `/sys/class/udc/<udc>/state` y cae a `sys.usb.state`.
-- Considera host de datos: `configured`, `suspended`, `*mtp*`, `*ptp*`, `*adb*`.
-- Un cargador no configura el UDC y no activa el modo.
-- Debounce de dos ciclos antes de desactivar.
-- `sys.elyvaen.usbdac.transition=1` evita que el monitor pelee durante el cambio.
+- `src/elyvaen-usb.c` → `payload/vendor/bin/hw/elyvaen-usb`.
+- Etiqueta SELinux: `u:object_r:vendor_hal_usb_qti_exec:s0` (0755). init lo
+  ejecuta y la política transiciona a `vendor_hal_usb_qti`, el mismo dominio del
+  HAL USB de Qualcomm. Ese dominio puede leer/escribir configfs, crear/quitar
+  enlaces de funciones y enganchar el UDC.
+- Lo que ese dominio **no** puede hacer se resuelve con dos acciones
+  `vendor_init` en el `.rc`:
+  - `vendor.usb.elyvaen.request=*` → `mkdir functions/uac2.0`.
+  - `vendor.usb.elyvaen.dac=1/0` → `start`/`stop elyvaen-uac2d`.
+- El daemon sigue siendo un servicio init con `seclabel hal_audio_default`
+  (`audio_device` + `proc_asound`). No hay shell ni `fork` desde el helper.
+- Configuración: `/vendor/etc/elyvaen/uac2.conf` (`vendor_configs_file`), legible
+  tanto por `vendor_hal_usb_qti` como por `hal_audio_default`. La copia antigua
+  en `/system/etc` se elimina en el build.
 
 ## Flujo
 
-1. Host de datos detectado.
-2. Se pausa la reproducción con `cmd media_session dispatch pause`/`input keyevent 127`.
-3. `elyvaen-usb-dac.sh on` desengancha el UDC, agrega `uac2.0` a la config existente y vuelve a engancharlo.
-4. Se arranca `elyvaen-uac2d` en `hal_audio_default`.
-5. Si el enlace UAC2 desaparece (por ejemplo, el HAL USB reconstruye el gadget), el monitor lo repara.
-6. Al desconectar el host, se detiene el daemon, se quita `uac2.0`, se restaura el gadget y se reanuda la app.
-
-## ADB/MTP
-
-- UAC2 se agrega a `g1`; las funciones ADB/MTP existentes no se eliminan.
-- ADB por USB puede caer durante el reenganche; `elyvaen.sh` configura ADB TCP en 5555.
-- El monitor no borra funciones ajenas.
+1. `on boot` pone `sys.elyvaen.usbdac.auto=1`.
+2. El helper espera a que exista `/config/usb_gadget/g1` y su configuración.
+3. Lee el UDC enganchado en `/config/usb_gadget/g1/UDC`; si está vacío usa
+   `udc=4e00000.dwc3` de `uac2.conf`.
+4. Si falta, pide la creación de `functions/uac2.0` (propiedad `request`) y
+   espera a que `vendor_init` haga el `mkdir`.
+5. Detiene el daemon (`dac=0`), desengancha el UDC, retira cualquier enlace
+   previo a `uac2.0` y escribe `p_chmask=0`, `p_srate`, `p_ssize=2`,
+   `c_chmask`, `c_srate`, `c_ssize` y `req_number`.
+6. Enlaza `functions/uac2.0` en `configs/b.1/uac2.0`, vuelve a enganchar el UDC
+   y publica `bound`. Las demás funciones (ADB, MTP, …) no se tocan.
+7. Pone `dac=1`: init arranca `elyvaen-uac2d`.
+8. Cada `poll_ms` comprueba que el enlace y los parámetros siguen ahí y que el
+   UDC está enganchado. Si el HAL USB reconstruye el gadget, reaplica UAC2
+   (con pausa tras `heal_max` reparaciones para no entrar en un bucle de
+   reenumeración).
 
 ## Propiedades
 
 ```sh
+getprop init.svc.elyvaen-usb
+getprop init.svc.elyvaen-uac2d
 getprop sys.elyvaen.usbdac.auto
-getprop sys.elyvaen.usbdac
-getprop sys.elyvaen.usbdac.transition
+getprop vendor.usb.elyvaen.dac
+getprop vendor.usb.elyvaen.state
+getprop vendor.usb.elyvaen.udc
 ```
 
 - `auto=1`: modo automático (por defecto en boot).
-- `auto=0`: detiene el monitor automático.
-- `usbdac=1/0`: estado real del modo DAC.
-- `transition=1`: cambio en curso.
+- `auto=0`: detiene el helper y desactiva UAC2.
+- `dac=1/0`: daemon UAC2 arrancado/parado.
+- `state`: `bound`, `disabled`, `error:*`, `heal-paused`, `stopped`.
+- `udc`: controlador enganchado.
 
 ## Manual
 
 ```sh
-setprop sys.elyvaen.usbdac.request 1
-setprop sys.elyvaen.usbdac.request 0
-/system/bin/elyvaen-usb-dac.sh status
+stop elyvaen-usb       # desactiva UAC2 y para el daemon (init, requiere root)
+start elyvaen-usb      # vuelve a activar
+/vendor/bin/hw/elyvaen-usb --once status
 ```
 
-## Pendiente de validación
+Desde ADB sin root se usan las propiedades y `logcat`. `vendor.usb.elyvaen.*`
+es legible por shell; `sys.elyvaen.usbdac.auto` también.
 
-- Confirmar que pausar la app libera el PCM interno para el daemon.
-- Confirmar que ADB/MTP siguen enumerando después del reenganche.
-- Confirmar que `UsbGadget` no elimina `uac2.0` de forma persistente; si lo hace, el monitor lo repara pero puede haber parpadeo.
-- Probar host PC, cargador, hub, suspensión y desconexión.
-- No se ha flasheado nada.
+## ADB/MTP
+
+- UAC2 se añade a `g1`; las funciones existentes no se eliminan. El enlace usa
+  un nombre propio (`uac2.0`), así que las reescrituras del HAL que solo borran
+  `f1..fN` no lo eliminan.
+- ADB puede caer durante el reenganche del UDC, pero `ffs.adb` no se destruye:
+  adbd sobrevive y el host reenumera ADB + audio.
+- El ciclo de auto-reparación tiene límite para evitar parpadeos infinitos.
+
+## Pendiente de validación en dispositivo
+
+- `init.svc.elyvaen-usb=running` y `init.svc.elyvaen-uac2d=running`.
+- Sin denegaciones `avc` para `vendor_hal_usb_qti` ni `vendor_init`.
+- Creación real de `functions/uac2.0` y enlace en `configs/b.1`.
+- Enumeración del host: interfaz Audio Class 01 además de ADB.
+- Audio real, cambios de frecuencia, volumen/mute.
+- ADB tras el reenganche, desconexión/reconexión, suspensión del host.
+- Si el HAL USB reescribe la composición con frecuencia.
+- Liberación del PCM interno: si la app DAP está reproduciendo, el daemon puede
+  encontrar el dispositivo ocupado; en la primera iteración no se pausa la app.

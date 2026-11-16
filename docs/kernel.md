@@ -99,7 +99,7 @@ Se compiló el branch `nokernelsu` con Alpine Clang 22.1.3, `LLVM_IAS=1`, 3 jobs
 - 58 módulos `.ko` (19.5 MB), vermagic `5.4.259-perf+-cypfq-test-g368d7ad093dd`.
 - `holi-moto-base.dtb` y los tres `holi-cypfq-*-overlay.dtbo` (DVT1/DVT2/PVT).
 
-Para esta primera prueba se desactivaron LTO/CFI/SCS, `DEBUG_INFO`, `MODVERSIONS` e `IKHEADERS`; la cámara se excluyó con `BOARD_CONFIG_CAMERA_KERNEL_NAME=none` porque su techpack no compila limpio y no se usa en el DAP.
+Para esta primera prueba se desactivaron LTO/CFI/SCS, `DEBUG_INFO`, `MODVERSIONS` e `IKHEADERS`; la cámara se excluyó con `BOARD_CONFIG_CAMERA_KERNEL_NAME=none` en ese build inicial. El 2026-11-09 se comprobó que `techpack/camera` sí compila: el único fallo era que el Makefile usa `dirname` con varias rutas y BusyBox no lo soporta. Con GNU coreutils se genera `camera.ko` y los builds actuales la incluyen.
 
 El `Image` se empaquetó con el ramdisk stock y se flasheó solo en `boot_a`. Resultado:
 
@@ -110,3 +110,11 @@ El `Image` se empaquetó con el ramdisk stock y se flasheó solo en `boot_a`. Re
 - `boot_b` (TWRP) no se tocó.
 
 Siguiente paso: hornear los 58 módulos nuevos en `/vendor/lib/modules` y sus listas (`modules.load`/`modules.dep`) para probar táctil, audio y WiFi con el kernel nuevo. El build reproduce con `scripts/build-mxiier-kernel.sh`.
+
+## Cámara con kernel 5.4.259 (2026-11-09)
+
+- `camera.ko` compilado con el techpack completo y el mismo `.config` del kernel UAC2.
+- Vermagic: `5.4.259-perf+-elyvaen-uac2-vol-elyvaen-uac2-g21036cc3f384`.
+- 59 módulos en total; `camera.ko` instalado en `/vendor/lib/modules` y añadido a `modules.load`.
+- En dispositivo: `camera` aparece en `/proc/modules`, `cameraserver` y `camera.provider@2.4` corren, `dumpsys media.camera` enumera 5 dispositivos y no hay crash de `CamX`/`camera.qcom.so`.
+- El aviso de “problema interno” desapareció. El crash de `com.motorola.thermalservice` es de userspace/ODEX y no del kernel.

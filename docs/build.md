@@ -32,6 +32,9 @@ cd /workspace/Android/Elyvaen
 ./scripts/build-super.sh images   # debloat + payload + build.prop + validación
 ./scripts/build-super.sh super    # integra las imágenes en super y genera sparse
 ./scripts/build-super.sh all      # todo
+
+# Super UAC2 sobre la base estable (sin re-debloat):
+./scripts/build-uac2-helper-super.sh
 ```
 
 ## Qué hace `images`
@@ -54,7 +57,11 @@ cd /workspace/Android/Elyvaen
 1. Copia `super_ab_safe_raw.img` a `build/super.raw.img`.
 2. Lee los offsets reales de `lpdump` y sobrescribe solo las particiones A con `dd`.
 3. Conserva metadata, grupo B y `system_b` intactos.
-4. Valida `lpdump` y genera `build/super.sparse.img` con `img2simg`.
+4. Valida `lpdump` y genera `build/super.sparse.img` con `scripts/raw-to-sparse.py`
+   (chunks de 256 MiB, necesarios para este bootloader).
+
+Si `e2rm` no está disponible, usar `SKIP_DEBLOAT=1` solo cuando las imágenes
+base ya estén debloqueadas (es el caso de `build-uac2-helper-super.sh`).
 
 ## Payload actual
 
@@ -62,7 +69,14 @@ cd /workspace/Android/Elyvaen
 - `product/app/HeliBoard/HeliBoard.apk`: teclado HeliBoard extraído del dispositivo.
 - `product/etc/permissions/privapp-permissions-com.mardous.booming.xml`: permite `REBOOT`, `SHUTDOWN`, `WRITE_SECURE_SETTINGS`, `DUMP` y `BLUETOOTH_PRIVILEGED` a la app como priv-app.
 - `product/media/bootanimation.zip` y `shutdownanimation.zip`: animación Aurora.
-- `system/bin/elyvaen.sh` y `system/etc/init/elyvaen.rc`: ajustes de arranque.
+- `system/bin/elyvaen.sh`: ajustes de arranque (referencia; ya no se arranca
+  por SELinux).
+- `vendor/bin/hw/elyvaen-uac2d`: daemon UAC2 (`hal_audio_default_exec`).
+- `vendor/bin/hw/elyvaen-usb`: helper nativo de configfs/UDC
+  (`vendor_hal_usb_qti_exec`).
+- `vendor/etc/init/elyvaen-uac2.rc`: servicio `elyvaen-usb`, daemon
+  `elyvaen-uac2d` y acciones `vendor_init` para `mkdir` y arranque del daemon.
+- `vendor/etc/elyvaen/uac2.conf`: configuración compartida por helper y daemon.
 - `system/usr/keylayout/gpio-keys.kl`: botón Assistant como tecla media.
 - `vendor/etc/audio_*.xml`, `mixer_paths.xml`: política 24/192, Pure Audio, LOHIFI y sin altavoz.
 
