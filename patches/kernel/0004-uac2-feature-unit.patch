@@ -1,0 +1,45 @@
+From c16bc85a8b291a8e62f08d839ec08dca42808cf7 Mon Sep 17 00:00:00 2001
+From: Elyvaen <elyvaen@users.noreply.github.com>
+Date: Mon, 16 Nov 2026 19:16:56 +0000
+Subject: [PATCH] uac2: add feature unit to dynamic descriptors
+
+The volume/mute feature unit was only present in the static audio
+descriptor arrays. The dynamic fs/hs/ss arrays used by
+setup_descriptor() omitted it, so the output terminal pointed to a
+missing unit and Windows rejected the audio function. Add fu_desc to
+all three arrays.
+---
+ drivers/usb/gadget/function/f_uac2.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/drivers/usb/gadget/function/f_uac2.c b/drivers/usb/gadget/function/f_uac2.c
+index 68637c0bd..dd174b574 100644
+--- a/drivers/usb/gadget/function/f_uac2.c
++++ b/drivers/usb/gadget/function/f_uac2.c
+@@ -636,6 +636,7 @@ static void setup_descriptor(struct f_uac2_opts *opts)
+ 	if (EPOUT_EN(opts)) {
+ 		fs_audio_desc[i++] = USBDHDR(&out_clk_src_desc);
+ 		fs_audio_desc[i++] = USBDHDR(&usb_out_it_desc);
++		fs_audio_desc[i++] = USBDHDR(&fu_desc);
+ 	}
+ 	if (EPIN_EN(opts)) {
+ 		fs_audio_desc[i++] = USBDHDR(&io_in_it_desc);
+@@ -669,6 +670,7 @@ static void setup_descriptor(struct f_uac2_opts *opts)
+ 	if (EPOUT_EN(opts)) {
+ 		hs_audio_desc[i++] = USBDHDR(&out_clk_src_desc);
+ 		hs_audio_desc[i++] = USBDHDR(&usb_out_it_desc);
++		hs_audio_desc[i++] = USBDHDR(&fu_desc);
+ 	}
+ 	if (EPIN_EN(opts)) {
+ 		hs_audio_desc[i++] = USBDHDR(&io_in_it_desc);
+@@ -702,6 +704,7 @@ static void setup_descriptor(struct f_uac2_opts *opts)
+ 	if (EPOUT_EN(opts)) {
+ 		ss_audio_desc[i++] = USBDHDR(&out_clk_src_desc);
+ 		ss_audio_desc[i++] = USBDHDR(&usb_out_it_desc);
++		ss_audio_desc[i++] = USBDHDR(&fu_desc);
+ 	}
+ 	if (EPIN_EN(opts)) {
+ 		ss_audio_desc[i++] = USBDHDR(&io_in_it_desc);
+-- 
+2.54.1
+

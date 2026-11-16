@@ -118,3 +118,11 @@ Siguiente paso: hornear los 58 módulos nuevos en `/vendor/lib/modules` y sus li
 - 59 módulos en total; `camera.ko` instalado en `/vendor/lib/modules` y añadido a `modules.load`.
 - En dispositivo: `camera` aparece en `/proc/modules`, `cameraserver` y `camera.provider@2.4` corren, `dumpsys media.camera` enumera 5 dispositivos y no hay crash de `CamX`/`camera.qcom.so`.
 - El aviso de “problema interno” desapareció. El crash de `com.motorola.thermalservice` es de userspace/ODEX y no del kernel.
+
+## Patch 0004: Feature Unit en descriptores dinámicos
+
+`patches/kernel/0004-uac2-feature-unit.patch` añade `fu_desc` a los arrays
+`fs_audio_desc`, `hs_audio_desc` y `ss_audio_desc`. Sin ella, `wTotalLength`
+del Audio Control declaraba 64 bytes pero el terminal de salida apuntaba a una
+unidad inexistente; Linux toleraba el descriptor, Windows no enumeraba la
+salida de audio.

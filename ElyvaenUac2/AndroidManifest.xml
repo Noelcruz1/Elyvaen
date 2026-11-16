@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.elyvaen.uac2"
+    android:versionCode="2"
+    android:versionName="1.1">
+
+    <uses-sdk android:minSdkVersion="31" android:targetSdkVersion="31"/>
+
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
+
+    <application
+        android:allowBackup="false"
+        android:label="Elyvaen UAC2">
+
+        <!--
+          Tiny privileged bridge between the Elyvaen music app (priv_app)
+          and the vendor UAC2 init service. It runs in the system_app
+          SELinux domain (see plat_seapp_contexts) so it can write
+          persist.elyvaen.* / sys.elyvaen.* system properties.
+
+          Only callers holding WRITE_SECURE_SETTINGS (the Elyvaen app)
+          can reach it.
+        -->
+        <provider
+            android:name=".Uac2Provider"
+            android:authorities="com.elyvaen.uac2"
+            android:exported="true" />
+
+        <receiver
+            android:name=".Uac2Receiver"
+            android:exported="true"
+            android:permission="android.permission.WRITE_SECURE_SETTINGS">
+            <intent-filter>
+                <action android:name="com.elyvaen.uac2.action.SET" />
+            </intent-filter>
+        </receiver>
+
+        <service
+            android:name=".Uac2PlaybackService"
+            android:exported="true"
+            android:permission="android.permission.WRITE_SECURE_SETTINGS"
+            android:foregroundServiceType="mediaPlayback" />
+    </application>
+</manifest>

@@ -97,3 +97,11 @@ sha256sum build/super.sparse.img
 ## Aviso
 
 El script no flashea nada. El flash y el rollback se documentan en [recovery.md](recovery.md).
+
+## Repositorio único (2026-11-16)
+
+La app vive en `ElyvaenMusic/` de este repo; `scripts/build-elyvaen-music.sh`
+ya usa esa ruta por defecto. El puente vive en `ElyvaenUac2/` y su `build.sh`
+copia el APK a `payload/product/priv-app/ElyvaenUac2/`. Los cambios de kernel
+están en `patches/kernel/` (0001-0004); el árbol `kernel-sources/` se descarga
+aparte. Ver `docs/repo-layout.md`.

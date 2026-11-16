@@ -105,3 +105,14 @@ Lee [CONTRIBUTING.md](CONTRIBUTING.md). La regla principal: base stock, nada de 
 ## Licencia
 
 GPL-3.0-or-later para el código y scripts de este repositorio. BoomingMusic es GPL-3.0. El firmware stock y los blobs propietarios de Motorola/Qualcomm no se distribuyen aquí.
+
+## Repositorio único
+
+Todo el proyecto versionado vive en este repositorio:
+
+- `src/`, `payload/`, `scripts/`, `docs/`: daemon, helper UAC2, payload y herramientas.
+- `ElyvaenMusic/`: fork de BoomingMusic con la app DAP y el servicio AudioTrack del DAC USB.
+- `ElyvaenUac2/`: puente de propiedades `system_app`.
+- `patches/kernel/`: serie UAC2 del kernel (0001-0004).
+
+El árbol del kernel (`kernel-sources/`) queda fuera de Git por tamaño; se reproduce aplicando `patches/kernel/*.patch` sobre la base `Mxiier/kernel_motorola_cypfq`. Ver `docs/repo-layout.md`.

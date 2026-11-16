@@ -8,7 +8,7 @@ set -eu
 # source tree is refreshed.
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-SRC=${SRC:-/workspace/Android/ElyvaenMusic}
+SRC=${SRC:-$ROOT/ElyvaenMusic}
 CHROOT=${CHROOT:-/workspace/sistema}
 DST=${DST:-$CHROOT/tmp/elyvaen-music}
 PAYLOAD=${PAYLOAD:-$ROOT/payload/product/priv-app/ElyvaenBooming}
