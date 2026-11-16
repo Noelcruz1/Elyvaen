@@ -287,7 +287,7 @@ fun DapDashboardSheet(
                                 ""
                             }
                             val modeLabel = stringResource(
-                                if (uac2Status.native) R.string.dap_uac2_native_short
+                                if (uac2Status.modeNative) R.string.dap_uac2_native_short
                                 else R.string.dap_uac2_compat_short
                             )
                             Text(
@@ -335,14 +335,14 @@ fun DapDashboardSheet(
                             )
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 FilterChip(
-                                    selected = uac2Status.native,
+                                    selected = uac2Status.modeNative,
                                     onClick = {
                                         scope.launch {
                                             val ok = withContext(Dispatchers.IO) {
                                                 Uac2Control.setQuality(context, true)
                                             }
                                             if (ok) {
-                                                uac2Status = uac2Status.copy(native = true)
+                                                uac2Status = uac2Status.copy(modeNative = true)
                                             } else {
                                                 Toast.makeText(
                                                     context,
@@ -357,14 +357,14 @@ fun DapDashboardSheet(
                                     }
                                 )
                                 FilterChip(
-                                    selected = !uac2Status.native,
+                                    selected = !uac2Status.modeNative,
                                     onClick = {
                                         scope.launch {
                                             val ok = withContext(Dispatchers.IO) {
                                                 Uac2Control.setQuality(context, false)
                                             }
                                             if (ok) {
-                                                uac2Status = uac2Status.copy(native = false)
+                                                uac2Status = uac2Status.copy(modeNative = false)
                                             } else {
                                                 Toast.makeText(
                                                     context,

@@ -46,6 +46,7 @@ object Uac2Control {
         val enabled: Boolean = false,
         val rate: Int = 0,
         val native: Boolean = true,
+        val modeNative: Boolean = true,
         val hostVolume: Int = 0,
         val hostMute: Boolean = false,
         val streaming: Boolean = false,
@@ -73,6 +74,7 @@ object Uac2Control {
         val enabled = isEnabled(context)
         var rate = 0
         var native = true
+        var modeNative = true
         var hostVolume = 0
         var hostMute = false
         var streaming = false
@@ -85,6 +87,7 @@ object Uac2Control {
                     when (parts[0]) {
                         "rate" -> rate = value.toIntOrNull() ?: rate
                         "native" -> native = value == "1"
+                        "mode" -> modeNative = value == "1"
                         "host_volume" -> hostVolume = value.toIntOrNull() ?: hostVolume
                         "host_mute" -> hostMute = value == "1"
                         "streaming" -> streaming = value == "1"
@@ -102,6 +105,7 @@ object Uac2Control {
             enabled = enabled,
             rate = rate,
             native = native,
+            modeNative = modeNative,
             hostVolume = hostVolume,
             hostMute = hostMute,
             streaming = streaming,
