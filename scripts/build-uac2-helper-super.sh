@@ -29,6 +29,7 @@ done
 
 "$ROOT/scripts/build-uac2d.sh"
 "$ROOT/scripts/build-elyvaen-usb.sh"
+"$ROOT/scripts/build-sepolicy.sh"
 
 mkdir -p "$OUT/base"
 ln -sf "$ROM_BASE/product_a.img" "$OUT/base/product_a.img"

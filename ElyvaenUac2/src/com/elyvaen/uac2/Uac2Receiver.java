@@ -30,7 +30,6 @@ public class Uac2Receiver extends BroadcastReceiver {
             return;
         }
         boolean enabled = intent.getBooleanExtra(EXTRA_ENABLED, false);
-        updatePlaybackService(context, enabled);
         boolean ok = setProperty(PROP_ENABLED, enabled ? "1" : "0");
         if (ok) {
             setProperty(PROP_AUTO, enabled ? "1" : "0");

@@ -142,7 +142,6 @@ public class Uac2Provider extends ContentProvider {
         Bundle result = new Bundle();
         if ("set".equals(method)) {
             boolean enabled = "1".equals(arg);
-            updatePlaybackService(enabled);
             boolean enabledOk = setProperty(PROP_ENABLED, enabled ? "1" : "0");
             // The vendor init .rc relays persist.elyvaen.uac2 to
             // sys.elyvaen.usbdac.auto. The direct set is a fast path and

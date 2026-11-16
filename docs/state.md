@@ -361,3 +361,22 @@ El helper ya no fuerza `c_srate`, así que no hay peleas ni reaplicaciones.
 Pendiente: si el host no reproduce, el daemon mantiene el PCM interno abierto
 con silencio; eso puede chocar con Booming. Falta una liberación por inactividad
 si se quiere usar la app y el DAC a la vez.
+
+## 24/192 nativo + volumen del host (2026-11-16)
+
+- `elyvaen-uac2d` captura el gadget a la tasa del host (44.1/48/88.2/96/
+  176.4/192 kHz) y, con `out_rate=0`, escribe **float32 sin remuestreo** en
+  `/data/local/tmp/elyvaen_uac2.pcm`; publica la tasa en `.rate`.
+- La app abre un `AudioTrack` float32 a esa tasa (hasta 192 kHz), no a 48 kHz
+  fijo. En cambios de tasa recrea el track y descarta muestras viejas.
+- Corrección de deriva por `PlaybackParams` (±500 ppm, pitch 1.0) para que el
+  FIFO no crezca ni se vacíe; el reloj del DAC manda.
+- Volumen/mute del host se leen de `UAC2 Host Volume`/`UAC2 Host Mute` en el
+  propio daemon y se aplican antes del FIFO (el host puede silenciar sin que
+  la app cambie nada).
+- Auto-arranque: `MainActivity.onCreate` llama a `Uac2Control.ensureService`
+  si `persist.elyvaen.uac2=1`; el servicio del puente ya no arranca nada.
+- Política: `sepolicy/elyvaen.cil` + `scripts/build-sepolicy.sh` compilan
+  `payload/vendor/etc/selinux/precompiled_sepolicy` a partir de los CIL de las
+  particiones base. El resultado reproducible es `251ae0d3…`.
+- `48 kHz` queda solo como modo de compatibilidad (`out_rate=48000`).

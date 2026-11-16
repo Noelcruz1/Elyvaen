@@ -52,6 +52,7 @@ import com.mardous.booming.extensions.currentFragment
 import com.mardous.booming.extensions.navigation.detailArgs
 import com.mardous.booming.extensions.navigation.isValidCategory
 import com.mardous.booming.extensions.showToast
+import com.mardous.booming.ui.screen.dap.Uac2Control
 import com.mardous.booming.extensions.utilities.toEnum
 import com.mardous.booming.extensions.whichFragment
 import com.mardous.booming.playback.Playback
@@ -86,6 +87,7 @@ class MainActivity : AbsSlidingMusicPanelActivity(), MediaController.Listener {
         applyDapAuroraUx()
         applyDapNoAutoplay()
         applyDapAudioDefaults()
+        Uac2Control.ensureService(this)
         applyPreferredDisplayMode()
 
         updateTabs()

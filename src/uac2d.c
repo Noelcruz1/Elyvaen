@@ -69,6 +69,8 @@ struct opts {
     int fifo_output;
     const char *fifo_path;
     char fifo_path_buf[256];
+    const char *rate_path;
+    char rate_path_buf[256];
     int out_rate;
 };
 
@@ -2237,6 +2239,9 @@ static int load_config(struct opts *o, const char *path)
         } else if (!strcmp(key, "fifo")) {
             snprintf(o->fifo_path_buf, sizeof(o->fifo_path_buf), "%s", val);
             o->fifo_path = o->fifo_path_buf;
+        } else if (!strcmp(key, "rate_file")) {
+            snprintf(o->rate_path_buf, sizeof(o->rate_path_buf), "%s", val);
+            o->rate_path = o->rate_path_buf;
         } else if (!strcmp(key, "out_rate"))
             parse_int(val, &o->out_rate);
         else if (!strcmp(key, "cpu"))
@@ -2268,6 +2273,24 @@ static int write_fifo_all(int fd, const void *buf, size_t len)
     return 0;
 }
 
+static void write_rate_file(const char *path, int rate)
+{
+    char buf[32];
+    int n;
+    int fd;
+
+    if (!path || !*path)
+        return;
+    n = snprintf(buf, sizeof(buf), "%d\n", rate);
+    fd = open(path, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0666);
+    if (fd < 0) {
+        log_msg("uac2d: rate file %s: %s\n", path, strerror(errno));
+        return;
+    }
+    (void)write(fd, buf, (size_t)n);
+    close(fd);
+}
+
 struct fifo_resamp {
     double phase;
     float prev[8];
@@ -2285,17 +2308,25 @@ static int run_fifo(struct opts *o)
     int period;
     int ret;
     int fifo_fd = -1;
-    int out_rate = o->out_rate > 0 ? o->out_rate : 48000;
+    int native_mode = o->out_rate <= 0;
+    int fixed_rate = o->out_rate > 0 ? o->out_rate : 0;
+    int out_rate;
+    int native;
     int channels = o->channels;
     uint8_t *capbuf = NULL;
     float *outbuf = NULL;
     int max_out;
     const char *fifo = o->fifo_path ? o->fifo_path :
                        "/data/local/tmp/elyvaen_uac2.pcm";
+    const char *rate_file = o->rate_path ? o->rate_path :
+                            "/data/local/tmp/elyvaen_uac2.rate";
     time_t next_rate;
     time_t next_stats;
     unsigned long long out_frames_total = 0;
     unsigned long long fifo_errors = 0;
+    int host_volume = 0;
+    int host_mute = 0;
+    int32_t host_gain = 32768;
 
     memset(&cap, 0, sizeof(cap));
     cap.fd = -1;
@@ -2326,8 +2357,12 @@ static int run_fifo(struct opts *o)
         return ret;
     }
     period = cap.period_frames;
+    out_rate = native_mode ? cap.rate : fixed_rate;
+    native = native_mode || out_rate == cap.rate;
+    if (native)
+        out_rate = cap.rate;
     capbuf = malloc((size_t)period * (size_t)cap.bytes_per_frame);
-    max_out = period * 8 + 16;
+    max_out = native ? period : period * 8 + 16;
     outbuf = malloc((size_t)max_out * (size_t)channels * sizeof(float));
     if (!capbuf || !outbuf) {
         log_msg("uac2d: fifo: out of memory\n");
@@ -2336,9 +2371,16 @@ static int run_fifo(struct opts *o)
         close(cap.fd);
         return -ENOMEM;
     }
+    write_rate_file(rate_file, out_rate);
+    if (uac2_control_value(cap.card, "UAC2 Host Volume", &host_volume) < 0)
+        host_volume = 0;
+    if (uac2_control_value(cap.card, "UAC2 Host Mute", &host_mute) < 0)
+        host_mute = 0;
+    host_gain = host_mute ? 0 : volume_gain_q15(host_volume);
     log_msg("uac2d: fifo capture card %d rate=%d period=%d fifo=%s "
-            "out=%d Hz float32\n",
-            cap_card, cap.rate, period, fifo, out_rate);
+            "out=%d Hz float32%s host_volume=%d mute=%d\n",
+            cap_card, cap.rate, period, fifo, out_rate,
+            native ? " native" : " resampled", host_volume, host_mute);
 
     if (pcm_prepare(&cap) < 0 || pcm_start(&cap) < 0) {
         log_msg("uac2d: fifo: cannot start capture\n");
@@ -2382,37 +2424,56 @@ static int run_fifo(struct opts *o)
                 int out_frames = 0;
                 int i;
                 int c;
+                float gain = host_gain > 0 ?
+                             (float)host_gain / 32768.0f : 0.0f;
 
-                for (i = 0; i < n; i++) {
-                    float cur[8];
-                    for (c = 0; c < channels; c++) {
-                        const uint8_t *p = capbuf +
-                            ((size_t)i * channels + c) * 3;
-                        uint32_t u = (uint32_t)p[0] |
-                                     ((uint32_t)p[1] << 8) |
-                                     ((uint32_t)p[2] << 16);
-                        int32_t v = ((int32_t)(u << 8)) >> 8;
+                if (native) {
+                    for (i = 0; i < n; i++) {
+                        for (c = 0; c < channels; c++) {
+                            const uint8_t *p = capbuf +
+                                ((size_t)i * channels + c) * 3;
+                            uint32_t u = (uint32_t)p[0] |
+                                         ((uint32_t)p[1] << 8) |
+                                         ((uint32_t)p[2] << 16);
+                            int32_t v = ((int32_t)(u << 8)) >> 8;
 
-                        cur[c] = (float)v / 8388608.0f;
+                            outbuf[(size_t)i * channels + c] =
+                                ((float)v / 8388608.0f) * gain;
+                        }
                     }
-                    if (!rs.init) {
+                    out_frames = n;
+                } else {
+                    for (i = 0; i < n; i++) {
+                        float cur[8];
+                        for (c = 0; c < channels; c++) {
+                            const uint8_t *p = capbuf +
+                                ((size_t)i * channels + c) * 3;
+                            uint32_t u = (uint32_t)p[0] |
+                                         ((uint32_t)p[1] << 8) |
+                                         ((uint32_t)p[2] << 16);
+                            int32_t v = ((int32_t)(u << 8)) >> 8;
+
+                            cur[c] = (float)v / 8388608.0f;
+                        }
+                        if (!rs.init) {
+                            for (c = 0; c < channels; c++)
+                                rs.prev[c] = cur[c];
+                            rs.init = 1;
+                        }
+                        while (rs.phase < 1.0 && out_frames < max_out) {
+                            for (c = 0; c < channels; c++)
+                                outbuf[(size_t)out_frames * channels + c] =
+                                    (rs.prev[c] + (cur[c] - rs.prev[c]) *
+                                     (float)rs.phase) * gain;
+                            out_frames++;
+                            rs.phase += (double)cap.rate / (double)out_rate;
+                        }
+                        rs.phase -= 1.0;
+                        if (rs.phase < 0.0)
+                            rs.phase = 0.0;
                         for (c = 0; c < channels; c++)
                             rs.prev[c] = cur[c];
-                        rs.init = 1;
                     }
-                    while (rs.phase < 1.0 && out_frames < max_out) {
-                        for (c = 0; c < channels; c++)
-                            outbuf[(size_t)out_frames * channels + c] =
-                                rs.prev[c] + (cur[c] - rs.prev[c]) *
-                                (float)rs.phase;
-                        out_frames++;
-                        rs.phase += (double)cap.rate / (double)out_rate;
-                    }
-                    rs.phase -= 1.0;
-                    if (rs.phase < 0.0)
-                        rs.phase = 0.0;
-                    for (c = 0; c < channels; c++)
-                        rs.prev[c] = cur[c];
                 }
                 if (out_frames > 0) {
                     ret = write_fifo_all(fifo_fd, outbuf,
@@ -2453,19 +2514,31 @@ static int run_fifo(struct opts *o)
                     break;
                 }
                 period = cap.period_frames;
+                out_rate = native_mode ? cap.rate : fixed_rate;
+                native = native_mode || out_rate == cap.rate;
+                if (native)
+                    out_rate = cap.rate;
                 free(capbuf);
                 free(outbuf);
                 capbuf = malloc((size_t)period *
                                 (size_t)cap.bytes_per_frame);
-                max_out = period * 8 + 16;
+                max_out = native ? period : period * 8 + 16;
                 outbuf = malloc((size_t)max_out * (size_t)channels *
                                 sizeof(float));
                 if (!capbuf || !outbuf)
                     break;
                 memset(&rs, 0, sizeof(rs));
+                write_rate_file(rate_file, out_rate);
                 if (pcm_prepare(&cap) < 0 || pcm_start(&cap) < 0)
                     break;
+                log_msg("uac2d: fifo: now out=%d Hz%s\n", out_rate,
+                        native ? " native" : " resampled");
             }
+            if (uac2_control_value(cap.card, "UAC2 Host Volume",
+                                   &host_volume) == 0 &&
+                uac2_control_value(cap.card, "UAC2 Host Mute",
+                                   &host_mute) == 0)
+                host_gain = host_mute ? 0 : volume_gain_q15(host_volume);
             next_rate = time(NULL) + 1;
         }
 
@@ -2568,7 +2641,7 @@ int main(int argc, char **argv)
     o.playback_format = -1;
     o.cpu = -1;
     o.config_path = NULL;
-    o.out_rate = 48000;
+    o.out_rate = 0;
 
     {
         int i;

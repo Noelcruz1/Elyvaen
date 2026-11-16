@@ -116,3 +116,14 @@ setprop sys.elyvaen.usbdac.request 0
 5. Repetir con `rate=48000` y `rate=192000`.
 6. Medir latencia y underruns; ajustar `periods`/`prefill_periods` si hace falta.
 7. Probar `off` y confirmar que ADB/MTP vuelven.
+
+## Modo nativo (24/192)
+
+`uac2.conf` usa `out_rate=0` (nativo) y `rate_file=/data/local/tmp/elyvaen_uac2.rate`.
+El daemon escribe float32 a la tasa real del host y la app crea el
+`AudioTrack` a esa misma tasa, hasta 192 kHz. Para forzar el modo estable de
+48 kHz, poner `out_rate=48000`; la app sigue leyendo `.rate`.
+
+La política se regenera con `scripts/build-sepolicy.sh` y se instala desde
+`payload/vendor/etc/selinux/precompiled_sepolicy`. Incluye el FIFO, el fichero
+de tasa, `dac_override` y la lectura desde `priv_app`.

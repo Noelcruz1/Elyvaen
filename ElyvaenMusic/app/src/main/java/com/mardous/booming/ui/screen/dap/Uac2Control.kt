@@ -3,6 +3,7 @@ package com.mardous.booming.ui.screen.dap
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.provider.Settings
 import android.util.Log
 
@@ -43,6 +44,27 @@ object Uac2Control {
     }.getOrDefault(false)
 
     fun refresh(context: Context): Status = Status(isEnabled(context), "")
+
+    /**
+     * Starts the app's own foreground service when the persisted UAC2 choice
+     * is on. Called from MainActivity.onCreate so the DAC is ready after a
+     * reboot/home launch without toggling the switch again.
+     */
+    fun ensureService(context: Context) {
+        if (!isEnabled(context)) {
+            return
+        }
+        val playbackService = Intent(context, Uac2PlaybackService::class.java)
+        runCatching {
+            if (Build.VERSION.SDK_INT >= 26) {
+                context.startForegroundService(playbackService)
+            } else {
+                context.startService(playbackService)
+            }
+        }.onFailure {
+            Log.w(TAG, "cannot ensure UAC2 playback service", it)
+        }
+    }
 
     fun setEnabled(context: Context, enabled: Boolean): Boolean {
         val command = Intent(ACTION_SET).apply {
