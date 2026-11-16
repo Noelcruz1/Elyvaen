@@ -1,0 +1,12 @@
+diff --git a/drivers/usb/gadget/function/f_uac2.c b/drivers/usb/gadget/function/f_uac2.c
+--- a/drivers/usb/gadget/function/f_uac2.c
++++ b/drivers/usb/gadget/function/f_uac2.c
+@@ -231,7 +231,7 @@
+ 	.bLength = 18,
+ 	.bDescriptorType = USB_DT_CS_INTERFACE,
+ 	.bDescriptorSubtype = UAC_FEATURE_UNIT,
+-	.bmaControls = { 3, 0, 0, 0, 3, 0, 0, 0, 3, 0, 0, 0 },
++	.bmaControls = { 0x0f, 0, 0, 0, 0x0f, 0, 0, 0, 0x0f, 0, 0, 0 },
+ };
+ 
+ static struct uac2_ac_header_descriptor ac_hdr_desc = {

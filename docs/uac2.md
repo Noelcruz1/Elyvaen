@@ -127,3 +127,17 @@ El daemon escribe float32 a la tasa real del host y la app crea el
 La política se regenera con `scripts/build-sepolicy.sh` y se instala desde
 `payload/vendor/etc/selinux/precompiled_sepolicy`. Incluye el FIFO, el fichero
 de tasa, `dac_override` y la lectura desde `priv_app`.
+
+## Volumen del host (UAC2 Feature Unit)
+
+En UAC2 `bmaControls` usa **dos bits por control** (lectura/escritura), no un
+bit por control como UAC1. El valor `0x03` solo habilita mute; para volumen y
+mute hay que usar `0x0f` por canal. El parche
+`patches/kernel/0005-uac2-volume-control-bits.patch` corrige el descriptor:
+
+```
+.bmaControls = { 0x0f, 0, 0, 0, 0x0f, 0, 0, 0, 0x0f, 0, 0, 0 },
+```
+
+Con eso Linux crea `USBH Out Playback Volume` y `... Switch`; el gadget
+actualiza `UAC2 Host Volume`/`UAC2 Host Mute` y `uac2d` aplica la ganancia.

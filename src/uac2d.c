@@ -71,6 +71,10 @@ struct opts {
     char fifo_path_buf[256];
     const char *rate_path;
     char rate_path_buf[256];
+    const char *mode_path;
+    char mode_path_buf[256];
+    const char *status_path;
+    char status_path_buf[256];
     int out_rate;
 };
 
@@ -2242,6 +2246,12 @@ static int load_config(struct opts *o, const char *path)
         } else if (!strcmp(key, "rate_file")) {
             snprintf(o->rate_path_buf, sizeof(o->rate_path_buf), "%s", val);
             o->rate_path = o->rate_path_buf;
+        } else if (!strcmp(key, "mode_file")) {
+            snprintf(o->mode_path_buf, sizeof(o->mode_path_buf), "%s", val);
+            o->mode_path = o->mode_path_buf;
+        } else if (!strcmp(key, "status_file")) {
+            snprintf(o->status_path_buf, sizeof(o->status_path_buf), "%s", val);
+            o->status_path = o->status_path_buf;
         } else if (!strcmp(key, "out_rate"))
             parse_int(val, &o->out_rate);
         else if (!strcmp(key, "cpu"))
@@ -2287,22 +2297,79 @@ static int write_fifo_all(int fd, const void *buf, size_t len)
     return 0;
 }
 
-static void write_rate_file(const char *path, int rate)
+static int write_rate_file(const char *path, int rate)
 {
     char buf[32];
     int n;
     int fd;
 
     if (!path || !*path)
-        return;
+        return 0;
     n = snprintf(buf, sizeof(buf), "%d\n", rate);
     fd = open(path, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0666);
     if (fd < 0) {
         log_msg("uac2d: rate file %s: %s\n", path, strerror(errno));
-        return;
+        return -1;
     }
+    (void)fchmod(fd, 0666);
     (void)write(fd, buf, (size_t)n);
     close(fd);
+    return 0;
+}
+
+static int write_status_file(const char *path, int rate, int native,
+                             int volume, int mute, int streaming,
+                             unsigned long long frames,
+                             unsigned long long errors)
+{
+    char buf[256];
+    int n;
+    int fd;
+
+    if (!path || !*path)
+        return 0;
+    n = snprintf(buf, sizeof(buf),
+                 "rate=%d\nnative=%d\nhost_volume=%d\nhost_mute=%d\n"
+                 "streaming=%d\nframes=%llu\nerrors=%llu\n",
+                 rate, native ? 1 : 0, volume, mute, streaming, frames,
+                 errors);
+    fd = open(path, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0666);
+    if (fd < 0) {
+        log_msg("uac2d: status file %s: %s\n", path, strerror(errno));
+        return -1;
+    }
+    (void)fchmod(fd, 0666);
+    (void)write(fd, buf, (size_t)n);
+    close(fd);
+    return 0;
+}
+
+static int read_mode_file(const char *path)
+{
+    char buf[32];
+    char *end;
+    long value;
+    ssize_t n;
+    int fd;
+
+    if (!path || !*path)
+        return -1;
+    fd = open(path, O_RDONLY | O_CLOEXEC);
+    if (fd < 0)
+        return -1;
+    n = read(fd, buf, sizeof(buf) - 1);
+    close(fd);
+    if (n <= 0)
+        return -1;
+    buf[n] = '\0';
+    value = strtol(buf, &end, 10);
+    if (end != buf)
+        return value > 0 ? 0 : 1;
+    if (strstr(buf, "native"))
+        return 1;
+    if (strstr(buf, "48000"))
+        return 0;
+    return -1;
 }
 
 struct fifo_resamp {
@@ -2320,6 +2387,7 @@ static int run_fifo(struct opts *o)
     int cap_card;
     int cap_fmt = -1;
     int period;
+    int open_rate;
     int ret;
     int fifo_fd = -1;
     int native_mode = o->out_rate <= 0;
@@ -2334,6 +2402,11 @@ static int run_fifo(struct opts *o)
                        "/data/local/tmp/elyvaen_uac2.pcm";
     const char *rate_file = o->rate_path ? o->rate_path :
                             "/data/local/tmp/elyvaen_uac2.rate";
+    const char *mode_file = o->mode_path ? o->mode_path :
+                            "/data/local/tmp/elyvaen_uac2.mode";
+    const char *status_file = o->status_path ? o->status_path :
+                              "/data/local/tmp/elyvaen_uac2.status";
+    int mode_state = -1;
     time_t next_rate;
     time_t next_stats;
     unsigned long long out_frames_total = 0;
@@ -2357,13 +2430,37 @@ static int run_fifo(struct opts *o)
         log_msg("uac2d: fifo: UAC2 capture card not found\n");
         return -ENODEV;
     }
+    mode_state = read_mode_file(mode_file);
+    if (mode_state == 0) {
+        native_mode = 0;
+        fixed_rate = 48000;
+        log_msg("uac2d: fifo: quality mode 48000 (compatibility)\n");
+    } else if (mode_state == 1) {
+        native_mode = 1;
+        fixed_rate = 0;
+        log_msg("uac2d: fifo: quality mode native\n");
+    }
     if (channels < 1 || channels > 8)
         channels = 2;
 
     period = o->rate / 100;
     if (period < 32)
         period = 32;
-    ret = open_pcm(&cap, cap_card, o->capture_device, 1, o->rate,
+    open_rate = o->rate;
+    {
+        int live_rate = uac2_control_rate(cap_card);
+
+        if (live_rate > 0)
+            open_rate = live_rate;
+    }
+    if (open_rate != o->rate) {
+        period = open_rate / 100;
+        if (period < 32)
+            period = 32;
+        log_msg("uac2d: fifo: live host rate %d (config %d)\n",
+                open_rate, o->rate);
+    }
+    ret = open_pcm(&cap, cap_card, o->capture_device, 1, open_rate,
                    channels, o->periods, period, 0, FMT_S24_3, &cap_fmt);
     if (ret < 0) {
         log_msg("uac2d: fifo: cannot open capture card %d: %s\n",
@@ -2395,6 +2492,8 @@ static int run_fifo(struct opts *o)
             "out=%d Hz float32%s host_volume=%d mute=%d\n",
             cap_card, cap.rate, period, fifo, out_rate,
             native ? " native" : " resampled", host_volume, host_mute);
+    write_status_file(status_file, out_rate, native, host_volume, host_mute,
+                      0, 0, 0);
 
     if (pcm_prepare(&cap) < 0 || pcm_start(&cap) < 0) {
         log_msg("uac2d: fifo: cannot start capture\n");
@@ -2425,6 +2524,9 @@ static int run_fifo(struct opts *o)
                 continue;
             }
             log_msg("uac2d: fifo: reader connected\n");
+            write_status_file(status_file, out_rate, native, host_volume,
+                              host_mute, 1, out_frames_total,
+                              fifo_errors);
         }
 
         pfd.fd = cap.fd;
@@ -2498,6 +2600,9 @@ static int run_fifo(struct opts *o)
                         close(fifo_fd);
                         fifo_fd = -1;
                         fifo_errors++;
+                        write_status_file(status_file, out_rate, native,
+                                          host_volume, host_mute, 0,
+                                          out_frames_total, fifo_errors);
                         continue;
                     }
                     out_frames_total += (unsigned long long)out_frames;
@@ -2513,6 +2618,12 @@ static int run_fifo(struct opts *o)
 
         if (time(NULL) >= next_rate) {
             int live_rate = uac2_control_rate(cap.card);
+            int new_mode = read_mode_file(mode_file);
+
+            if (new_mode >= 0 && new_mode != mode_state) {
+                log_msg("uac2d: fifo: quality mode changed, reopening\n");
+                break;
+            }
 
             if (live_rate > 0 && live_rate != cap.rate) {
                 log_msg("uac2d: fifo: host rate %d -> %d\n",
@@ -2547,12 +2658,18 @@ static int run_fifo(struct opts *o)
                     break;
                 log_msg("uac2d: fifo: now out=%d Hz%s\n", out_rate,
                         native ? " native" : " resampled");
+                write_status_file(status_file, out_rate, native,
+                                  host_volume, host_mute, 1,
+                                  out_frames_total, fifo_errors);
             }
             if (uac2_control_value(cap.card, "UAC2 Host Volume",
                                    &host_volume) == 0 &&
                 uac2_control_value(cap.card, "UAC2 Host Mute",
                                    &host_mute) == 0)
                 host_gain = host_mute ? 0 : volume_gain_q15(host_volume);
+            write_status_file(status_file, out_rate, native, host_volume,
+                              host_mute, fifo_fd >= 0, out_frames_total,
+                              fifo_errors);
             next_rate = time(NULL) + 1;
         }
 

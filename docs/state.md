@@ -380,3 +380,24 @@ si se quiere usar la app y el DAC a la vez.
   `payload/vendor/etc/selinux/precompiled_sepolicy` a partir de los CIL de las
   particiones base. El resultado reproducible es `251ae0d3…`.
 - `48 kHz` queda solo como modo de compatibilidad (`out_rate=48000`).
+
+## Pruebas nativas y correcciones (2026-11-16)
+
+- 24/192 nativo validado de punta a punta con tono de 1 kHz: `aplay` 24-bit a
+  192k, daemon `out=192000 native`, AudioTrack de la app a 192k y captura por
+  Line Input del NAS (nivel ≈ −26 dBFS RMS, sin cambio de tono).
+- Cambios en caliente validados: 48 → 192 → 96 → 44.1 kHz, con recreación del
+  AudioTrack y `rate_file` actualizado.
+- Deriva estable en 60 s a 192k (`fifo_errors=0`, sin underruns).
+- Mute del host validado (el nivel cae al ruido de fondo).
+- Fallo encontrado: el fichero `.rate` quedaba `0600` por el `umask`; la app
+  no podía leerlo. Corregido con `fchmod(0666)` en `uac2d`.
+- Fallo encontrado: al arrancar con el host ya en 192k, el daemon intentaba
+  abrir a 48k y fallaba con `EINVAL`. Corregido consultando
+  `UAC2 Capture Rate` antes del primer `open`.
+- Fallo encontrado: el Feature Unit usaba `0x03` (solo mute). Corregido a
+  `0x0f` en el parche 0005; requiere kernel #8.
+- `uac2d` publica `.status` (rate, native, host_volume, host_mute, streaming,
+  errors) y acepta `.mode` (`native`/`48000`) para el selector de calidad.
+- La app añade estado real del enlace, calidad nativa/48k, volumen del host,
+  auto-arranque y un toggle Pure Audio que desactiva el ecualizador.

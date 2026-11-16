@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -70,11 +71,13 @@ fun DapDashboardSheet(
     val extraInfo by playerViewModel.extraInfoFlow.collectAsState()
     val outputDevice by equalizerViewModel.audioDevice.collectAsState()
     val bitPerfectState by equalizerViewModel.bitPerfectState.collectAsState()
+    val equalizerSettings by equalizerViewModel.equalizerSettings.collectAsState()
     val battery = rememberBatteryInfo()
     val storage = rememberStorageInfo()
     val hasSong = currentSong.id != -1L
     var uac2Enabled by remember { mutableStateOf(Uac2Control.isEnabled(context)) }
-    var uac2State by remember { mutableStateOf("") }
+    var uac2Status by remember { mutableStateOf(Uac2Control.refresh(context)) }
+    var uac2AutoStart by remember { mutableStateOf(Uac2Control.isAutoStart(context)) }
     var uac2Busy by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     LaunchedEffect(Unit) {
@@ -82,7 +85,7 @@ fun DapDashboardSheet(
             val status = withContext(Dispatchers.IO) { Uac2Control.refresh(context) }
             if (!uac2Busy) {
                 uac2Enabled = status.enabled
-                uac2State = status.state
+                uac2Status = status
             }
             delay(2000)
         }
@@ -187,10 +190,27 @@ fun DapDashboardSheet(
                                     style = MaterialTheme.typography.bodySmall
                                 )
                             }
-                            ShapedText(
-                                text = stringResource(R.string.dap_pure_audio),
-                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                style = MaterialTheme.typography.bodySmall
+                        }
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = stringResource(R.string.dap_pure_audio_title),
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                                Text(
+                                    text = stringResource(R.string.dap_pure_audio_summary),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Switch(
+                                checked = !equalizerSettings.eqState.enabled,
+                                onCheckedChange = { pure ->
+                                    equalizerViewModel.setEqualizerState(!pure)
+                                }
                             )
                         }
                     }
@@ -249,32 +269,139 @@ fun DapDashboardSheet(
                                                 Uac2Control.refresh(context)
                                             }
                                             uac2Enabled = status.enabled
-                                            uac2State = status.state
+                                            uac2Status = status
                                         }
                                         uac2Busy = false
                                     }
                                 }
                             )
                         }
-                        if (uac2State.isNotEmpty()) {
-                            val stateLabel = when {
-                                !uac2Enabled -> stringResource(R.string.dap_uac2_inactive)
-                                uac2State == "ready" || uac2State == "bound" ->
-                                    stringResource(R.string.dap_uac2_active)
-                                uac2State == "disabled" || uac2State == "stopped" ->
-                                    stringResource(R.string.dap_uac2_inactive)
-                                uac2State == "heal-paused" ->
-                                    stringResource(R.string.dap_uac2_retrying)
-                                else -> uac2State
+                        if (uac2Enabled) {
+                            val rateLabel = if (uac2Status.rate > 0) {
+                                String.format(
+                                    Locale.US,
+                                    "%.1f kHz",
+                                    uac2Status.rate / 1000.0
+                                )
+                            } else {
+                                ""
                             }
+                            val modeLabel = stringResource(
+                                if (uac2Status.native) R.string.dap_uac2_native_short
+                                else R.string.dap_uac2_compat_short
+                            )
                             Text(
-                                text = stringResource(
-                                    R.string.dap_uac2_state,
-                                    stateLabel
-                                ),
+                                text = when {
+                                    uac2Status.streaming && rateLabel.isNotEmpty() ->
+                                        stringResource(
+                                            R.string.dap_uac2_linked,
+                                            rateLabel,
+                                            modeLabel
+                                        )
+                                    rateLabel.isNotEmpty() ->
+                                        stringResource(
+                                            R.string.dap_uac2_waiting_rate,
+                                            rateLabel
+                                        )
+                                    else -> stringResource(R.string.dap_uac2_starting)
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (uac2Status.streaming) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                }
+                            )
+                            Text(
+                                text = if (uac2Status.hostMute) {
+                                    stringResource(R.string.dap_uac2_host_muted)
+                                } else {
+                                    stringResource(
+                                        R.string.dap_uac2_host,
+                                        String.format(
+                                            Locale.US,
+                                            "%.1f dB",
+                                            uac2Status.hostVolume / 256.0
+                                        )
+                                    )
+                                },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
+                            Text(
+                                text = stringResource(R.string.dap_uac2_quality),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                FilterChip(
+                                    selected = uac2Status.native,
+                                    onClick = {
+                                        scope.launch {
+                                            val ok = withContext(Dispatchers.IO) {
+                                                Uac2Control.setQuality(context, true)
+                                            }
+                                            if (ok) {
+                                                uac2Status = uac2Status.copy(native = true)
+                                            } else {
+                                                Toast.makeText(
+                                                    context,
+                                                    R.string.dap_uac2_quality_error,
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
+                                            }
+                                        }
+                                    },
+                                    label = {
+                                        Text(text = stringResource(R.string.dap_uac2_native))
+                                    }
+                                )
+                                FilterChip(
+                                    selected = !uac2Status.native,
+                                    onClick = {
+                                        scope.launch {
+                                            val ok = withContext(Dispatchers.IO) {
+                                                Uac2Control.setQuality(context, false)
+                                            }
+                                            if (ok) {
+                                                uac2Status = uac2Status.copy(native = false)
+                                            } else {
+                                                Toast.makeText(
+                                                    context,
+                                                    R.string.dap_uac2_quality_error,
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
+                                            }
+                                        }
+                                    },
+                                    label = {
+                                        Text(text = stringResource(R.string.dap_uac2_compat))
+                                    }
+                                )
+                            }
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = stringResource(R.string.dap_uac2_autostart),
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                    Text(
+                                        text = stringResource(R.string.dap_uac2_autostart_summary),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                Switch(
+                                    checked = uac2AutoStart,
+                                    onCheckedChange = { checked ->
+                                        uac2AutoStart = checked
+                                        Uac2Control.setAutoStart(context, checked)
+                                    }
+                                )
+                            }
                         }
                     }
                 }
