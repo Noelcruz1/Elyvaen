@@ -42,6 +42,6 @@ CROSS_CC=$(find_cross_cc) || {
 cp "$BIN" "$PAYLOAD_BIN"
 chmod 0755 "$PAYLOAD_BIN"
 
-file "$BIN"
+command -v file >/dev/null 2>&1 && file "$BIN" || true
 ls -l "$BIN" "$PAYLOAD_BIN"
 sha256sum "$BIN" "$PAYLOAD_BIN" > "$OUT/SHA256SUMS"

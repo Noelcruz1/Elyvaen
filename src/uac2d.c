@@ -1,6 +1,7 @@
 #define _GNU_SOURCE
 #include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <math.h>
 #include <poll.h>
 #include <sched.h>
@@ -14,6 +15,11 @@
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <sys/resource.h>
+#include <sys/socket.h>
+#include <sys/stat.h>
+#include <sys/syscall.h>
+#include <sys/uio.h>
+#include <sys/un.h>
 #include <time.h>
 #include <unistd.h>
 #include <sound/asound.h>
@@ -59,6 +65,11 @@ struct opts {
     const char *log_path;
     char log_path_buf[256];
     int self_test;
+    int dump_mixer;
+    int fifo_output;
+    const char *fifo_path;
+    char fifo_path_buf[256];
+    int out_rate;
 };
 
 struct stream {
@@ -78,15 +89,87 @@ struct stream {
 static volatile sig_atomic_t stop_requested;
 static FILE *log_fp;
 
+/* Minimal logd writer (Android 10+ protocol: android_log_header_t +
+ * priority + tag + message). Used so the daemon is visible in logcat
+ * when running as an init service with stderr redirected to /dev/null. */
+struct logd_header {
+    uint8_t id;
+    uint16_t tid;
+    uint32_t sec;
+    uint32_t nsec;
+} __attribute__((packed));
+
+static int logd_fd = -1;
+
+#define LOGD_ID_MAIN 0
+#define LOGD_PRIO_INFO 4
+
+static void logd_log(int prio, const char *msg)
+{
+    struct sockaddr_un un;
+    struct iovec vec[4];
+    struct logd_header hdr;
+    struct timespec ts;
+    static char tag[] = "elyvaen-uac2d";
+    char line[1024];
+    uint8_t p = (uint8_t)prio;
+    size_t len;
+
+    if (logd_fd < 0) {
+        int fd = socket(AF_UNIX, SOCK_DGRAM | SOCK_CLOEXEC, 0);
+
+        if (fd < 0)
+            return;
+        memset(&un, 0, sizeof(un));
+        un.sun_family = AF_UNIX;
+        strncpy(un.sun_path, "/dev/socket/logdw",
+                sizeof(un.sun_path) - 1);
+        if (connect(fd, (struct sockaddr *)&un, sizeof(un)) < 0) {
+            close(fd);
+            return;
+        }
+        logd_fd = fd;
+    }
+
+    len = strlen(msg);
+    if (len >= sizeof(line))
+        len = sizeof(line) - 1;
+    memcpy(line, msg, len);
+    line[len] = '\0';
+    while (len > 0 && (line[len - 1] == '\n' || line[len - 1] == '\r'))
+        line[--len] = '\0';
+
+    clock_gettime(CLOCK_REALTIME, &ts);
+    hdr.id = LOGD_ID_MAIN;
+    hdr.tid = (uint16_t)syscall(SYS_gettid);
+    hdr.sec = (uint32_t)ts.tv_sec;
+    hdr.nsec = (uint32_t)ts.tv_nsec;
+
+    vec[0].iov_base = &hdr;
+    vec[0].iov_len = sizeof(hdr);
+    vec[1].iov_base = &p;
+    vec[1].iov_len = sizeof(p);
+    vec[2].iov_base = tag;
+    vec[2].iov_len = sizeof(tag);
+    vec[3].iov_base = line;
+    vec[3].iov_len = len + 1;
+    (void)writev(logd_fd, vec, 4);
+}
+
 static void log_msg(const char *fmt, ...)
 {
+    char buf[1024];
     va_list ap;
+
+    va_start(ap, fmt);
+    vsnprintf(buf, sizeof(buf), fmt, ap);
+    va_end(ap);
+
     if (!log_fp)
         log_fp = stderr;
-    va_start(ap, fmt);
-    vfprintf(log_fp, fmt, ap);
-    va_end(ap);
+    fputs(buf, log_fp);
     fflush(log_fp);
+    logd_log(LOGD_PRIO_INFO, buf);
 }
 
 static void on_signal(int sig)
@@ -118,6 +201,76 @@ static int fmt_bytes(int fmt)
     default:
         return 0;
     }
+}
+
+static int frame_peak(int fmt, const uint8_t *buf, int frames, int channels)
+{
+    int samples = frames * channels;
+    int peak = 0;
+    int i;
+
+    for (i = 0; i < samples; i++) {
+        int32_t v;
+
+        if (fmt == FMT_S16) {
+            v = (int32_t)(int16_t)((uint16_t)buf[i * 2] |
+                                   ((uint16_t)buf[i * 2 + 1] << 8));
+        } else if (fmt == FMT_S24_3) {
+            const uint8_t *p = buf + i * 3;
+            uint32_t u = (uint32_t)p[0] | ((uint32_t)p[1] << 8) |
+                         ((uint32_t)p[2] << 16);
+
+            v = ((int32_t)(u << 8)) >> 8;
+        } else {
+            const uint8_t *p = buf + i * 4;
+            uint32_t u = (uint32_t)p[0] | ((uint32_t)p[1] << 8) |
+                         ((uint32_t)p[2] << 16) |
+                         ((uint32_t)p[3] << 24);
+
+            v = (fmt == FMT_S24_4) ? (((int32_t)(u << 8)) >> 8) :
+                (int32_t)u;
+        }
+        if (v < 0)
+            v = -v;
+        if (v > peak)
+            peak = v;
+    }
+    return peak;
+}
+
+static unsigned long long frame_abs_sum(int fmt, const uint8_t *buf,
+                                        int frames, int channels)
+{
+    int samples = frames * channels;
+    unsigned long long sum = 0;
+    int i;
+
+    for (i = 0; i < samples; i++) {
+        int32_t v;
+
+        if (fmt == FMT_S16) {
+            v = (int32_t)(int16_t)((uint16_t)buf[i * 2] |
+                                   ((uint16_t)buf[i * 2 + 1] << 8));
+        } else if (fmt == FMT_S24_3) {
+            const uint8_t *p = buf + i * 3;
+            uint32_t u = (uint32_t)p[0] | ((uint32_t)p[1] << 8) |
+                         ((uint32_t)p[2] << 16);
+
+            v = ((int32_t)(u << 8)) >> 8;
+        } else {
+            const uint8_t *p = buf + i * 4;
+            uint32_t u = (uint32_t)p[0] | ((uint32_t)p[1] << 8) |
+                         ((uint32_t)p[2] << 16) |
+                         ((uint32_t)p[3] << 24);
+
+            v = (fmt == FMT_S24_4) ? (((int32_t)(u << 8)) >> 8) :
+                (int32_t)u;
+        }
+        if (v < 0)
+            v = -v;
+        sum += (unsigned int)v;
+    }
+    return sum;
 }
 
 static int fmt_bits(int fmt)
@@ -220,14 +373,37 @@ static void interval_exact(struct snd_interval *i, unsigned int value)
     i->empty = 0;
 }
 
-static int pcm_set_hw_params(struct stream *s, int period_frames)
+static void params_any(struct snd_pcm_hw_params *p)
+{
+    int i;
+
+    memset(p, 0, sizeof(*p));
+    for (i = SNDRV_PCM_HW_PARAM_FIRST_MASK;
+         i <= SNDRV_PCM_HW_PARAM_LAST_MASK; i++) {
+        struct snd_mask *m = param_mask(p, i);
+        if (m)
+            memset(m, 0xff, sizeof(*m));
+    }
+    for (i = SNDRV_PCM_HW_PARAM_FIRST_INTERVAL;
+         i <= SNDRV_PCM_HW_PARAM_LAST_INTERVAL; i++) {
+        struct snd_interval *v = param_interval(p, i);
+        if (v) {
+            memset(v, 0, sizeof(*v));
+            v->min = 0;
+            v->max = UINT_MAX;
+        }
+    }
+}
+
+static int pcm_set_hw_params_mode(struct stream *s, int period_frames,
+                                  int auto_mode, int min_period)
 {
     struct snd_pcm_hw_params p;
     struct snd_mask *m;
     struct snd_interval *i;
     int ret;
 
-    memset(&p, 0, sizeof(p));
+    params_any(&p);
     m = param_mask(&p, SNDRV_PCM_HW_PARAM_ACCESS);
     if (!m)
         return -EINVAL;
@@ -246,11 +422,6 @@ static int pcm_set_hw_params(struct stream *s, int period_frames)
     mask_none(m);
     mask_set(m, SNDRV_PCM_SUBFORMAT_STD);
 
-    i = param_interval(&p, SNDRV_PCM_HW_PARAM_SAMPLE_BITS);
-    if (!i)
-        return -EINVAL;
-    interval_exact(i, (unsigned int)fmt_bits(s->format));
-
     i = param_interval(&p, SNDRV_PCM_HW_PARAM_CHANNELS);
     if (!i)
         return -EINVAL;
@@ -261,15 +432,43 @@ static int pcm_set_hw_params(struct stream *s, int period_frames)
         return -EINVAL;
     interval_exact(i, (unsigned int)s->rate);
 
+    if (!auto_mode) {
+        i = param_interval(&p, SNDRV_PCM_HW_PARAM_SAMPLE_BITS);
+        if (!i)
+            return -EINVAL;
+        interval_exact(i, (unsigned int)fmt_bits(s->format));
+    }
+
     i = param_interval(&p, SNDRV_PCM_HW_PARAM_PERIOD_SIZE);
     if (!i)
         return -EINVAL;
-    interval_exact(i, (unsigned int)period_frames);
+    if (min_period > 0) {
+        i->min = (unsigned int)min_period;
+        i->max = UINT_MAX;
+        i->openmin = 0;
+        i->openmax = 0;
+        i->integer = 1;
+        i->empty = 0;
 
-    i = param_interval(&p, SNDRV_PCM_HW_PARAM_PERIODS);
-    if (!i)
-        return -EINVAL;
-    interval_exact(i, (unsigned int)s->periods);
+        i = param_interval(&p, SNDRV_PCM_HW_PARAM_BUFFER_SIZE);
+        if (!i)
+            return -EINVAL;
+        i->min = (unsigned int)min_period * 4;
+        i->max = UINT_MAX;
+        i->openmin = 0;
+        i->openmax = 0;
+        i->integer = 1;
+        i->empty = 0;
+    } else if (!auto_mode) {
+        interval_exact(i, (unsigned int)period_frames);
+    }
+
+    if (!auto_mode && min_period <= 0) {
+        i = param_interval(&p, SNDRV_PCM_HW_PARAM_PERIODS);
+        if (!i)
+            return -EINVAL;
+        interval_exact(i, (unsigned int)s->periods);
+    }
 
     ret = ioctl(s->fd, SNDRV_PCM_IOCTL_HW_PARAMS, &p);
     if (ret < 0)
@@ -288,6 +487,21 @@ static int pcm_set_hw_params(struct stream *s, int period_frames)
         s->buffer_frames = s->period_frames * s->periods;
 
     return 0;
+}
+
+static int pcm_set_hw_params(struct stream *s, int period_frames,
+                             int min_period)
+{
+    int ret;
+
+    ret = pcm_set_hw_params_mode(s, period_frames, 0, min_period);
+    if (ret == -EINVAL) {
+        ret = pcm_set_hw_params_mode(s, period_frames, 1, min_period);
+        if (ret == 0)
+            log_msg("uac2d: hw_params auto: period=%d buffer=%d\n",
+                    s->period_frames, s->buffer_frames);
+    }
+    return ret;
 }
 
 static int pcm_set_sw_params(struct stream *s, int start_threshold)
@@ -377,13 +591,18 @@ static int wait_fd(int fd, short events, int timeout_ms)
 
 static int open_pcm(struct stream *s, int card, int device, int capture,
                     int rate, int channels, int periods, int requested_period,
-                    int requested_format, int *selected_format)
+                    int min_period, int requested_format,
+                    int *selected_format)
 {
     char path[64];
     int formats[FMT_COUNT];
     int format_count = 0;
     int period_candidates[6];
     int period_count = 0;
+    int first_open_err = 0;
+    int first_hw_err = 0;
+    int first_hw_fmt = -1;
+    int first_hw_period = 0;
     int f;
     int i;
     int ret;
@@ -421,9 +640,24 @@ static int open_pcm(struct stream *s, int card, int device, int capture,
             int pf = period_candidates[i];
             if (pf < 32)
                 pf = 32;
-            s->fd = open(path, O_RDWR | O_NONBLOCK | O_CLOEXEC);
+            s->fd = open(path, O_NONBLOCK | O_CLOEXEC |
+                         (capture ? O_RDONLY : O_WRONLY));
             if (s->fd < 0)
+                s->fd = open(path, O_RDWR | O_NONBLOCK | O_CLOEXEC);
+            if (s->fd < 0) {
+                if (!first_open_err)
+                    first_open_err = -errno;
                 return -errno;
+            }
+            {
+                struct snd_pcm_info info;
+
+                memset(&info, 0, sizeof(info));
+                info.subdevice = 0;
+                if (ioctl(s->fd, SNDRV_PCM_IOCTL_INFO, &info) == 0)
+                    log_msg("uac2d: pcm %s id='%s' name='%s' sub='%s'\n",
+                            path, info.id, info.name, info.subname);
+            }
             s->format = formats[f];
             s->rate = rate;
             s->channels = channels;
@@ -435,13 +669,32 @@ static int open_pcm(struct stream *s, int card, int device, int capture,
             s->period_frames = pf;
             s->buffer_frames = 0;
 
-            ret = pcm_set_hw_params(s, pf);
+            ret = pcm_set_hw_params(s, pf, min_period);
             if (ret == 0) {
                 *selected_format = formats[f];
                 return 0;
             }
+            if (!first_hw_err) {
+                first_hw_err = ret;
+                first_hw_fmt = formats[f];
+                first_hw_period = pf;
+            }
             close(s->fd);
             s->fd = -1;
+        }
+    }
+    {
+        static time_t last_probe;
+        time_t now = time(NULL);
+
+        if (now - last_probe >= 10) {
+            log_msg("uac2d: probe %s: open=%s hw=%s fmt=%s period=%d\n",
+                    path,
+                    first_open_err ? strerror(-first_open_err) : "ok",
+                    first_hw_err ? strerror(-first_hw_err) : "ok",
+                    first_hw_fmt >= 0 ? fmt_name(first_hw_fmt) : "-",
+                    first_hw_period);
+            last_probe = now;
         }
     }
     return -EINVAL;
@@ -534,6 +787,223 @@ static int uac2_control_rate(int card)
     if (uac2_control_value(card, "UAC2 Capture Rate", &value) < 0)
         return -1;
     return value;
+}
+
+static int uac2_control_set(int card, const char *name, int value)
+{
+    char path[64];
+    struct snd_ctl_elem_value val;
+    int fd;
+    int ret;
+
+    snprintf(path, sizeof(path), "/dev/snd/controlC%d", card);
+    fd = open(path, O_RDWR | O_CLOEXEC);
+    if (fd < 0)
+        return -errno;
+    memset(&val, 0, sizeof(val));
+    val.id.iface = SNDRV_CTL_ELEM_IFACE_MIXER;
+    snprintf((char *)val.id.name, sizeof(val.id.name), "%s", name);
+    val.value.integer.value[0] = value;
+    if (ioctl(fd, SNDRV_CTL_IOCTL_ELEM_WRITE, &val) < 0)
+        ret = -errno;
+    else
+        ret = 0;
+    close(fd);
+    return ret;
+}
+
+/* Set a mixer control by name. Enum controls are matched by item name;
+ * integer controls parse the value. Returns 0 on success. */
+static int ctl_set(int card, const char *name, const char *value)
+{
+    char path[64];
+    struct snd_ctl_elem_info info;
+    struct snd_ctl_elem_value val;
+    int fd;
+    int ret = -EINVAL;
+    unsigned int i;
+
+    snprintf(path, sizeof(path), "/dev/snd/controlC%d", card);
+    fd = open(path, O_RDWR | O_CLOEXEC);
+    if (fd < 0)
+        return -errno;
+
+    memset(&info, 0, sizeof(info));
+    info.id.iface = SNDRV_CTL_ELEM_IFACE_MIXER;
+    snprintf((char *)info.id.name, sizeof(info.id.name), "%s", name);
+    if (ioctl(fd, SNDRV_CTL_IOCTL_ELEM_INFO, &info) < 0) {
+        ret = -errno;
+        goto out;
+    }
+
+    memset(&val, 0, sizeof(val));
+    val.id = info.id;
+
+    if (info.type == SNDRV_CTL_ELEM_TYPE_ENUMERATED) {
+        for (i = 0; i < info.value.enumerated.items; i++) {
+            info.value.enumerated.item = i;
+            if (ioctl(fd, SNDRV_CTL_IOCTL_ELEM_INFO, &info) < 0)
+                break;
+            if (!strcasecmp((char *)info.value.enumerated.name, value)) {
+                val.value.enumerated.item[0] = i;
+                ret = 0;
+                break;
+            }
+        }
+    } else if (info.type == SNDRV_CTL_ELEM_TYPE_INTEGER ||
+               info.type == SNDRV_CTL_ELEM_TYPE_BOOLEAN) {
+        val.value.integer.value[0] = strtol(value, NULL, 0);
+        ret = 0;
+    }
+
+    if (ret == 0 && ioctl(fd, SNDRV_CTL_IOCTL_ELEM_WRITE, &val) < 0)
+        ret = -errno;
+out:
+    close(fd);
+    return ret;
+}
+
+static void log_ctl_int(int card, const char *name)
+{
+    int value;
+
+    if (uac2_control_value(card, name, &value) == 0)
+        log_msg("uac2d: ctl %s=%d\n", name, value);
+    else
+        log_msg("uac2d: ctl %s unavailable\n", name);
+}
+
+/*
+ * The QCOM PCM hw_params registers an ACDB app_type config for the
+ * stream. A raw PCM open may clear it, losing the media calibration
+ * (about 20 dB on this device). Re-writing the current values after the
+ * open re-registers the HAL's media config for our stream.
+ */
+static void reapply_app_type(int card, int device)
+{
+    char name[64];
+    char path[64];
+    struct snd_ctl_elem_info info;
+    struct snd_ctl_elem_value val;
+    int fd;
+
+    snprintf(name, sizeof(name), "Audio Stream %d App Type Cfg", device);
+    snprintf(path, sizeof(path), "/dev/snd/controlC%d", card);
+    fd = open(path, O_RDWR | O_CLOEXEC);
+    if (fd < 0) {
+        log_msg("uac2d: app_type: open %s: %s\n", path, strerror(errno));
+        return;
+    }
+    memset(&info, 0, sizeof(info));
+    info.id.iface = SNDRV_CTL_ELEM_IFACE_PCM;
+    snprintf((char *)info.id.name, sizeof(info.id.name), "%.43s", name);
+    if (ioctl(fd, SNDRV_CTL_IOCTL_ELEM_INFO, &info) < 0) {
+        log_msg("uac2d: app_type: info %s: %s\n", name, strerror(errno));
+        close(fd);
+        return;
+    }
+    memset(&val, 0, sizeof(val));
+    val.id = info.id;
+    if (ioctl(fd, SNDRV_CTL_IOCTL_ELEM_READ, &val) < 0) {
+        log_msg("uac2d: app_type: read %s: %s\n", name, strerror(errno));
+        close(fd);
+        return;
+    }
+    if (ioctl(fd, SNDRV_CTL_IOCTL_ELEM_WRITE, &val) < 0) {
+        log_msg("uac2d: app_type: write %s: %s\n", name, strerror(errno));
+        close(fd);
+        return;
+    }
+    log_msg("uac2d: app_type re-registered %s count=%u\n", name,
+            info.count);
+    close(fd);
+}
+
+static const char *dma_rate_name(int rate)
+{
+    switch (rate) {
+    case 8000:
+        return "KHZ_8";
+    case 11025:
+        return "KHZ_11P025";
+    case 16000:
+        return "KHZ_16";
+    case 22050:
+        return "KHZ_22P05";
+    case 32000:
+        return "KHZ_32";
+    case 44100:
+        return "KHZ_44P1";
+    case 48000:
+        return "KHZ_48";
+    case 88200:
+        return "KHZ_88P2";
+    case 96000:
+        return "KHZ_96";
+    case 176400:
+        return "KHZ_176P4";
+    case 192000:
+        return "KHZ_192";
+    default:
+        return "KHZ_48";
+    }
+}
+
+static void setup_playback_route(int card, int rate)
+{
+    (void)rate;
+    static const struct {
+        const char *name;
+        const char *value;
+    } ctrls[] = {
+        /* MultiMedia1 -> RX CDC DMA -> WCD937x headphones. The HAL
+         * uses this route for deep-buffer playback; SEC_MI2S_RX is the
+         * speaker/AW882xx path and only leaks into the jack. */
+        { "RX_CDC_DMA_RX_0 Audio Mixer MultiMedia1", "1" },
+        { "RX_HPH_PWR_MODE", "LOHIFI" },
+        { "RX HPH Mode", "CLS_H_LOHIFI" },
+        { "RX_MACRO RX0 MUX", "AIF1_PB" },
+        { "RX_MACRO RX1 MUX", "AIF1_PB" },
+        { "RX_CDC_DMA_RX_0 Channels", "Two" },
+        { "RX_CDC_DMA_RX_0 Format", "S24_3LE" },
+        { "RX INT0_1 MIX1 INP0", "RX0" },
+        { "RX INT1_1 MIX1 INP0", "RX1" },
+        { "RX INT0 DEM MUX", "CLSH_DSM_OUT" },
+        { "RX INT1 DEM MUX", "CLSH_DSM_OUT" },
+        { "RX_COMP1 Switch", "1" },
+        { "RX_COMP2 Switch", "1" },
+        { "HPHL_COMP Switch", "1" },
+        { "HPHR_COMP Switch", "1" },
+        { "HPHL_RDAC Switch", "1" },
+        { "HPHR_RDAC Switch", "1" },
+        { "HPH_L Switch", "1" },
+        { "HPH_R Switch", "1" },
+        { "RX_CDC_DMA_RX_0_DL_HL Switch", "1" },
+        /* The HAL's mixer_paths uses 84 for these; with the DMA route
+         * finally correct, match the HAL instead of assuming 0 dB. */
+        { "RX_RX0 Digital Volume", "84" },
+        { "RX_RX1 Digital Volume", "84" },
+        { "RX_RX0 Mix Digital Volume", "0" },
+        { "RX_RX1 Mix Digital Volume", "0" },
+        { "HPHL Volume", "20" },
+        { "HPHR Volume", "20" },
+    };
+    int ok = 0;
+    size_t i;
+
+    for (i = 0; i < sizeof(ctrls) / sizeof(ctrls[0]); i++) {
+        if (ctl_set(card, ctrls[i].name, ctrls[i].value) == 0)
+            ok++;
+    }
+    if (ctl_set(card, "RX_CDC_DMA_RX_0 SampleRate",
+                dma_rate_name(192000)) == 0)
+        ok++;
+    log_msg("uac2d: playback route controls applied: %d/%d rate=KHZ_192\n",
+            ok, (int)(sizeof(ctrls) / sizeof(ctrls[0])) + 1);
+    log_ctl_int(card, "RX_RX0 Digital Volume");
+    log_ctl_int(card, "RX_RX1 Digital Volume");
+    log_ctl_int(card, "HPHL Volume");
+    log_ctl_int(card, "HPHR Volume");
 }
 
 static int32_t volume_gain_q15(int volume)
@@ -1024,6 +1494,7 @@ static int run_bridge(struct opts *o)
     int pb_bytes;
     int max_frame_bytes;
     int period;
+    int pb_period;
     int prefill;
     time_t next_rate_check;
     struct frame_ring ring;
@@ -1031,6 +1502,12 @@ static int run_bridge(struct opts *o)
     unsigned long long xruns_in = 0;
     unsigned long long xruns_out = 0;
     unsigned long long silence_frames = 0;
+    int cap_peak = 0;
+    int pb_peak = 0;
+    unsigned long long cap_abs = 0;
+    unsigned long long cap_cnt = 0;
+    unsigned long long pb_abs = 0;
+    unsigned long long pb_cnt = 0;
     int host_volume = 0;
     int host_mute = 0;
     int32_t gain_q15 = 32768;
@@ -1050,6 +1527,19 @@ static int run_bridge(struct opts *o)
     if (card_count < 0) {
         log_msg("uac2d: no /proc/asound/cards: %s\n", strerror(-card_count));
         return card_count;
+    }
+
+    {
+        static time_t last_cards;
+        time_t now = time(NULL);
+        int c;
+
+        if (now - last_cards >= 30) {
+            for (c = 0; c < card_count; c++)
+                log_msg("uac2d: card %d: %s\n", cards[c].number,
+                        cards[c].name);
+            last_cards = now;
+        }
     }
 
     cap_card = o->capture_card;
@@ -1081,11 +1571,46 @@ static int run_bridge(struct opts *o)
     }
 
     {
-        int rates[] = { o->rate, 192000, 176400, 96000, 88200, 48000,
-                        44100, 32000, 24000, 22050, 16000, 8000 };
-        int rate_count = (int)(sizeof(rates) / sizeof(rates[0]));
+        int current_rate = uac2_control_rate(cap_card);
+        int rates[13];
+        int rate_count = 13;
+        static int rate_logs;
         int r;
         int opened = 0;
+
+        if (current_rate != o->rate) {
+            int set_ret = uac2_control_set(cap_card, "UAC2 Capture Rate",
+                                           o->rate);
+
+            if (set_ret == 0) {
+                log_msg("uac2d: forced UAC2 capture rate %d -> %d\n",
+                        current_rate, o->rate);
+                current_rate = uac2_control_rate(cap_card);
+            } else {
+                log_msg("uac2d: cannot set UAC2 rate %d: %s\n", o->rate,
+                        strerror(-set_ret));
+            }
+        }
+        rates[0] = current_rate;
+        rates[1] = o->rate;
+        rates[2] = 192000;
+        rates[3] = 176400;
+        rates[4] = 96000;
+        rates[5] = 88200;
+        rates[6] = 48000;
+        rates[7] = 44100;
+        rates[8] = 32000;
+        rates[9] = 24000;
+        rates[10] = 22050;
+        rates[11] = 16000;
+        rates[12] = 8000;
+
+        if (rate_logs < 4) {
+            log_msg("uac2d: control rate=%d config rate=%d\n",
+                    current_rate, o->rate);
+            rate_logs++;
+        }
+
         ret = -EINVAL;
         for (r = 0; r < rate_count && !opened; r++) {
             int candidate = rates[r];
@@ -1100,12 +1625,17 @@ static int run_bridge(struct opts *o)
             if (duplicate)
                 continue;
             ret = open_pcm(&cap, cap_card, o->capture_device, 1, candidate,
-                           o->channels, o->periods, period, o->capture_format,
-                           &cap_fmt);
+                           o->channels, o->periods, period, 0,
+                           o->capture_format, &cap_fmt);
             if (ret == 0) {
                 o->rate = candidate;
                 opened = 1;
                 break;
+            }
+            if (rate_logs < 24) {
+                log_msg("uac2d: rate %d rejected: %s\n", candidate,
+                        strerror(-ret));
+                rate_logs++;
             }
         }
         if (!opened) {
@@ -1121,9 +1651,11 @@ static int run_bridge(struct opts *o)
         return -EINVAL;
     }
 
+    setup_playback_route(pb_card, o->rate);
+
     ret = open_pcm(&pb, pb_card, o->playback_device, 0, o->rate,
-                   o->channels, o->periods, period, o->playback_format,
-                   &pb_fmt);
+                   o->channels, o->periods, period, 256,
+                   o->playback_format, &pb_fmt);
     if (ret < 0) {
         log_msg("uac2d: cannot open playback card %d device %d: %s\n",
                 pb_card, o->playback_device, strerror(-ret));
@@ -1136,17 +1668,25 @@ static int run_bridge(struct opts *o)
         close(pb.fd);
         return -EINVAL;
     }
+    /* hw_params may reset codec gains; re-apply them after the PCM is
+     * configured (the DMA format/rate stay the same). */
+    setup_playback_route(pb_card, o->rate);
+    reapply_app_type(pb_card, o->playback_device);
+    pb_period = period;
+    if (pb_period <= 0)
+        pb_period = 256;
     max_frame_bytes = cap_bytes > pb_bytes ? cap_bytes : pb_bytes;
 
-    prefill = o->prefill_periods * period;
+    prefill = o->prefill_periods * pb_period;
     if (prefill > pb.buffer_frames)
         prefill = pb.buffer_frames;
 
     capbuf = malloc((size_t)period * (size_t)cap_bytes);
-    pbbuf = malloc((size_t)period * (size_t)max_frame_bytes);
-    silence = calloc((size_t)period, (size_t)pb_bytes);
+    pbbuf = malloc((size_t)pb_period * (size_t)max_frame_bytes);
+    silence = calloc((size_t)pb_period, (size_t)pb_bytes);
     if (!capbuf || !pbbuf || !silence ||
-        ring_init(&ring, period * 8, pb_bytes, period * 3) < 0) {
+        ring_init(&ring, pb.buffer_frames * 2, pb_bytes,
+                  pb.buffer_frames) < 0) {
         log_msg("uac2d: out of memory\n");
         free(capbuf);
         free(pbbuf);
@@ -1200,10 +1740,12 @@ static int run_bridge(struct opts *o)
     if (uac2_control_value(cap.card, "UAC2 Host Mute", &host_mute) < 0)
         host_mute = 0;
     gain_q15 = host_mute ? 0 : volume_gain_q15(host_volume);
+    log_msg("uac2d: initial host volume=%d mute=%d gain=%d\n",
+            host_volume, host_mute, gain_q15);
 
     next_rate_check = time(NULL) + 1;
     {
-        time_t next_stats = time(NULL) + 60;
+        time_t next_stats = time(NULL) + 5;
         while (!stop_requested) {
         struct pollfd fds[2];
         int pr;
@@ -1231,9 +1773,19 @@ static int run_bridge(struct opts *o)
             next_rate_check = time(NULL) + 1;
             if (time(NULL) >= next_stats) {
                 log_msg("uac2d: stats drops=%llu xruns_in=%llu "
-                        "xruns_out=%llu silence=%llu\n",
-                        drops, xruns_in, xruns_out, silence_frames);
-                next_stats = time(NULL) + 60;
+                        "xruns_out=%llu silence=%llu cap_peak=%d "
+                        "pb_peak=%d cap_avg=%llu pb_avg=%llu\n",
+                        drops, xruns_in, xruns_out, silence_frames,
+                        cap_peak, pb_peak,
+                        cap_cnt ? cap_abs / cap_cnt : 0,
+                        pb_cnt ? pb_abs / pb_cnt : 0);
+                cap_peak = 0;
+                pb_peak = 0;
+                cap_abs = 0;
+                cap_cnt = 0;
+                pb_abs = 0;
+                pb_cnt = 0;
+                next_stats = time(NULL) + 5;
             }
         }
 
@@ -1251,20 +1803,28 @@ static int run_bridge(struct opts *o)
             break;
         }
         if (pr == 0) {
-            int n = ring_peek(&ring, pbbuf, period);
-            int w;
-            if (n > 0) {
+            int n = ring_peek(&ring, pbbuf, pb_period);
+            int w = 0;
+            if (n >= pb_period) {
+                crossfade_data(pb_fmt, o->channels, pb_period, pbbuf,
+                               last_sample, &fade_remaining);
+                w = pcm_write(&pb, pbbuf, pb_period);
+                if (w > 0)
+                    ring_consume(&ring, w);
+            } else if (n == 0) {
+                fill_silence_fade(pb_fmt, o->channels, pb_period, silence,
+                                  last_sample, &fade_remaining);
+                w = pcm_write(&pb, silence, pb_period);
+                if (w > 0)
+                    silence_frames += (unsigned long long)w;
+            } else {
+                /* No event for 20 ms and only a partial block left:
+                 * flush it rather than letting the PCM underrun. */
                 crossfade_data(pb_fmt, o->channels, n, pbbuf, last_sample,
                                &fade_remaining);
                 w = pcm_write(&pb, pbbuf, n);
                 if (w > 0)
                     ring_consume(&ring, w);
-            } else {
-                fill_silence_fade(pb_fmt, o->channels, period, silence,
-                                  last_sample, &fade_remaining);
-                w = pcm_write(&pb, silence, period);
-                if (w > 0)
-                    silence_frames += (unsigned long long)w;
             }
             if (w == -EPIPE) {
                 xruns_out++;
@@ -1285,6 +1845,20 @@ static int run_bridge(struct opts *o)
                                o->channels);
                 apply_gain(pb_fmt, pbbuf, n, o->channels, gain_q15);
                 {
+                    int p = frame_peak(cap_fmt, capbuf, n, o->channels);
+
+                    if (p > cap_peak)
+                        cap_peak = p;
+                    p = frame_peak(pb_fmt, pbbuf, n, o->channels);
+                    if (p > pb_peak)
+                        pb_peak = p;
+                    cap_abs += frame_abs_sum(cap_fmt, capbuf, n,
+                                             o->channels);
+                    cap_cnt += (unsigned long long)n * o->channels;
+                    pb_abs += frame_abs_sum(pb_fmt, pbbuf, n, o->channels);
+                    pb_cnt += (unsigned long long)n * o->channels;
+                }
+                {
                     int dropped = ring_push(&ring, pbbuf, n);
                     if (dropped > 0) {
                         drops += (unsigned long long)dropped;
@@ -1303,18 +1877,18 @@ static int run_bridge(struct opts *o)
         }
 
         if (fds[1].revents & (POLLOUT | POLLERR | POLLHUP)) {
-            int n = ring_peek(&ring, pbbuf, period);
-            int w;
-            if (n > 0) {
-                crossfade_data(pb_fmt, o->channels, n, pbbuf, last_sample,
-                               &fade_remaining);
-                w = pcm_write(&pb, pbbuf, n);
+            int n = ring_peek(&ring, pbbuf, pb_period);
+            int w = 0;
+            if (n >= pb_period) {
+                crossfade_data(pb_fmt, o->channels, pb_period, pbbuf,
+                               last_sample, &fade_remaining);
+                w = pcm_write(&pb, pbbuf, pb_period);
                 if (w > 0)
                     ring_consume(&ring, w);
-            } else {
-                fill_silence_fade(pb_fmt, o->channels, period, silence,
+            } else if (n == 0) {
+                fill_silence_fade(pb_fmt, o->channels, pb_period, silence,
                                   last_sample, &fade_remaining);
-                w = pcm_write(&pb, silence, period);
+                w = pcm_write(&pb, silence, pb_period);
                 if (w > 0)
                     silence_frames += (unsigned long long)w;
             }
@@ -1547,6 +2121,10 @@ static int parse_args(struct opts *o, int argc, char **argv)
             o->self_test = 1;
             continue;
         }
+        if (!strcmp(a, "--dump-mixer")) {
+            o->dump_mixer = 1;
+            continue;
+        }
         if (i + 1 >= argc) {
             fprintf(stderr, "uac2d: missing value for %s\n", a);
             return -1;
@@ -1653,6 +2231,14 @@ static int load_config(struct opts *o, const char *path)
             o->capture_format = fmt_from_name(val);
         else if (!strcmp(key, "playback_format"))
             o->playback_format = fmt_from_name(val);
+        else if (!strcmp(key, "output")) {
+            if (!strcmp(val, "fifo"))
+                o->fifo_output = 1;
+        } else if (!strcmp(key, "fifo")) {
+            snprintf(o->fifo_path_buf, sizeof(o->fifo_path_buf), "%s", val);
+            o->fifo_path = o->fifo_path_buf;
+        } else if (!strcmp(key, "out_rate"))
+            parse_int(val, &o->out_rate);
         else if (!strcmp(key, "cpu"))
             parse_int(val, &o->cpu);
         else if (!strcmp(key, "log")) {
@@ -1662,6 +2248,305 @@ static int load_config(struct opts *o, const char *path)
     }
     fclose(f);
     return 0;
+}
+
+static int write_fifo_all(int fd, const void *buf, size_t len)
+{
+    const uint8_t *p = buf;
+
+    while (len > 0) {
+        ssize_t n = write(fd, p, len);
+
+        if (n < 0) {
+            if (errno == EINTR)
+                continue;
+            return -errno;
+        }
+        p += n;
+        len -= (size_t)n;
+    }
+    return 0;
+}
+
+struct fifo_resamp {
+    double phase;
+    float prev[8];
+    int init;
+};
+
+static int run_fifo(struct opts *o)
+{
+    struct card_info cards[MAX_CARDS];
+    struct stream cap;
+    struct fifo_resamp rs;
+    int card_count;
+    int cap_card;
+    int cap_fmt = -1;
+    int period;
+    int ret;
+    int fifo_fd = -1;
+    int out_rate = o->out_rate > 0 ? o->out_rate : 48000;
+    int channels = o->channels;
+    uint8_t *capbuf = NULL;
+    float *outbuf = NULL;
+    int max_out;
+    const char *fifo = o->fifo_path ? o->fifo_path :
+                       "/data/local/tmp/elyvaen_uac2.pcm";
+    time_t next_rate;
+    time_t next_stats;
+    unsigned long long out_frames_total = 0;
+    unsigned long long fifo_errors = 0;
+
+    memset(&cap, 0, sizeof(cap));
+    cap.fd = -1;
+    memset(&rs, 0, sizeof(rs));
+
+    card_count = scan_cards(cards, MAX_CARDS);
+    if (card_count < 0) {
+        log_msg("uac2d: fifo: no cards: %s\n", strerror(-card_count));
+        return card_count;
+    }
+    cap_card = o->capture_card >= 0 ? o->capture_card :
+               find_uac2_card(cards, card_count);
+    if (cap_card < 0) {
+        log_msg("uac2d: fifo: UAC2 capture card not found\n");
+        return -ENODEV;
+    }
+    if (channels < 1 || channels > 8)
+        channels = 2;
+
+    period = o->rate / 100;
+    if (period < 32)
+        period = 32;
+    ret = open_pcm(&cap, cap_card, o->capture_device, 1, o->rate,
+                   channels, o->periods, period, 0, FMT_S24_3, &cap_fmt);
+    if (ret < 0) {
+        log_msg("uac2d: fifo: cannot open capture card %d: %s\n",
+                cap_card, strerror(-ret));
+        return ret;
+    }
+    period = cap.period_frames;
+    capbuf = malloc((size_t)period * (size_t)cap.bytes_per_frame);
+    max_out = period * 8 + 16;
+    outbuf = malloc((size_t)max_out * (size_t)channels * sizeof(float));
+    if (!capbuf || !outbuf) {
+        log_msg("uac2d: fifo: out of memory\n");
+        free(capbuf);
+        free(outbuf);
+        close(cap.fd);
+        return -ENOMEM;
+    }
+    log_msg("uac2d: fifo capture card %d rate=%d period=%d fifo=%s "
+            "out=%d Hz float32\n",
+            cap_card, cap.rate, period, fifo, out_rate);
+
+    if (pcm_prepare(&cap) < 0 || pcm_start(&cap) < 0) {
+        log_msg("uac2d: fifo: cannot start capture\n");
+        free(capbuf);
+        free(outbuf);
+        close(cap.fd);
+        return -EIO;
+    }
+
+    next_rate = time(NULL) + 1;
+    next_stats = time(NULL) + 60;
+    while (!stop_requested) {
+        struct pollfd pfd;
+        int pr;
+
+        if (fifo_fd < 0) {
+            if (mkfifo(fifo, 0666) < 0 && errno != EEXIST) {
+                log_msg("uac2d: fifo: mkfifo %s: %s\n", fifo,
+                        strerror(errno));
+            }
+            (void)chmod(fifo, 0666);
+            fifo_fd = open(fifo, O_WRONLY | O_NONBLOCK | O_CLOEXEC);
+            if (fifo_fd < 0) {
+                if ((fifo_errors++ % 20) == 0)
+                    log_msg("uac2d: fifo: waiting for reader on %s\n",
+                            fifo);
+                msleep(250);
+                continue;
+            }
+            log_msg("uac2d: fifo: reader connected\n");
+        }
+
+        pfd.fd = cap.fd;
+        pfd.events = POLLIN;
+        pfd.revents = 0;
+        pr = poll(&pfd, 1, 200);
+        if (pr > 0 && (pfd.revents & (POLLIN | POLLERR | POLLHUP))) {
+            int n = pcm_read(&cap, capbuf, period);
+
+            if (n > 0) {
+                int out_frames = 0;
+                int i;
+                int c;
+
+                for (i = 0; i < n; i++) {
+                    float cur[8];
+                    for (c = 0; c < channels; c++) {
+                        const uint8_t *p = capbuf +
+                            ((size_t)i * channels + c) * 3;
+                        uint32_t u = (uint32_t)p[0] |
+                                     ((uint32_t)p[1] << 8) |
+                                     ((uint32_t)p[2] << 16);
+                        int32_t v = ((int32_t)(u << 8)) >> 8;
+
+                        cur[c] = (float)v / 8388608.0f;
+                    }
+                    if (!rs.init) {
+                        for (c = 0; c < channels; c++)
+                            rs.prev[c] = cur[c];
+                        rs.init = 1;
+                    }
+                    while (rs.phase < 1.0 && out_frames < max_out) {
+                        for (c = 0; c < channels; c++)
+                            outbuf[(size_t)out_frames * channels + c] =
+                                rs.prev[c] + (cur[c] - rs.prev[c]) *
+                                (float)rs.phase;
+                        out_frames++;
+                        rs.phase += (double)cap.rate / (double)out_rate;
+                    }
+                    rs.phase -= 1.0;
+                    if (rs.phase < 0.0)
+                        rs.phase = 0.0;
+                    for (c = 0; c < channels; c++)
+                        rs.prev[c] = cur[c];
+                }
+                if (out_frames > 0) {
+                    ret = write_fifo_all(fifo_fd, outbuf,
+                                         (size_t)out_frames *
+                                         (size_t)channels * sizeof(float));
+                    if (ret < 0) {
+                        log_msg("uac2d: fifo: write: %s\n", strerror(-ret));
+                        close(fifo_fd);
+                        fifo_fd = -1;
+                        fifo_errors++;
+                        continue;
+                    }
+                    out_frames_total += (unsigned long long)out_frames;
+                }
+            } else if (n == -EPIPE) {
+                pcm_prepare(&cap);
+                pcm_start(&cap);
+            } else if (n < 0 && n != -EAGAIN) {
+                log_msg("uac2d: fifo: capture read: %s\n", strerror(-n));
+                break;
+            }
+        }
+
+        if (time(NULL) >= next_rate) {
+            int live_rate = uac2_control_rate(cap.card);
+
+            if (live_rate > 0 && live_rate != cap.rate) {
+                log_msg("uac2d: fifo: host rate %d -> %d\n",
+                        cap.rate, live_rate);
+                pcm_drop(&cap);
+                close(cap.fd);
+                cap.fd = -1;
+                ret = open_pcm(&cap, cap_card, o->capture_device, 1,
+                               live_rate, channels, o->periods, 0, 0,
+                               FMT_S24_3, &cap_fmt);
+                if (ret < 0) {
+                    log_msg("uac2d: fifo: reopen: %s\n", strerror(-ret));
+                    break;
+                }
+                period = cap.period_frames;
+                free(capbuf);
+                free(outbuf);
+                capbuf = malloc((size_t)period *
+                                (size_t)cap.bytes_per_frame);
+                max_out = period * 8 + 16;
+                outbuf = malloc((size_t)max_out * (size_t)channels *
+                                sizeof(float));
+                if (!capbuf || !outbuf)
+                    break;
+                memset(&rs, 0, sizeof(rs));
+                if (pcm_prepare(&cap) < 0 || pcm_start(&cap) < 0)
+                    break;
+            }
+            next_rate = time(NULL) + 1;
+        }
+
+        if (time(NULL) >= next_stats) {
+            log_msg("uac2d: fifo stats out_frames=%llu fifo_errors=%llu\n",
+                    out_frames_total, fifo_errors);
+            next_stats = time(NULL) + 60;
+        }
+    }
+
+    if (fifo_fd >= 0)
+        close(fifo_fd);
+    if (cap.fd >= 0) {
+        pcm_drop(&cap);
+        close(cap.fd);
+    }
+    free(capbuf);
+    free(outbuf);
+    return 0;
+}
+
+static void dump_mixer(int card)
+{
+    char path[64];
+    struct snd_ctl_elem_list list;
+    struct snd_ctl_elem_id *ids = NULL;
+    int fd;
+    int i;
+    int count;
+
+    snprintf(path, sizeof(path), "/dev/snd/controlC%d", card);
+    fd = open(path, O_RDWR | O_CLOEXEC);
+    if (fd < 0) {
+        log_msg("uac2d: mixdump: cannot open %s: %s\n", path,
+                strerror(errno));
+        return;
+    }
+    memset(&list, 0, sizeof(list));
+    if (ioctl(fd, SNDRV_CTL_IOCTL_ELEM_LIST, &list) < 0) {
+        log_msg("uac2d: mixdump: list count failed: %s\n", strerror(errno));
+        close(fd);
+        return;
+    }
+    count = (int)list.count;
+    ids = calloc((size_t)count, sizeof(*ids));
+    if (!ids) {
+        close(fd);
+        return;
+    }
+    list.pids = ids;
+    list.space = (unsigned int)count;
+    if (ioctl(fd, SNDRV_CTL_IOCTL_ELEM_LIST, &list) < 0) {
+        log_msg("uac2d: mixdump: list failed: %s\n", strerror(errno));
+        free(ids);
+        close(fd);
+        return;
+    }
+    log_msg("uac2d: mixdump card=%d count=%d\n", card, (int)list.used);
+    for (i = 0; i < (int)list.used; i++) {
+        struct snd_ctl_elem_info info;
+        struct snd_ctl_elem_value val;
+
+        memset(&info, 0, sizeof(info));
+        info.id = ids[i];
+        if (ioctl(fd, SNDRV_CTL_IOCTL_ELEM_INFO, &info) < 0)
+            continue;
+        memset(&val, 0, sizeof(val));
+        val.id = ids[i];
+        if (ioctl(fd, SNDRV_CTL_IOCTL_ELEM_READ, &val) < 0)
+            continue;
+        if (info.type == SNDRV_CTL_ELEM_TYPE_INTEGER ||
+            info.type == SNDRV_CTL_ELEM_TYPE_BOOLEAN) {
+            log_msg("uac2d: mix %s=%ld\n", (char *)info.id.name,
+                    val.value.integer.value[0]);
+        } else if (info.type == SNDRV_CTL_ELEM_TYPE_ENUMERATED) {
+            log_msg("uac2d: mix %s=%u\n", (char *)info.id.name,
+                    val.value.enumerated.item[0]);
+        }
+    }
+    free(ids);
+    close(fd);
 }
 
 int main(int argc, char **argv)
@@ -1683,6 +2568,7 @@ int main(int argc, char **argv)
     o.playback_format = -1;
     o.cpu = -1;
     o.config_path = NULL;
+    o.out_rate = 48000;
 
     {
         int i;
@@ -1699,6 +2585,10 @@ int main(int argc, char **argv)
         return 2;
     if (o.self_test)
         return self_test();
+    if (o.dump_mixer) {
+        dump_mixer(o.playback_card >= 0 ? o.playback_card : 0);
+        return 0;
+    }
     if (o.channels < 1 || o.channels > 8 || o.rate < 8000 ||
         o.rate > 384000 || o.periods < 2 || o.prefill_periods < 0 ||
         o.cpu < -1 || o.cpu > 31) {
@@ -1723,16 +2613,28 @@ int main(int argc, char **argv)
     signal(SIGINT, on_signal);
     signal(SIGPIPE, SIG_IGN);
 
-    while (!stop_requested) {
-        ret = run_bridge(&o);
-        if (stop_requested)
-            break;
-        if (ret == UAC2_RATE_CHANGED)
-            log_msg("uac2d: reopening for new host rate\n");
-        else if (ret < 0)
-            log_msg("uac2d: bridge unavailable (%s), retrying\n",
-                    strerror(-ret));
-        msleep(1000);
+    if (o.fifo_output || o.fifo_path) {
+        while (!stop_requested) {
+            ret = run_fifo(&o);
+            if (stop_requested)
+                break;
+            if (ret < 0)
+                log_msg("uac2d: fifo unavailable (%s), retrying\n",
+                        strerror(-ret));
+            msleep(1000);
+        }
+    } else {
+        while (!stop_requested) {
+            ret = run_bridge(&o);
+            if (stop_requested)
+                break;
+            if (ret == UAC2_RATE_CHANGED)
+                log_msg("uac2d: reopening for new host rate\n");
+            else if (ret < 0)
+                log_msg("uac2d: bridge unavailable (%s), retrying\n",
+                        strerror(-ret));
+            msleep(1000);
+        }
     }
 
     log_msg("uac2d: stopped\n");

@@ -21,7 +21,9 @@ need() {
 
 need debugfs
 need e2fsck
-need e2rm
+if [ "${SKIP_DEBLOAT:-0}" != "1" ]; then
+    need e2rm
+fi
 need dumpe2fs
 need lpdump
 need python3
@@ -54,6 +56,7 @@ ctx_for() {
 file_ctx_for() {
     case "$1:$2" in
         vendor:/bin/hw/elyvaen-uac2d) echo "u:object_r:hal_audio_default_exec:s0" ;;
+        vendor:/bin/hw/elyvaen-usb) echo "u:object_r:vendor_hal_usb_qti_exec:s0" ;;
         *) ctx_for "$1" ;;
     esac
 }
@@ -119,6 +122,10 @@ prepare_images() {
 }
 
 apply_debloat() {
+    if [ "${SKIP_DEBLOAT:-0}" = "1" ]; then
+        log "==> Debloat omitido (SKIP_DEBLOAT=1)"
+        return 0
+    fi
     log "==> Aplicando debloat seguro"
     count=0
     skipped=0
@@ -175,6 +182,127 @@ apply_payload() {
     patch_vendor_file_contexts
 }
 
+clean_elyvaen_init() {
+    log "==> Limpiando servicios Elyvaen antiguos de init.qcom.rc"
+    img=$(img_for vendor)
+    tmp="$OUT_DIR/init.qcom.rc"
+    dbgq "dump \"/etc/init/hw/init.qcom.rc\" \"$tmp\"" "$img" >/dev/null || die "no se pudo extraer init.qcom.rc"
+    [ -s "$tmp" ] || die "init.qcom.rc vacio"
+    if grep -q '^# Elyvaen services' "$tmp"; then
+        new="$OUT_DIR/init.qcom.rc.clean"
+        awk '
+            BEGIN { skip = 0 }
+            /^# Elyvaen services$/ { skip = 1; next }
+            skip && /^on early-init$/ { skip = 0 }
+            skip { next }
+            { print }
+        ' "$tmp" > "$new"
+        install_file "$img" "$new" "/etc/init/hw/init.qcom.rc" 0100644 "u:object_r:vendor_configs_file:s0"
+    fi
+    if exists "$img" "/etc/init/elyvaen.rc"; then
+        dbg "rm \"/etc/init/elyvaen.rc\"" "$img" || true
+    fi
+
+    # La config antigua vivia en system; los dominios vendor no pueden
+    # leer system_file. Ahora esta en /vendor/etc/elyvaen/uac2.conf.
+    simg=$(img_for system)
+    if exists "$simg" "/system/etc/elyvaen/uac2.conf"; then
+        dbg "rm \"/system/etc/elyvaen/uac2.conf\"" "$simg" || true
+    fi
+    # Scripts shell antiguos: no pueden arrancar por SELinux y fueron
+    # reemplazados por el helper nativo en /vendor/bin/hw.
+    for old in \
+        /system/bin/elyvaen-boot.sh \
+        /system/bin/elyvaen-dmesg.sh \
+        /system/bin/elyvaen-usb-auto.sh \
+        /system/bin/elyvaen-usb-dac.sh \
+        /system/bin/elyvaen.sh
+    do
+        if exists "$simg" "$old"; then
+            dbg "rm \"$old\"" "$simg" || true
+        fi
+    done
+}
+
+patch_vendor_qcom_init() {
+    log "==> Inyectando servicios Elyvaen en init.qcom.rc"
+    img=$(img_for vendor)
+    tmp="$OUT_DIR/init.qcom.rc"
+    dbgq "dump \"/etc/init/hw/init.qcom.rc\" \"$tmp\"" "$img" >/dev/null || die "no se pudo extraer init.qcom.rc"
+    [ -s "$tmp" ] || die "init.qcom.rc vacio"
+    if ! grep -q 'Elyvaen services' "$tmp"; then
+        new="$OUT_DIR/init.qcom.rc.elyvaen"
+        last=$(grep -n '^import ' "$tmp" | tail -1 | cut -d: -f1)
+        [ -n "$last" ] || last=0
+        head -n "$last" "$tmp" > "$new"
+        printf '\n# Elyvaen services\n' >> "$new"
+        cat "$PAYLOAD/vendor/etc/init/elyvaen-uac2.rc" >> "$new"
+        tail -n +$((last + 1)) "$tmp" >> "$new"
+        install_file "$img" "$new" "/etc/init/hw/init.qcom.rc" 0100644 "u:object_r:vendor_configs_file:s0"
+    fi
+}
+
+patch_vendor_audio_init() {
+    log "==> Inyectando servicios Elyvaen en el .rc del HAL de audio"
+    img=$(img_for vendor)
+    tmp="$OUT_DIR/android.hardware.audio.service.rc"
+    dbgq "dump \"/etc/init/android.hardware.audio.service.rc\" \"$tmp\"" "$img" >/dev/null || die "no se pudo extraer android.hardware.audio.service.rc"
+    [ -s "$tmp" ] || die "android.hardware.audio.service.rc vacio"
+    if ! grep -q 'Elyvaen services' "$tmp"; then
+        new="$OUT_DIR/android.hardware.audio.service.rc.elyvaen"
+        last=$(grep -n '^import ' "$tmp" | tail -1 | cut -d: -f1)
+        [ -n "$last" ] || last=0
+        head -n "$last" "$tmp" > "$new"
+        printf '\n# Elyvaen services\n' >> "$new"
+        cat "$PAYLOAD/vendor/etc/init/elyvaen-uac2.rc" >> "$new"
+        printf '\n' >> "$new"
+        cat "$PAYLOAD/vendor/etc/init/elyvaen.rc" >> "$new"
+        tail -n +$((last + 1)) "$tmp" >> "$new"
+        install_file "$img" "$new" "/etc/init/android.hardware.audio.service.rc" 0100644 "u:object_r:vendor_configs_file:s0"
+    fi
+}
+
+patch_vendor_usb_init() {
+    log "==> Inyectando servicios Elyvaen en init.mmi.usb.rc"
+    img=$(img_for vendor)
+    tmp="$OUT_DIR/init.mmi.usb.rc"
+    dbgq "dump \"/etc/init/hw/init.mmi.usb.rc\" \"$tmp\"" "$img" >/dev/null || die "no se pudo extraer init.mmi.usb.rc"
+    [ -s "$tmp" ] || die "init.mmi.usb.rc vacio"
+    if ! grep -q 'Elyvaen services' "$tmp"; then
+        new="$OUT_DIR/init.mmi.usb.rc.elyvaen"
+        last=$(grep -n '^import ' "$tmp" | tail -1 | cut -d: -f1)
+        [ -n "$last" ] || last=0
+        head -n "$last" "$tmp" > "$new"
+        printf '\n# Elyvaen services\n' >> "$new"
+        cat "$PAYLOAD/vendor/etc/init/elyvaen-uac2.rc" >> "$new"
+        printf '\n' >> "$new"
+        cat "$PAYLOAD/vendor/etc/init/elyvaen.rc" >> "$new"
+        tail -n +$((last + 1)) "$tmp" >> "$new"
+        install_file "$img" "$new" "/etc/init/hw/init.mmi.usb.rc" 0100644 "u:object_r:vendor_configs_file:s0"
+    fi
+}
+
+patch_init_rc() {
+    log "==> Importando servicios Elyvaen en init.rc"
+    img=$(img_for system)
+    tmp="$OUT_DIR/init.rc"
+    dbgq "dump \"/system/etc/init/hw/init.rc\" \"$tmp\"" "$img" >/dev/null || die "no se pudo extraer init.rc"
+    [ -s "$tmp" ] || die "init.rc vacio"
+    if ! grep -q 'Elyvaen services' "$tmp"; then
+        new="$OUT_DIR/init.rc.elyvaen"
+        last=$(grep -n '^import ' "$tmp" | tail -1 | cut -d: -f1)
+        [ -n "$last" ] || last=0
+        head -n "$last" "$tmp" > "$new"
+        printf '\n# Elyvaen services\n' >> "$new"
+        cat "$PAYLOAD/vendor/etc/init/elyvaen-uac2.rc" >> "$new"
+        printf '\n' >> "$new"
+        cat "$PAYLOAD/vendor/etc/init/elyvaen.rc" >> "$new"
+        tail -n +$((last + 1)) "$tmp" >> "$new"
+        tmp="$new"
+    fi
+    install_file "$img" "$tmp" "/system/etc/init/hw/init.rc" 0100644 "u:object_r:system_file:s0"
+}
+
 patch_vendor_file_contexts() {
     log "==> Etiquetando binario UAC2 en vendor_file_contexts"
     img=$(img_for vendor)
@@ -184,7 +312,74 @@ patch_vendor_file_contexts() {
     if ! grep -q 'elyvaen-uac2d' "$tmp"; then
         printf '/(vendor|system/vendor)/bin/hw/elyvaen-uac2d u:object_r:hal_audio_default_exec:s0\n' >> "$tmp"
     fi
+    if ! grep -q 'elyvaen-usb ' "$tmp"; then
+        printf '/(vendor|system/vendor)/bin/hw/elyvaen-usb u:object_r:vendor_hal_usb_qti_exec:s0\n' >> "$tmp"
+    fi
     install_file "$img" "$tmp" "/etc/selinux/vendor_file_contexts" 0100644 "u:object_r:file_contexts_file:s0" "u:object_r:file_contexts_file:s0"
+}
+
+patch_system_policies() {
+    log "==> Aplicando politicas de sistema (seapp/property/hiddenapi)"
+    img=$(img_for system)
+    added=0
+
+    # 1) Asignar el dominio system_app (y datos system_app_data_file) al
+    #    puente com.elyvaen.uac2. system_app puede escribir system_prop.
+    #    La app principal (com.elyvaen.booming) sigue en priv_app para
+    #    conservar el acceso completo a storage/media.
+    tmp="$OUT_DIR/plat_seapp_contexts"
+    dbgq "dump \"/system/etc/selinux/plat_seapp_contexts\" \"$tmp\"" "$img" >/dev/null || die "no se pudo extraer plat_seapp_contexts"
+    [ -s "$tmp" ] || die "plat_seapp_contexts vacio"
+    if ! grep -q 'name=com\.elyvaen\.uac2' "$tmp"; then
+        new="$OUT_DIR/plat_seapp_contexts.new"
+        awk '
+            !done && /^user=_app([ \t]|$)/ {
+                print "user=_app isPrivApp=true name=com.elyvaen.uac2 domain=system_app type=system_app_data_file levelFrom=user"
+                done = 1
+            }
+            { print }
+            END { if (!done) exit 1 }
+        ' "$tmp" > "$new" || die "no se encontro el grupo user=_app en plat_seapp_contexts"
+        install_file "$img" "$new" "/system/etc/selinux/plat_seapp_contexts" 0100644 \
+            "u:object_r:seapp_contexts_file:s0"
+        added=$((added + 1))
+    fi
+
+    # 2) persist.elyvaen.* como system_prop para que system_app lo pueda
+    #    escribir (sys.* ya cae en la entrada generica sys.).
+    tmp="$OUT_DIR/plat_property_contexts"
+    dbgq "dump \"/system/etc/selinux/plat_property_contexts\" \"$tmp\"" "$img" >/dev/null || die "no se pudo extraer plat_property_contexts"
+    [ -s "$tmp" ] || die "plat_property_contexts vacio"
+    if ! grep -q '^persist\.elyvaen\.' "$tmp"; then
+        new="$OUT_DIR/plat_property_contexts.new"
+        cp "$tmp" "$new"
+        printf 'persist.elyvaen.        u:object_r:system_prop:s0\n' >> "$new"
+        install_file "$img" "$new" "/system/etc/selinux/plat_property_contexts" 0100644 \
+            "u:object_r:property_contexts_file:s0"
+        added=$((added + 1))
+    fi
+
+    # 3) Eximir al puente del filtro de API oculta: usa
+    #    android.os.SystemProperties (reflexion) para escribir las props.
+    tmp="$OUT_DIR/hiddenapi-package-whitelist.xml"
+    dbgq "dump \"/system/etc/sysconfig/hiddenapi-package-whitelist.xml\" \"$tmp\"" "$img" >/dev/null || die "no se pudo extraer hiddenapi-package-whitelist.xml"
+    [ -s "$tmp" ] || die "hiddenapi-package-whitelist.xml vacio"
+    if ! grep -q 'com\.elyvaen\.uac2' "$tmp"; then
+        new="$OUT_DIR/hiddenapi-package-whitelist.xml.new"
+        awk '
+            !done && /<\/config>/ {
+                print "  <hidden-api-whitelisted-app package=\"com.elyvaen.uac2\" />"
+                done = 1
+            }
+            { print }
+            END { if (!done) exit 1 }
+        ' "$tmp" > "$new" || die "no se encontro </config> en hiddenapi-package-whitelist.xml"
+        install_file "$img" "$new" "/system/etc/sysconfig/hiddenapi-package-whitelist.xml" 0100644 \
+            "u:object_r:system_file:s0"
+        added=$((added + 1))
+    fi
+
+    log "   parches aplicados: $added"
 }
 
 patch_build_prop() {
@@ -196,6 +391,10 @@ patch_build_prop() {
     if ! grep -q '^ro.elyvaen.version=' "$tmp"; then
         printf '\n# Elyvaen\n' >> "$tmp"
         cat "$CONFIG/build.prop.additions" >> "$tmp"
+    fi
+    if [ "${DEBUG_ROOT:-0}" = "1" ]; then
+        sed -i 's/^ro.debuggable=0/ro.debuggable=1/' "$tmp"
+        sed -i 's/^ro.secure=1/ro.secure=0/' "$tmp"
     fi
     install_file "$img" "$tmp" "/system/build.prop" 0100600 "u:object_r:system_file:s0"
 }
@@ -256,6 +455,7 @@ write_manifest() {
         echo "device=cypfq (moto g51 5G)"
         echo "base_super=$BASE_SUPER"
         echo "base_images=$BASE_IMAGES"
+        echo "debug_root=${DEBUG_ROOT:-0}"
         echo "payload_files=$(find "$PAYLOAD" -type f | wc -l)"
         echo "debloat_rules=$(grep -vc '^#' "$CONFIG/debloat-safe.txt" 2>/dev/null || true)"
         echo
@@ -271,7 +471,9 @@ case "$MODE" in
         mkdir -p "$OUT_DIR"
         prepare_images
         apply_debloat
+        clean_elyvaen_init
         apply_payload
+        patch_system_policies
         patch_build_prop
         validate_images
         write_manifest
@@ -288,7 +490,9 @@ case "$MODE" in
         mkdir -p "$OUT_DIR"
         prepare_images
         apply_debloat
+        clean_elyvaen_init
         apply_payload
+        patch_system_policies
         patch_build_prop
         validate_images
         build_super

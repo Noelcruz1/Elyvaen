@@ -8,9 +8,15 @@ JOBS=${JOBS:-3}
 BRANCH=${BRANCH:-elyvaen-uac2}
 
 command -v clang >/dev/null 2>&1 || {
-    echo "Falta clang. En Alpine: apk add build-base clang lld llvm bison flex perl openssl-dev ncurses-dev dtc elfutils-dev bash"
+    echo "Falta clang. En Alpine: apk add build-base clang lld llvm bison flex perl openssl-dev ncurses-dev dtc elfutils-dev bash coreutils"
     exit 1
 }
+
+# techpack/camera invoca dirname con varias rutas; BusyBox no lo soporta.
+if ! dirname --version 2>/dev/null | grep -q 'GNU coreutils'; then
+    echo "Falta GNU dirname. En Alpine: apk add coreutils"
+    exit 1
+fi
 
 if [ ! -d "$SRC/.git" ]; then
     echo "Falta el source del kernel en $SRC"
@@ -32,7 +38,7 @@ export LLVM_PARALLEL_LINK_JOBS=1
 
 make vendor/cypfq_defconfig >/tmp/elyvaen-release-config.log 2>&1
 
-# Perfil de release: LTO/ThinLTO + O3, sin CFI/SCS/debug, y con UAC2.
+# Perfil de release: LTO/ThinLTO + O3, sin CFI/SCS/debug, con UAC2 y camara.
 scripts/config --file "$KBUILD_OUTPUT/.config" \
     -e LTO_CLANG -e THINLTO -d LTO_NONE \
     -d CFI_CLANG -d SHADOW_CALL_STACK \
@@ -43,7 +49,7 @@ make olddefconfig >>/tmp/elyvaen-release-config.log 2>&1
 
 grep -E 'CONFIG_(LTO|LTO_CLANG|THINLTO|LTO_NONE|CFI_CLANG|DEBUG_FS|KALLSYMS_ALL|USB_CONFIGFS_F_UAC2|USB_F_UAC2|SND_USB_AUDIO|CC_OPTIMIZE_FOR_PERFORMANCE)' "$KBUILD_OUTPUT/.config" | head -30
 
-make -j"$JOBS" Image modules BOARD_CONFIG_CAMERA_KERNEL_NAME=none >/tmp/elyvaen-release-build.log 2>&1
+make -j"$JOBS" Image modules >/tmp/elyvaen-release-build.log 2>&1
 
 mkdir -p "$OUT" "$OUT/modules"
 cp "$KBUILD_OUTPUT/arch/arm64/boot/Image" "$OUT/Image"

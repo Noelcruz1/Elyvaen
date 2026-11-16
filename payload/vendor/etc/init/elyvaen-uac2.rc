@@ -1,0 +1,90 @@
+# Elyvaen USB DAC (UAC2).
+#
+# elyvaen-usb runs as vendor_hal_usb_qti (file label
+# vendor_hal_usb_qti_exec). That domain can read/write configfs
+# attributes, create/remove function symlinks and bind the UDC, but it
+# cannot mkdir configfs directories or set sys.* properties.
+#
+# The vendor_init actions below provide those two missing pieces:
+#   - vendor.usb.elyvaen.request=* -> create functions/uac2.0
+#   - vendor.usb.elyvaen.dac=1/0    -> start/stop the audio daemon
+#
+# elyvaen-uac2d keeps the existing hal_audio_default domain/exec type
+# (audio_device + proc_asound). No shell is involved.
+#
+# User control (Elyvaen app, system_app domain):
+#   persist.elyvaen.uac2=1/0 -> sys.elyvaen.usbdac.auto=1/0
+#   sys.elyvaen.usbdac.auto=1/0 -> start/stop elyvaen-usb
+#
+# Default is OFF: the phone behaves as a normal DAP (local playback +
+# charging) until the user enables USB DAC mode from the app.
+
+service elyvaen-usb /vendor/bin/hw/elyvaen-usb --config /vendor/etc/elyvaen/uac2.conf --auto
+    class late_start
+    user root
+    group root audio system
+    disabled
+
+service elyvaen-uac2d /vendor/bin/hw/elyvaen-uac2d --config /vendor/etc/elyvaen/uac2.conf
+    class late_start
+    user root
+    group root audio system
+    seclabel u:r:hal_audio_default:s0
+    disabled
+
+# One-shot diagnostic: dump every card0 mixer control to logcat.
+# Triggered by the bridge through sys.elyvaen.mixdump=0 -> 1.
+service elyvaen-mixdump /vendor/bin/hw/elyvaen-uac2d --dump-mixer
+    class late_start
+    user root
+    group root audio
+    seclabel u:r:hal_audio_default:s0
+    disabled
+    oneshot
+
+on property:sys.elyvaen.mixdump=1
+    start elyvaen-mixdump
+
+# Safe default before the persisted user choice is loaded.
+on init
+    setprop sys.elyvaen.usbdac.auto 0
+
+# Persisted user choice. The trigger also fires while init loads the
+# persistent properties from /data/property on boot.
+on property:persist.elyvaen.uac2=1
+    setprop sys.elyvaen.usbdac.auto 1
+
+on property:persist.elyvaen.uac2=0
+    setprop sys.elyvaen.usbdac.auto 0
+
+on property:sys.elyvaen.usbdac.auto=1
+    start elyvaen-usb
+
+on property:sys.elyvaen.usbdac.auto=0
+    setprop vendor.usb.elyvaen.dac 0
+    stop elyvaen-usb
+    stop elyvaen-uac2d
+    # init may SIGKILL the helper before its final publish; keep the
+    # externally visible state in sync with the switch.
+    setprop sys.elyvaen.usbdac.state disabled
+
+# vendor_init can mkdir under configfs; the helper cannot.
+on property:vendor.usb.elyvaen.request=*
+    mkdir /config/usb_gadget/g1/functions/uac2.0 0770
+
+on property:vendor.usb.elyvaen.dac=1
+    start elyvaen-uac2d
+
+on property:vendor.usb.elyvaen.dac=0
+    stop elyvaen-uac2d
+
+# vendor_usb_prop no es legible por shell; copia el estado a sys.*
+# (system_prop) para poder diagnosticar desde adb.
+on property:vendor.usb.elyvaen.state=*
+    setprop sys.elyvaen.usbdac.state ${vendor.usb.elyvaen.state}
+
+on property:vendor.usb.elyvaen.dac=*
+    setprop sys.elyvaen.usbdac.dac ${vendor.usb.elyvaen.dac}
+
+on property:vendor.usb.elyvaen.udc=*
+    setprop sys.elyvaen.usbdac.udc ${vendor.usb.elyvaen.udc}

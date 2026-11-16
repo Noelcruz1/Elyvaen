@@ -9,9 +9,15 @@ BRANCH=${BRANCH:-nokernelsu}
 TAG=${LOCALVERSION:-cypfq-test}
 
 command -v clang >/dev/null 2>&1 || {
-    echo "Falta clang. En Alpine: apk add build-base clang lld llvm bison flex perl openssl-dev ncurses-dev dtc elfutils-dev"
+    echo "Falta clang. En Alpine: apk add build-base clang lld llvm bison flex perl openssl-dev ncurses-dev dtc elfutils-dev coreutils"
     exit 1
 }
+
+# techpack/camera invoca dirname con varias rutas; BusyBox no lo soporta.
+if ! dirname --version 2>/dev/null | grep -q 'GNU coreutils'; then
+    echo "Falta GNU dirname. En Alpine: apk add coreutils"
+    exit 1
+fi
 
 if [ ! -d "$SRC/.git" ]; then
     mkdir -p "$(dirname "$SRC")"
@@ -29,7 +35,7 @@ make vendor/cypfq_defconfig >/tmp/cypfq-kernel-config.log 2>&1
 
 # Build de prueba rapido y compatible con stock/Magisk:
 # sin LTO/CFI/SCS, sin debug info, sin MODVERSIONS, sin IKHEADERS.
-# La camara no se usa en el DAP y su techpack no compila limpio en este arbol.
+# La camara se incluye como camera.ko usando el techpack completo.
 scripts/config --file "$KBUILD_OUTPUT/.config" \
     -d LTO_CLANG -d CFI_CLANG -d SHADOW_CALL_STACK \
     -d DEBUG_INFO -d MODVERSIONS -d IKHEADERS \
@@ -37,8 +43,8 @@ scripts/config --file "$KBUILD_OUTPUT/.config" \
 make olddefconfig >/tmp/cypfq-kernel-olddef.log 2>&1
 
 mkdir -p "$OUT"
-make -j"$JOBS" Image modules BOARD_CONFIG_CAMERA_KERNEL_NAME=none > "$OUT/build-kernel.log" 2>&1
-make -j"$JOBS" dtbs BOARD_CONFIG_CAMERA_KERNEL_NAME=none > "$OUT/build-dtbs.log" 2>&1
+make -j"$JOBS" Image modules > "$OUT/build-kernel.log" 2>&1
+make -j"$JOBS" dtbs > "$OUT/build-dtbs.log" 2>&1
 
 rm -rf "$OUT/modules" "$OUT/dts"
 mkdir -p "$OUT/modules" "$OUT/dts"
