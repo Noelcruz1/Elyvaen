@@ -134,3 +134,39 @@ La cola es un sheet, no una pantalla.
 - Reutilizar viewmodels/repositorios; no tocar `playback`, `data` ni UAC2.
 - Feature flag para alternar la UI vieja durante la migración.
 - Empezar por Now Playing y el shell; migrar el resto pantalla a pantalla.
+
+## Dirección elegida: HiBy M500 x Hatsune Miku (v2)
+
+Referencia: HiBy Digital M500 x Hatsune Miku. Se toma el lenguaje visual,
+no la dotación multimedia del M500 (4G, cámara, FM, altavoces, micrófonos,
+launcher Android). La app será solo reproductor + DAC USB.
+
+### Paleta
+
+- **Miku teal** `#39C5BB` (acento principal, sliders, iconos).
+- **Miku mint** `#7FF7E8` (detalles, textos secundarios).
+- **Neon pink** `#FF4F9A` (estado activo, play, power, badges).
+- **Deep ink** `#061012` (fondo OLED).
+- **Glass teal** `#0C1F21` / `#123033` (superficies).
+- **Blanco** `#F4FFFD`, secundario `#8FB8B5`.
+
+### Motivos
+
+- Teal + magenta como la carcasa Miku y el botón power rosa.
+- Cristal/acrylic, esquinas redondeadas, pills y sliders con pulgar teal.
+- Aire retro-cassette: carrete/tape en el seek, botones táctiles, VU meter.
+- Avatar de cantante virtual en Inicio (placeholder abstracto; se puede
+  sustituir por arte de Miku proporcionado por el usuario).
+- Fondo con ondas/geometría "sea breeze" muy sutiles.
+- Animaciones: carretes girando al reproducir, pulso del avatar, háptica.
+- Solo funciones de reproductor: Inicio, Biblioteca, DAC USB, Ajustes.
+
+### Mockups
+
+`docs/ui-mockups/v2-miku/`:
+- `01-now-playing.png`
+- `02-home.png`
+- `03-library.png`
+- `04-usb-dac.png`
+
+Los SVG editables están en `v2-miku/svg/`.
