@@ -1067,6 +1067,7 @@
     <string name="plain_style">Plain</string>
     <string name="m3_style">M3</string>
     <string name="expressive_style">Expressive</string>
+    <string name="elyvaen_style">Elyvaen</string>
     <string name="normal_style">Normal</string>
     <string name="cascading">Cascading</string>
     <string name="depth">Depth</string>
@@ -1141,4 +1142,9 @@
     <string name="uncaught_error_restart_app">Restart app</string>
     <string name="uncaught_error_github">Open issue on GitHub</string>
     <string name="uncaught_error_send">Send report</string>
+    <string name="elyvaen_your_music">Your music</string>
+    <string name="elyvaen_home_subtitle">Local library · bit-perfect when possible</string>
+    <string name="elyvaen_play_all">Play all</string>
+    <string name="elyvaen_view_all">View all</string>
+    <string name="elyvaen_mix">Mix</string>
 </resources>

@@ -152,8 +152,10 @@ android {
             signingConfig = releaseSigning
         }
         debug {
-            applicationIdSuffix = ".debug"
-            versionNameSuffix = ".debug"
+            if (!providers.gradleProperty("elyvaenNoSuffix").isPresent) {
+                applicationIdSuffix = ".debug"
+                versionNameSuffix = ".debug"
+            }
         }
     }
     buildFeatures {

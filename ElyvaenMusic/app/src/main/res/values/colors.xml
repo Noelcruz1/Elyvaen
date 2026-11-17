@@ -14,6 +14,35 @@
     <color name="surfaceContainerLowestBlack">#0B0B0B</color>
     <color name="elevationOverlayBlack">@android:color/black</color>
 
+    <!-- Elyvaen / Aurora: Symphony-like charcoal with Miku teal and pink accents -->
+    <color name="elyvaen_primary">#5FE6D8</color>
+    <color name="elyvaen_on_primary">#00201D</color>
+    <color name="elyvaen_primary_container">#0E3B38</color>
+    <color name="elyvaen_on_primary_container">#B6FFF5</color>
+    <color name="elyvaen_secondary">#FF8DBB</color>
+    <color name="elyvaen_on_secondary">#3B001C</color>
+    <color name="elyvaen_secondary_container">#4C1932</color>
+    <color name="elyvaen_on_secondary_container">#FFD9E8</color>
+    <color name="elyvaen_tertiary">#C9B8FF</color>
+    <color name="elyvaen_on_tertiary">#24124A</color>
+    <color name="elyvaen_tertiary_container">#3A2963</color>
+    <color name="elyvaen_on_tertiary_container">#E9DDFF</color>
+    <color name="elyvaen_background">#08090B</color>
+    <color name="elyvaen_on_background">#EDF6F4</color>
+    <color name="elyvaen_surface">#0B0D10</color>
+    <color name="elyvaen_on_surface">#EDF6F4</color>
+    <color name="elyvaen_surface_variant">#192325</color>
+    <color name="elyvaen_on_surface_variant">#A6B8B5</color>
+    <color name="elyvaen_outline">#5D6D6B</color>
+    <color name="elyvaen_outline_variant">#243230</color>
+    <color name="elyvaen_surface_container_lowest">#050607</color>
+    <color name="elyvaen_surface_container_low">#0E1114</color>
+    <color name="elyvaen_surface_container">#12161A</color>
+    <color name="elyvaen_surface_container_high">#181D21</color>
+    <color name="elyvaen_surface_container_highest">#20262B</color>
+    <color name="elyvaen_error">#FFB4AB</color>
+    <color name="elyvaen_on_error">#690005</color>
+
     <color name="radial_gradient_black_overlay">#B3000000</color>
     <color name="twenty_percent_black_overlay">#34000000</color>
     <color name="fifty_percent_black_overlay">#88000000</color>

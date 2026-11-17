@@ -790,6 +790,7 @@
     <string name="plain_style">Puro</string>
     <string name="m3_style">M3</string>
     <string name="expressive_style">Expresivo</string>
+    <string name="elyvaen_style">Elyvaen</string>
     <string name="normal_style">Normal</string>
     <string name="cascading">En cascada</string>
     <string name="depth">Profundidad</string>
@@ -1103,4 +1104,9 @@
     <string name="sync_autoeq_database">Sincronizar base de datos de AutoEq</string>
     <string name="search_autoeq_placeholder">Buscar modelo de auriculares</string>
     <string name="allow_lyrics_download_from">Permitir descarga desde:</string>
+    <string name="elyvaen_your_music">Tu música</string>
+    <string name="elyvaen_home_subtitle">Biblioteca local · bit-perfect cuando sea posible</string>
+    <string name="elyvaen_play_all">Reproducir todo</string>
+    <string name="elyvaen_view_all">Ver todo</string>
+    <string name="elyvaen_mix">Mezcla</string>
 </resources>

@@ -75,6 +75,11 @@ class HomeFragment : AbsMainActivityFragment(), IScrollHelper {
                                 playerViewModel.openAndShuffleQueue(it)
                             }
                         },
+                        onPlayAllClick = {
+                            libraryViewModel.allSongs().observe(viewLifecycleOwner) {
+                                playerViewModel.openQueue(it, shuffleMode = OpenShuffleMode.Off)
+                            }
+                        },
                         onSongItemClick = { songs, index ->
                             playerViewModel.openQueue(songs, index, shuffleMode = OpenShuffleMode.Off)
                         },

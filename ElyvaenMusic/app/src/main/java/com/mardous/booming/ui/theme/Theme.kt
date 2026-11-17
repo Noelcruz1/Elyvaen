@@ -2,7 +2,10 @@ package com.mardous.booming.ui.theme
 
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
+import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
@@ -12,6 +15,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.colorResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.mardous.booming.R
 import com.mardous.booming.core.model.player.PlayerColorScheme
 import com.mardous.booming.util.Preferences
@@ -92,6 +98,48 @@ private val darkScheme = darkColorScheme(
     surfaceContainerHighest = surfaceContainerHighestDark,
 )
 
+private val ElyvaenShapes = Shapes(
+    extraSmall = RoundedCornerShape(10.dp),
+    small = RoundedCornerShape(14.dp),
+    medium = RoundedCornerShape(20.dp),
+    large = RoundedCornerShape(26.dp),
+    extraLarge = RoundedCornerShape(34.dp)
+)
+
+private val ElyvaenTypography: Typography = customTypography.copy(
+    displayLarge = customTypography.displayLarge.copy(
+        fontWeight = FontWeight.Bold,
+        letterSpacing = (-1.6).sp
+    ),
+    displayMedium = customTypography.displayMedium.copy(
+        fontWeight = FontWeight.Bold,
+        letterSpacing = (-1.2).sp
+    ),
+    displaySmall = customTypography.displaySmall.copy(
+        fontWeight = FontWeight.Bold,
+        letterSpacing = (-0.8).sp
+    ),
+    headlineLarge = customTypography.headlineLarge.copy(
+        fontWeight = FontWeight.Bold,
+        letterSpacing = (-0.6).sp
+    ),
+    headlineMedium = customTypography.headlineMedium.copy(
+        fontWeight = FontWeight.Bold,
+        letterSpacing = (-0.5).sp
+    ),
+    headlineSmall = customTypography.headlineSmall.copy(
+        fontWeight = FontWeight.SemiBold,
+        letterSpacing = (-0.3).sp
+    ),
+    titleLarge = customTypography.titleLarge.copy(
+        fontWeight = FontWeight.SemiBold,
+        letterSpacing = (-0.2).sp
+    ),
+    titleMedium = customTypography.titleMedium.copy(
+        fontWeight = FontWeight.SemiBold
+    )
+)
+
 @Composable
 fun BoomingMusicTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
@@ -125,7 +173,8 @@ fun BoomingMusicTheme(
 
     MaterialTheme(
         colorScheme = colorScheme,
-        typography = if (customFont) customTypography else defaultTypography,
+        typography = if (customFont) ElyvaenTypography else defaultTypography,
+        shapes = ElyvaenShapes,
         content = content
     )
 }
@@ -153,7 +202,8 @@ fun PlayerTheme(
 
     MaterialTheme(
         colorScheme = scheme,
-        typography = customTypography,
+        typography = ElyvaenTypography,
+        shapes = ElyvaenShapes,
         content = content
     )
 }

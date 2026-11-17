@@ -48,6 +48,16 @@ enum class NowPlayingScreen(
         supportsCustomCornerRadius = true,
         supportsSmallImage = true
     ),
+    Elyvaen(
+        R.string.elyvaen_style,
+        R.drawable.np_elyvaen,
+        R.layout.fragment_album_cover_elyvaen,
+        buttonStyle = NowPlayingButtonStyle.Normal,
+        supportsCoverLyrics = true,
+        supportsCarouselEffect = false,
+        supportsCustomCornerRadius = false,
+        supportsSmallImage = false
+    ),
     FullCover(
         R.string.full_cover_style,
         R.drawable.np_full,
@@ -111,7 +121,7 @@ enum class NowPlayingScreen(
 
     val defaultColorScheme: PlayerColorSchemeMode
         get() = when (this) {
-            Default, Plain, Peek -> PlayerColorSchemeMode.AppTheme
+            Default, Plain, Peek, Elyvaen -> PlayerColorSchemeMode.AppTheme
             M3 -> PlayerColorSchemeMode.MaterialYou
             Expressive -> PlayerColorSchemeMode.Blur
             FullCover, Gradient -> PlayerColorSchemeMode.VibrantColor
@@ -120,7 +130,8 @@ enum class NowPlayingScreen(
     val supportedColorSchemes: PlayerColorSchemeList
         get() = when (this) {
             Default,
-            Plain -> listOf(
+            Plain,
+            Elyvaen -> listOf(
                 PlayerColorSchemeMode.AppTheme,
                 PlayerColorSchemeMode.SimpleColor,
                 PlayerColorSchemeMode.MaterialYou,
@@ -160,7 +171,8 @@ enum class NowPlayingScreen(
             Default,
             Plain,
             M3,
-            Expressive -> listOf(
+            Expressive,
+            Elyvaen -> listOf(
                 PlayerTransition.Simple,
                 PlayerTransition.Cascading,
                 PlayerTransition.Depth,

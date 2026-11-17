@@ -17,22 +17,20 @@
 
 package com.mardous.booming.ui.screen.library.home
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.ScaffoldDefaults
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -41,39 +39,20 @@ import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.preference.PreferenceManager
-import com.mardous.booming.MainActivity
 import com.mardous.booming.R
 import com.mardous.booming.core.model.LibraryMargin
 import com.mardous.booming.data.model.Album
 import com.mardous.booming.data.model.ContentType
 import com.mardous.booming.data.model.Song
 import com.mardous.booming.data.model.Suggestion
-import com.mardous.booming.extensions.observeKeyAsState
-import com.mardous.booming.ui.component.compose.BoomingMusicTopAppBar
 import com.mardous.booming.ui.component.compose.EmptyView
-import com.mardous.booming.ui.component.compose.menu.MenuDefaults
-import com.mardous.booming.ui.component.compose.menu.MenuItem
-import com.mardous.booming.ui.component.compose.menu.TopAppBarMenu
-import com.mardous.booming.ui.component.compose.rememberTopAppBarScrollBehavior
-import com.mardous.booming.ui.component.views.TopAppBarLayout
 import com.mardous.booming.ui.screen.library.LibraryViewModel
-import com.mardous.booming.ui.screen.player.PlayerViewModel
-import com.mardous.booming.util.APPBAR_MODE
-import com.mardous.booming.util.AppBarMode
-import com.mardous.booming.ui.screen.dap.DapAuroraHero
 import org.koin.compose.viewmodel.koinActivityViewModel
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -83,11 +62,11 @@ sealed class HomeUiState {
     data class Success(val suggestions: List<Suggestion>) : HomeUiState()
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     onActionClick: (ContentType) -> Unit,
     onShuffleClick: () -> Unit,
+    onPlayAllClick: () -> Unit,
     onSongItemClick: (List<Song>, Int) -> Unit,
     onItemClick: (Any) -> Unit,
     onPlayAlbumClick: (Album) -> Unit,
@@ -98,29 +77,17 @@ fun HomeScreen(
     scrollToTopTrigger: Boolean = false,
     onScrollToTopDone: () -> Unit = {},
     homeViewModel: HomeViewModel = koinViewModel(),
-    libraryViewModel: LibraryViewModel = koinActivityViewModel(),
-    playerViewModel: PlayerViewModel = koinActivityViewModel()
+    libraryViewModel: LibraryViewModel = koinActivityViewModel()
 ) {
-    val context = LocalContext.current
     val density = LocalDensity.current
 
     val uiState by homeViewModel.uiState.collectAsStateWithLifecycle()
-    val isPlaying by playerViewModel.isPlayingFlow.collectAsStateWithLifecycle()
     val miniPlayerMargin by libraryViewModel.getMiniPlayerMargin().observeAsState(LibraryMargin(0))
 
     val listState = rememberLazyListState()
     val bottomContentPadding by remember {
         derivedStateOf { with(density) { miniPlayerMargin.totalMargin.toDp() } + 16.dp }
     }
-
-    val preferences = remember { PreferenceManager.getDefaultSharedPreferences(context) }
-    val headerMode by preferences.observeKeyAsState(APPBAR_MODE, TopAppBarLayout.AppBarMode.SIMPLE) {
-        if (preferences.getString(it, null) == AppBarMode.COMPACT) {
-            TopAppBarLayout.AppBarMode.SIMPLE
-        } else TopAppBarLayout.AppBarMode.COLLAPSING
-    }
-
-    val scrollingBehavior = rememberTopAppBarScrollBehavior(headerMode)
 
     LaunchedEffect(scrollToTopTrigger) {
         if (scrollToTopTrigger) {
@@ -131,66 +98,30 @@ fun HomeScreen(
 
     Scaffold(
         topBar = {
-            BoomingMusicTopAppBar(
-                title = {
-                    Text(
-                        modifier = Modifier.pointerInput(Unit) {
-                            detectTapGestures(onLongPress = {
-                                (context as? MainActivity)?.exitKioskMode()
-                            })
-                        },
-                        text = buildAnnotatedString {
-                            withStyle(
-                                style = SpanStyle(color = MaterialTheme.colorScheme.onSurface)
-                            ) { append("Cypfq") }
-                            append(" ")
-                            withStyle(
-                                style = SpanStyle(
-                                    color = MaterialTheme.colorScheme.primary,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            ) { append("DAP") }
-                        }
-                    )
-                },
-                actions = {
-                    TopAppBarMenu(
-                        items = listOf(
-                            MenuItem.Button.Action(
-                                icon = painterResource(R.drawable.ic_equalizer_24dp),
-                                text = stringResource(R.string.dap_dashboard),
-                                onClick = onDashboardClick
-                            ),
-                            MenuItem.Button.Action(
-                                icon = painterResource(R.drawable.ic_search_24dp),
-                                text = stringResource(R.string.search_label),
-                                onClick = onSearchClick
-                            ),
-                            MenuItem.Button.Action(
-                                icon = painterResource(R.drawable.ic_settings_24dp),
-                                text = stringResource(R.string.settings_title),
-                                onClick = onSettingsClick
-                            )
-                        ),
-                        colors = MenuDefaults.topAppBarMenuColors(
-                            actionContainerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                        )
-                    )
-                },
-                headerMode = headerMode,
-                scrollBehavior = scrollingBehavior,
-                contentPadding = PaddingValues(end = 8.dp)
+            ElyvaenHomeTopBar(
+                onSearchClick = onSearchClick,
+                onSettingsClick = onSettingsClick
             )
         },
-        // workaround: legacy View-based UI insets are conflicting with Compose's
-        contentWindowInsets = ScaffoldDefaults.contentWindowInsets
-            .only(WindowInsetsSides.Vertical + WindowInsetsSides.Right),
-        modifier = Modifier
-            .fillMaxSize()
-            .nestedScroll(scrollingBehavior.nestedScrollConnection)
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        containerColor = androidx.compose.material3.MaterialTheme.colorScheme.background,
+        modifier = Modifier.fillMaxSize()
     ) { innerPadding ->
-        Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
-            when(val currentState = uiState) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            androidx.compose.material3.MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.14f),
+                            androidx.compose.material3.MaterialTheme.colorScheme.background,
+                            androidx.compose.material3.MaterialTheme.colorScheme.background
+                        )
+                    )
+                )
+                .padding(innerPadding)
+        ) {
+            when (val currentState = uiState) {
                 is HomeUiState.Loading -> {
                     CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
                 }
@@ -211,14 +142,26 @@ fun HomeScreen(
                         contentPadding = PaddingValues(bottom = bottomContentPadding)
                     ) {
                         item {
-                            DapAuroraHero(
-                                isPlaying = isPlaying,
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                            ElyvaenStatusCard(
+                                onDashboardClick = onDashboardClick,
+                                modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp)
                             )
                         }
-                        item { HomeTopActions(onActionClick = onActionClick) }
+                        item {
+                            ElyvaenHomeIntro(
+                                onPlayAllClick = onPlayAllClick,
+                                onShuffleClick = onShuffleClick,
+                                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
+                            )
+                        }
+                        item {
+                            ElyvaenHomeTopActions(
+                                onActionClick = onActionClick,
+                                modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp)
+                            )
+                        }
                         items(currentState.suggestions) { suggestion ->
-                            SuggestionSection(
+                            ElyvaenSuggestionSection(
                                 suggestion = suggestion,
                                 onSongItemClick = onSongItemClick,
                                 onItemClick = onItemClick,
@@ -226,6 +169,9 @@ fun HomeScreen(
                                 onShuffleClick = onShuffleClick,
                                 onOpenClick = { onOpenSuggestion(suggestion) }
                             )
+                        }
+                        item {
+                            Spacer(Modifier.height(12.dp))
                         }
                     }
                 }

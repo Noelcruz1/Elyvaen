@@ -5,7 +5,35 @@
 
     <style name="Theme.Booming.Light" parent="Base.Theme.Booming.Light"/>
 
-    <style name="Theme.Booming.Black" parent="Base.Theme.Booming.Black"/>
+    <style name="Theme.Booming.Black" parent="Base.Theme.Booming.Black">
+        <item name="colorPrimary">@color/elyvaen_primary</item>
+        <item name="colorOnPrimary">@color/elyvaen_on_primary</item>
+        <item name="colorPrimaryContainer">@color/elyvaen_primary_container</item>
+        <item name="colorOnPrimaryContainer">@color/elyvaen_on_primary_container</item>
+        <item name="colorSecondary">@color/elyvaen_secondary</item>
+        <item name="colorOnSecondary">@color/elyvaen_on_secondary</item>
+        <item name="colorSecondaryContainer">@color/elyvaen_secondary_container</item>
+        <item name="colorOnSecondaryContainer">@color/elyvaen_on_secondary_container</item>
+        <item name="colorTertiary">@color/elyvaen_tertiary</item>
+        <item name="colorOnTertiary">@color/elyvaen_on_tertiary</item>
+        <item name="colorTertiaryContainer">@color/elyvaen_tertiary_container</item>
+        <item name="colorOnTertiaryContainer">@color/elyvaen_on_tertiary_container</item>
+        <item name="colorError">@color/elyvaen_error</item>
+        <item name="colorOnError">@color/elyvaen_on_error</item>
+        <item name="android:colorBackground">@color/elyvaen_background</item>
+        <item name="colorOnBackground">@color/elyvaen_on_background</item>
+        <item name="colorSurface">@color/elyvaen_surface</item>
+        <item name="colorOnSurface">@color/elyvaen_on_surface</item>
+        <item name="colorSurfaceVariant">@color/elyvaen_surface_variant</item>
+        <item name="colorOnSurfaceVariant">@color/elyvaen_on_surface_variant</item>
+        <item name="colorOutline">@color/elyvaen_outline</item>
+        <item name="colorOutlineVariant">@color/elyvaen_outline_variant</item>
+        <item name="colorSurfaceContainerLowest">@color/elyvaen_surface_container_lowest</item>
+        <item name="colorSurfaceContainerLow">@color/elyvaen_surface_container_low</item>
+        <item name="colorSurfaceContainer">@color/elyvaen_surface_container</item>
+        <item name="colorSurfaceContainerHigh">@color/elyvaen_surface_container_high</item>
+        <item name="colorSurfaceContainerHighest">@color/elyvaen_surface_container_highest</item>
+    </style>
 
     <style name="Theme.Booming.FollowSystem" parent="Base.Theme.Booming.Adaptive"/>
 
@@ -71,6 +99,21 @@
         <item name="android:focusableInTouchMode">false</item>
         <item name="android:focusable">false</item>
         <item name="icon">@drawable/ic_more_vert_24dp</item>
+    </style>
+
+    <style name="Widget.Booming.BottomNavigation" parent="Widget.Material3.BottomNavigationView">
+        <item name="android:background">@drawable/bg_bottom_nav</item>
+        <item name="itemIconTint">@color/bottom_nav_item_color</item>
+        <item name="itemTextColor">@color/bottom_nav_item_color</item>
+        <item name="itemActiveIndicatorStyle">@style/Widget.Booming.BottomNavigation.ActiveIndicator</item>
+        <item name="elevation">0dp</item>
+        <item name="labelVisibilityMode">labeled</item>
+    </style>
+
+    <style name="Widget.Booming.BottomNavigation.ActiveIndicator" parent="Widget.Material3.BottomNavigationView.ActiveIndicator">
+        <item name="android:color">@color/elyvaen_primary_container</item>
+        <item name="android:width">64dp</item>
+        <item name="android:height">32dp</item>
     </style>
 
     <style name="BottomSheetStyle" parent="Widget.Material3.BottomSheet">

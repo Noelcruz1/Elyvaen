@@ -359,7 +359,7 @@ class MainActivity : AbsSlidingMusicPanelActivity(), MediaController.Listener {
             return
         }
         preferences.edit()
-            .putString("now_playing_screen", "Expressive")
+            .putString("now_playing_screen", "Elyvaen")
             .putString("player_expressive_color_scheme", "Blur")
             .putBoolean("carousel_effect", true)
             .putBoolean("now_playing_small_image", false)
@@ -397,6 +397,13 @@ class MainActivity : AbsSlidingMusicPanelActivity(), MediaController.Listener {
                 .putString("player_expressive_color_scheme", "AppTheme")
                 .putString("player_default_color_scheme", "AppTheme")
                 .putBoolean("dap_aurora_player_applied", true)
+                .apply()
+        }
+        if (!preferences.getBoolean("dap_elyvaen_player_applied", false)) {
+            preferences.edit()
+                .putString("now_playing_screen", "Elyvaen")
+                .putString("player_elyvaen_color_scheme", "AppTheme")
+                .putBoolean("dap_elyvaen_player_applied", true)
                 .apply()
         }
     }
