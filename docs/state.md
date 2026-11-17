@@ -456,3 +456,8 @@ si se quiere usar la app y el DAC a la vez.
 - `patches/kernel/0006-uac2-hs-endpoint-bandwidth.patch` cambia a
   `bInterval=1` (150 B/microframe, 1,2 MB/s).
 - Kernel #9 (`boot_uac2_fu9.img`); solo cambia `boot_a`, no el super.
+
+- Kernel #9 flasheado: `boot_uac2_fu9.img` (`66b753fe…`), Image
+  `655bc1e4…`, release `#9`. Endpoint HS OUT verificado en el host:
+  `wMaxPacketSize=150` (0x96), `bInterval=1`; ALSA reporta
+  `RATE: [44100 192000]`. Pendiente de confirmar la lista 24/192 en Windows.
