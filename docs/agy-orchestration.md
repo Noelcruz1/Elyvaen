@@ -59,3 +59,23 @@ password en `/workspace/Android/tools/antigravity/.env`). Después persiste en
 - Respaldo: instalación antigua en
   `/srv/dev-disk-by-uuid-a2e4b2e5-95cf-40fb-9af4-0090fb851dbf/antigravity`,
   contenedor `antigravity` parado.
+
+## Montajes correctos (host Docker)
+
+El daemon Docker del NAS ve las rutas del host, no las de este contenedor:
+
+- Proyecto/home: `/srv/dev-disk-by-uuid-a2e4b2e5-95cf-40fb-9af4-0090fb851dbf/opencode/workspace/Android/tools/antigravity`
+- Repo: `.../opencode/workspace/Android/Elyvaen` (`ro`)
+- Trabajo: `.../opencode/workspace/Android/agy-work`
+- Mockups: `.../opencode/workspace/Android/Mockups-Elyvaen`
+
+Dentro de OpenCode siguen siendo `/workspace/Android/...`. Si se recrea el
+contenedor, usar las rutas del host en los `Binds`; si no, Docker monta
+directorios vacíos y `agy` pierde el token.
+
+## Estado de autenticación
+
+El token migrado funciona en `elyvaen-agy`: `agy models`, Gemini 3.8 Flash,
+Claude Sonnet 4.6, Claude Opus 4.6 y `--tools` están verificados. No hace
+falta el token del login. Si en el futuro `agy` pide login, usar `agy login`
+y la ventana `agent` de ttyd.
