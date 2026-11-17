@@ -435,3 +435,15 @@ si se quiere usar la app y el DAC a la vez.
   actualización en `/data/app`. Un factory reset volvería a la app del super
   (funcional, sin las últimas traducciones/notificación). El diálogo VINTF
   "Sistema Android" es preexistente; se descarta con Aceptar.
+
+## Windows 11 + ADB (2026-11-17)
+
+- Causa confirmada de que Windows no viera la salida: **ADB activo**. El
+  composite expone el interfaz vendor de ADB junto a UAC2 y Windows no carga
+  `usbaudio2.sys`; Linux sí. Al desactivar la depuración USB, Windows muestra
+  el DAC y funciona.
+- `sys.usb.config=adb` y `out_frames=0` en el daemon eran los indicios.
+- El estado “Conectado · 192 kHz · Nativo” de la app es interno (servicio
+  leyendo el FIFO), no confirma que el host esté reproduciendo.
+- Pendiente opcional: desenganchar ADB automáticamente en modo DAC o mostrar
+  un aviso en el panel.

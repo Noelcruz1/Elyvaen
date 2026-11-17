@@ -141,3 +141,22 @@ mute hay que usar `0x0f` por canal. El parche
 
 Con eso Linux crea `USBH Out Playback Volume` y `... Switch`; el gadget
 actualiza `UAC2 Host Volume`/`UAC2 Host Mute` y `uac2d` aplica la ganancia.
+
+## Windows 11: ADB debe estar desactivado
+
+Con la depuración USB (ADB) activada, el gadget Android expone el interfaz
+vendor de ADB en la misma configuración que UAC2. Windows 11 se queda con
+ese interfaz y **no** publica la salida UAC2, aunque Linux sí la bindea sin
+problema. El teléfono puede mostrar `Conectado · 192 kHz · Nativo` porque ese
+estado es interno (servicio de la app leyendo el FIFO), no prueba de que
+Windows esté enviando audio.
+
+Verificado: al desactivar **Opciones de desarrollador → Depuración USB** (o
+poner el USB en “Sin transferencia de datos”), Windows muestra el DAC y
+reproduce; al reactivar ADB, desaparece.
+
+- Para usar el DAC en Windows: mantener ADB apagado.
+- Para mantenimiento: reactivar ADB temporalmente, o usar ADB por Wi-Fi.
+- Mejora pendiente: que el helper desenganche el enlace `ffs.adb` de
+  `configs/b.1` mientras UAC2 está activo y lo restaure al apagar, y/o un
+  aviso en el panel DAP.
