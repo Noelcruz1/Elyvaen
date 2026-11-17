@@ -1,0 +1,164 @@
+#!/bin/sh
+# agy — headless wrapper for the Antigravity CLI container.
+#
+# This is the OpenCode-facing tool. It never runs the interactive TUI for
+# prompts; it uses `agy --print` and writes through the shared work dir.
+#
+# Examples:
+#   agy models
+#   agy ask --model gemini-3.8-flash-high "Diseña 3 conceptos de UI"
+#   agy ask --model claude-opus-4-6-thinking --tools "Revisa el brief"
+#   agy ask --out /workspace/Android/agy-work/out.md "Escribe el brief"
+#   echo "prompt" | agy ask
+#   agy login
+#
+# Environment overrides:
+#   AGY_CONTAINER, AGY_HOME, AGY_WORKDIR (container path),
+#   AGY_HOST_WORKDIR (host path), AGY_CHROOT.
+
+set -eu
+
+AGY_HOME=${AGY_HOME:-/workspace/Android/tools/antigravity}
+CONTAINER=${AGY_CONTAINER:-elyvaen-agy}
+WORKDIR=${AGY_WORKDIR:-/workspace/agy-work}
+HOST_WORKDIR=${AGY_HOST_WORKDIR:-/workspace/Android/agy-work}
+CHROOT=${AGY_CHROOT:-/workspace/sistema}
+DEFAULT_MODEL=${AGY_DEFAULT_MODEL:-gemini-3.8-flash-high}
+DOCKER_PREFIX="chroot $CHROOT env DOCKER_HOST=unix:///run/docker.sock docker"
+
+die() { printf 'agy: %s\n' "$*" >&2; exit 1; }
+
+docker_() {
+    # shellcheck disable=SC2086
+    $DOCKER_PREFIX "$@"
+}
+
+ensure_workdir() {
+    mkdir -p "$HOST_WORKDIR"
+}
+
+usage() {
+    cat <<EOF
+agy — Antigravity CLI headless
+
+Uso:
+  agy models
+  agy status
+  agy start | stop | restart
+  agy login
+  agy ask [opciones] <prompt | ->
+
+Opciones de ask:
+  --model MODELO       gemini-3.8-flash-high|medium|low,
+                       claude-sonnet-4-6, claude-opus-4-6-thinking,
+                       gpt-oss-120b-medium (default: $DEFAULT_MODEL)
+  --format FORMATO     text | json (default: text)
+  --out ARCHIVO        guarda también la respuesta en ARCHIVO
+  --tools              permite editar archivos en $WORKDIR
+  --workdir DIR        workdir del contenedor (default: $WORKDIR)
+  --                   fin de opciones
+
+El prompt se lee de los argumentos o de stdin. Los archivos que el modelo
+escriba con --tools aparecen en $HOST_WORKDIR.
+EOF
+}
+
+cmd_models() {
+    docker_ exec "$CONTAINER" agy models
+}
+
+cmd_status() {
+    docker_ ps -a --filter "name=^/${CONTAINER}$" \
+        --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
+}
+
+cmd_lifecycle() {
+    action=$1
+    case "$action" in
+        start|stop|restart) docker_ "$action" "$CONTAINER" ;;
+        *) die "acción desconocida: $action" ;;
+    esac
+    cmd_status
+}
+
+cmd_login() {
+    [ -f "$AGY_HOME/.env" ] || die "no existe $AGY_HOME/.env"
+    user=$(sed -n 's/^TTYD_USER=//p' "$AGY_HOME/.env" | head -1)
+    pass=$(sed -n 's/^TTYD_PASSWORD=//p' "$AGY_HOME/.env" | head -1)
+    cat <<EOF
+ttyd:     http://192.168.100.25:7681
+usuario:  ${user:-agy}
+password: ${pass:-<ver $AGY_HOME/.env>}
+
+Dentro de ttyd: ventana "agent" para el login OAuth de Antigravity;
+ventana "shell" para una terminal. La sesión se guarda en $AGY_HOME/home.
+EOF
+}
+
+cmd_ask() {
+    model=$DEFAULT_MODEL
+    format=text
+    out=
+    tools=0
+    workdir=$WORKDIR
+
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --model) [ $# -ge 2 ] || die "falta valor para --model"; model=$2; shift 2 ;;
+            --model=*) model=${1#*=}; shift ;;
+            --format) [ $# -ge 2 ] || die "falta valor para --format"; format=$2; shift 2 ;;
+            --format=*) format=${1#*=}; shift ;;
+            --out) [ $# -ge 2 ] || die "falta valor para --out"; out=$2; shift 2 ;;
+            --out=*) out=${1#*=}; shift ;;
+            --workdir) [ $# -ge 2 ] || die "falta valor para --workdir"; workdir=$2; shift 2 ;;
+            --workdir=*) workdir=${1#*=}; shift ;;
+            --tools) tools=1; shift ;;
+            --) shift; break ;;
+            -h|--help) usage; return 0 ;;
+            -*) die "opción desconocida: $1" ;;
+            *) break ;;
+        esac
+    done
+
+    if [ $# -gt 0 ]; then
+        prompt=$*
+    else
+        prompt=$(cat)
+    fi
+    [ -n "$prompt" ] || die "prompt vacío"
+
+    ensure_workdir
+    printf '%s' "$prompt" > "$HOST_WORKDIR/.agy-prompt.txt"
+    chmod 0644 "$HOST_WORKDIR/.agy-prompt.txt"
+
+    extra=
+    if [ "$tools" = "1" ]; then
+        extra="--dangerously-skip-permissions --mode accept-edits"
+    fi
+
+    tmp=$(mktemp "${TMPDIR:-/tmp}/agy-out.XXXXXX")
+    set +e
+    # shellcheck disable=SC2016
+    docker_ exec -w "$workdir" "$CONTAINER" sh -lc \
+        'agy --model "$1" --output-format "$2" '"$extra"' --print="$(cat .agy-prompt.txt)"' \
+        sh "$model" "$format" > "$tmp" 2>&1
+    rc=$?
+    set -e
+    cat "$tmp"
+    if [ -n "$out" ]; then
+        cp "$tmp" "$out"
+        printf '\nagy: salida guardada en %s\n' "$out" >&2
+    fi
+    rm -f "$tmp"
+    return "$rc"
+}
+
+case "${1:-}" in
+    models) cmd_models ;;
+    status) cmd_status ;;
+    start|stop|restart) cmd_lifecycle "$1" ;;
+    login) cmd_login ;;
+    ask) shift; cmd_ask "$@" ;;
+    ''|-h|--help|help) usage ;;
+    *) usage; exit 2 ;;
+esac
