@@ -78,6 +78,7 @@ fun DapDashboardSheet(
     var uac2Enabled by remember { mutableStateOf(Uac2Control.isEnabled(context)) }
     var uac2Status by remember { mutableStateOf(Uac2Control.refresh(context)) }
     var uac2AutoStart by remember { mutableStateOf(Uac2Control.isAutoStart(context)) }
+    var adbEnabled by remember { mutableStateOf(Uac2Control.isAdbEnabled(context)) }
     var uac2Busy by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     LaunchedEffect(Unit) {
@@ -86,6 +87,7 @@ fun DapDashboardSheet(
             if (!uac2Busy) {
                 uac2Enabled = status.enabled
                 uac2Status = status
+                adbEnabled = Uac2Control.isAdbEnabled(context)
             }
             delay(2000)
         }
@@ -328,6 +330,15 @@ fun DapDashboardSheet(
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
+                            if (adbEnabled) {
+                                Text(
+                                    text = stringResource(
+                                        R.string.dap_uac2_adb_warning
+                                    ),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
                             Text(
                                 text = stringResource(R.string.dap_uac2_quality),
                                 style = MaterialTheme.typography.bodySmall,

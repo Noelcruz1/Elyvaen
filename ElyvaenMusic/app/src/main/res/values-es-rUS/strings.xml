@@ -435,6 +435,7 @@
     <string name="dap_uac2_inactive">Apagado</string>
     <string name="dap_uac2_retrying">Reintentando</string>
     <string name="dap_uac2_error">No se pudo cambiar UAC2</string>
+    <string name="dap_uac2_adb_warning">ADB activo: Windows no detectará el DAC. Desactiva la depuración USB.</string>
     <string name="dap_uac2_native">Nativo 24/192</string>
     <string name="dap_uac2_native_short">Nativo</string>
     <string name="dap_uac2_compat">48 kHz estable</string>
