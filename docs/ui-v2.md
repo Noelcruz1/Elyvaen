@@ -61,14 +61,15 @@ Estado: **fase 1 y 2 implementadas y verificadas en el Moto G51** (2026-11-17).
 ## Capturas
 
 - `screens/home.png` — Home con “Para ti”, estado DAP y mini player.
-- `screens/home-sections.png` — rejilla de álbumes, artistas y redescubrir.
-- `screens/player.png` — player Elyvaen con favorito y próxima pista.
+- `screens/home-foryou.png` — sección “Para ti” con carrusel de canciones.
+- `screens/player.png` — player Elyvaen con favorito, portada y próxima pista.
 - `screens/library-songs.png` — biblioteca de canciones.
 - `screens/library-albums.png` — biblioteca de álbumes.
 - `screens/settings.png` — ajustes.
 - `screens/queue.png` — cola.
 - `screens/lyrics.png` — letras.
 - `screens/player-menu.png` — menú completo del player.
+- `screens/style-picker.png` — selector de estilo con Elyvaen.
 - `screens/dap-dashboard.png` — panel DAP/UAC2.
 
 ## Pruebas realizadas
