@@ -1,0 +1,609 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Elyvaen DAP — Prototype</title>
+<style>
+  :root{
+    --teal:#39C5BB;
+    --mint:#7FF7E8;
+    --pink:#FF4F9A;
+    --ink:#061012;
+    --ink2:#071A1B;
+    --glass:#0C1F21;
+    --glass2:#123033;
+    --line:rgba(127,247,232,.13);
+    --text:#F4FFFD;
+    --muted:#8FB8B5;
+    --dim:#4E6B68;
+    --shadow:0 30px 80px rgba(0,0,0,.55);
+    --font:'Inter','Inter Display',system-ui,-apple-system,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:#020506;color:var(--text);font-family:var(--font);overflow:hidden}
+  body{display:flex;align-items:center;justify-content:center}
+  button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+  .phone{
+    position:relative;width:1080px;height:2460px;flex:0 0 auto;
+    background:
+      radial-gradient(1100px 900px at 78% 4%, rgba(57,197,187,.16), transparent 58%),
+      radial-gradient(900px 800px at 8% 76%, rgba(255,79,154,.12), transparent 60%),
+      linear-gradient(160deg,#0A2424 0%,#071416 38%,#030708 100%);
+    overflow:hidden;isolation:isolate;transform-origin:center center;
+  }
+  .phone::after{
+    content:"";position:absolute;inset:0;z-index:80;pointer-events:none;
+    background:repeating-linear-gradient(0deg,rgba(255,255,255,.018) 0 1px,transparent 1px 3px);
+    opacity:.35;mix-blend-mode:overlay;
+  }
+  .bg{position:absolute;inset:0;z-index:0;overflow:hidden}
+  .bg .wave{position:absolute;border:1.5px solid rgba(57,197,187,.10);border-radius:50%;filter:none}
+  .bg .w1{width:1500px;height:900px;left:-700px;top:180px;transform:rotate(-18deg)}
+  .bg .w2{width:1200px;height:700px;right:-620px;top:900px;transform:rotate(22deg);border-color:rgba(255,79,154,.09)}
+  .bg .w3{width:1600px;height:1000px;left:-500px;bottom:-500px;transform:rotate(8deg)}
+  .bg .glow{position:absolute;border-radius:50%;filter:blur(60px);opacity:.35}
+  .bg .g1{width:520px;height:520px;left:-160px;top:340px;background:#0E5A53}
+  .bg .g2{width:420px;height:420px;right:-140px;top:840px;background:#4A1635}
+  .bg .g3{width:620px;height:620px;left:260px;bottom:-240px;background:#0B2E2C;opacity:.25}
+
+  .status{
+    position:absolute;z-index:20;top:34px;left:64px;right:64px;
+    display:flex;align-items:center;justify-content:space-between;
+    font-size:24px;color:var(--muted);letter-spacing:.02em
+  }
+  .status .time{font-weight:700;color:var(--text);font-variant-numeric:tabular-nums}
+  .status .brand{display:flex;align-items:center;gap:12px;font-size:20px;font-weight:700;letter-spacing:.28em;color:var(--text)}
+  .status .brand i{width:8px;height:8px;border-radius:50%;background:var(--pink);box-shadow:0 0 18px var(--pink)}
+  .status .right{display:flex;align-items:center;gap:14px}
+  .status .chip{border:1px solid var(--line);color:var(--mint);border-radius:999px;padding:6px 12px;font-size:15px;letter-spacing:.12em}
+  .battery{display:flex;align-items:center;gap:5px}
+  .battery i{display:block;width:40px;height:18px;border:2px solid var(--muted);border-radius:5px;position:relative}
+  .battery i::after{content:"";position:absolute;right:-7px;top:4px;width:4px;height:8px;background:var(--muted);border-radius:0 2px 2px 0}
+  .battery b{display:block;width:32px;height:12px;margin:1px;background:var(--teal);border-radius:2px;box-shadow:0 0 12px rgba(57,197,187,.5)}
+
+  .screen{
+    position:absolute;inset:0;z-index:10;padding:0 64px;
+    transition:transform .62s cubic-bezier(.2,.85,.2,1),opacity .42s ease;
+    will-change:transform
+  }
+  .screen.library,.screen.dac{
+    z-index:30;background:
+      radial-gradient(900px 800px at 80% 0%, rgba(57,197,187,.12), transparent 60%),
+      linear-gradient(170deg,#081A1B 0%,#061012 50%,#030708 100%);
+    transform:translateY(100%);
+  }
+  .screen.library.active,.screen.dac.active{transform:translateY(0)}
+  .now{transform:translateY(0)}
+  .now.pushed{transform:translateY(-7%) scale(.97);opacity:.35}
+
+  .eyebrow{font-size:17px;letter-spacing:.24em;text-transform:uppercase;color:var(--muted)}
+  .topline{position:absolute;top:104px;left:64px;right:64px;display:flex;align-items:center;justify-content:space-between;z-index:20}
+  .topline .left{display:flex;align-items:center;gap:14px}
+  .topline .left b{font-size:17px;letter-spacing:.24em;color:var(--mint)}
+  .topline .left span{font-size:14px;letter-spacing:.18em;color:var(--dim)}
+  .topline .right{font-size:14px;letter-spacing:.18em;color:var(--dim)}
+
+  /* ---------- NOW PLAYING ---------- */
+  .deck{
+    position:absolute;left:64px;right:64px;top:164px;height:1010px;
+    border-radius:44px;padding:32px 34px;
+    background:linear-gradient(150deg,rgba(20,52,54,.92),rgba(7,21,23,.96));
+    border:1px solid rgba(127,247,232,.16);
+    box-shadow:var(--shadow), inset 0 1px 0 rgba(255,255,255,.06);
+    display:flex;flex-direction:column;justify-content:space-between;overflow:hidden
+  }
+  .deck::before{
+    content:"";position:absolute;inset:0;pointer-events:none;border-radius:44px;
+    background:radial-gradient(700px 500px at 20% 0%,rgba(57,197,187,.10),transparent 60%);
+  }
+  .deck-head,.deck-foot{display:flex;align-items:center;justify-content:space-between;font-size:14px;letter-spacing:.22em;color:var(--dim);position:relative;z-index:2}
+  .deck-head b{color:var(--mint);font-weight:700}
+  .deck-head .screw{width:12px;height:12px;border-radius:50%;border:1px solid var(--dim);box-shadow:inset 0 0 0 3px rgba(0,0,0,.35)}
+  .tapewindow{display:flex;align-items:center;justify-content:space-between;gap:18px;height:88px;margin:6px 0;padding:0 8px;border-top:1px solid rgba(127,247,232,.10);border-bottom:1px solid rgba(127,247,232,.10);position:relative;z-index:2}
+  .tapewindow .reels{display:flex;gap:8px}
+  .tapewindow .reels i{width:28px;height:28px;border-radius:50%;border:1px solid rgba(127,247,232,.3);position:relative}
+  .tapewindow .reels i::after{content:"";position:absolute;inset:8px;border-radius:50%;background:var(--pink);box-shadow:0 0 12px rgba(255,79,154,.5)}
+  .tapewindow .mid{flex:1;text-align:center}
+  .tapewindow .mid b{display:block;font-size:13px;letter-spacing:.2em;color:var(--mint);font-weight:600}
+  .tapewindow .mid span{display:block;font-size:11px;letter-spacing:.24em;color:var(--dim);margin-top:5px}
+  .tapewindow .side{font-size:11px;letter-spacing:.2em;color:var(--dim)}
+  .cassette{display:flex;align-items:center;justify-content:space-between;gap:22px;position:relative;z-index:2;margin-top:2px}
+  .reel{
+    width:152px;height:152px;border-radius:50%;flex:0 0 auto;position:relative;
+    background:radial-gradient(circle at 50% 45%,#163A3A 0 28%,#0A1C1D 29% 61%,#061012 62%);
+    border:1px solid rgba(127,247,232,.22);
+    box-shadow:inset 0 0 0 10px rgba(0,0,0,.22),0 10px 30px rgba(0,0,0,.35)
+  }
+  .reel::before{content:"";position:absolute;inset:24px;border-radius:50%;border:1px dashed rgba(127,247,232,.28)}
+  .reel .spokes{position:absolute;inset:0;animation:spin 4.2s linear infinite}
+  .reel .spokes i{position:absolute;left:50%;top:50%;width:6px;height:60px;background:linear-gradient(var(--mint),rgba(127,247,232,.08));transform-origin:50% 0;border-radius:4px}
+  .reel .spokes i:nth-child(1){transform:rotate(0deg)}
+  .reel .spokes i:nth-child(2){transform:rotate(60deg)}
+  .reel .spokes i:nth-child(3){transform:rotate(120deg)}
+  .reel .spokes i:nth-child(4){transform:rotate(180deg)}
+  .reel .spokes i:nth-child(5){transform:rotate(240deg)}
+  .reel .spokes i:nth-child(6){transform:rotate(300deg)}
+  .reel .hub{position:absolute;left:50%;top:50%;width:34px;height:34px;margin:-17px;border-radius:50%;background:var(--pink);box-shadow:0 0 22px rgba(255,79,154,.6)}
+  .phone.playing .reel .spokes{animation-play-state:running}
+  .phone:not(.playing) .reel .spokes{animation-play-state:paused}
+
+  .art{
+    position:relative;width:520px;height:520px;border-radius:30px;flex:0 0 auto;overflow:hidden;
+    background:
+      radial-gradient(circle at 68% 28%,rgba(127,247,232,.32),transparent 34%),
+      radial-gradient(circle at 26% 68%,rgba(255,79,154,.26),transparent 40%),
+      linear-gradient(145deg,#0B3C3A 0%,#102B3A 42%,#3D1735 100%);
+    box-shadow:0 26px 60px rgba(0,0,0,.5), inset 0 0 0 1px rgba(255,255,255,.08)
+  }
+  .art::before{
+    content:"";position:absolute;width:390px;height:390px;border-radius:50%;
+    left:70px;top:52px;border:1px solid rgba(255,255,255,.24)
+  }
+  .art::after{
+    content:"";position:absolute;width:250px;height:250px;border-radius:50%;
+    left:135px;top:132px;border:1px solid rgba(255,255,255,.16);
+    background:radial-gradient(circle at 50% 50%,rgba(6,16,18,.0) 0 38%,rgba(6,16,18,.35) 39% 100%)
+  }
+  .art .label{
+    position:absolute;left:32px;right:32px;bottom:28px;z-index:2;
+    font-size:14px;letter-spacing:.24em;color:rgba(244,255,253,.8);
+    display:flex;justify-content:space-between;align-items:center
+  }
+  .art .label b{color:var(--mint);font-weight:600}
+  .art .mark{position:absolute;left:32px;top:28px;z-index:2;font-size:13px;letter-spacing:.22em;color:rgba(244,255,253,.72)}
+  .art .vinyl{
+    position:absolute;left:50%;top:50%;width:210px;height:210px;margin:-105px;border-radius:50%;
+    background:repeating-radial-gradient(circle at 50% 50%,rgba(255,255,255,.10) 0 1px,transparent 1px 5px);
+    opacity:.6;transform:rotate(18deg)
+  }
+  .art .vinyl::after{content:"";position:absolute;inset:86px;border-radius:50%;background:var(--pink);box-shadow:0 0 30px rgba(255,79,154,.5);opacity:.85}
+
+  .track{position:absolute;left:64px;right:64px;top:1210px;z-index:15}
+  .track .meta{font-size:16px;letter-spacing:.22em;color:var(--dim);margin-bottom:8px}
+  .track h1{margin:0;font-family:'Inter Display','Inter',sans-serif;font-size:78px;line-height:.98;letter-spacing:-.04em;font-weight:700}
+  .track .artist{margin-top:14px;font-size:28px;color:var(--muted);letter-spacing:-.01em}
+  .track .artist span{color:var(--dim);padding:0 8px}
+  .badges{display:flex;gap:10px;margin-top:24px;flex-wrap:wrap}
+  .badge{font-size:16px;letter-spacing:.12em;padding:9px 14px;border-radius:999px;border:1px solid var(--line);color:var(--muted);background:rgba(12,31,33,.6)}
+  .badge.teal{color:#06201D;background:var(--teal);border-color:transparent;font-weight:700}
+  .badge.pink{color:var(--pink);border-color:rgba(255,79,154,.55);background:rgba(255,79,154,.07);font-weight:700}
+  .badge.mint{color:var(--mint);border-color:rgba(127,247,232,.35)}
+
+  .tape{position:absolute;left:64px;right:64px;top:1550px;z-index:15}
+  .tape .rail{height:10px;border-radius:999px;background:rgba(255,255,255,.08);position:relative;overflow:visible;box-shadow:inset 0 1px 2px rgba(0,0,0,.6)}
+  .tape .rail::before{content:"";position:absolute;inset:0;border-radius:999px;background:repeating-linear-gradient(90deg,rgba(255,255,255,.08) 0 2px,transparent 2px 8px);opacity:.25}
+  .tape .fill{position:absolute;left:0;top:0;height:10px;width:38%;border-radius:999px;background:linear-gradient(90deg,var(--teal),var(--pink));box-shadow:0 0 22px rgba(255,79,154,.35)}
+  .tape .head{position:absolute;left:38%;top:-9px;width:4px;height:28px;background:var(--pink);border-radius:3px;box-shadow:0 0 18px var(--pink)}
+  .tape .times{display:flex;justify-content:space-between;margin-top:12px;font-size:17px;letter-spacing:.08em;color:var(--muted);font-variant-numeric:tabular-nums}
+  .tape .times b{color:var(--text);font-weight:600}
+
+  .transport{position:absolute;left:64px;right:64px;top:1640px;z-index:15;display:flex;align-items:center;justify-content:space-between}
+  .tbtn{width:84px;height:84px;border-radius:50%;display:grid;place-items:center;color:var(--muted);background:rgba(12,31,33,.58);border:1px solid var(--line);transition:transform .15s ease,color .2s ease}
+  .tbtn:hover{color:var(--mint);transform:translateY(-2px)}
+  .tbtn svg{width:34px;height:34px}
+  .play{width:168px;height:168px;border-radius:50%;display:grid;place-items:center;position:relative;background:radial-gradient(circle at 40% 30%,#5BE4D7,var(--teal) 62%,#1F9D95);box-shadow:0 0 0 7px rgba(255,79,154,.85),0 0 60px rgba(57,197,187,.38),0 18px 40px rgba(0,0,0,.45);color:#06201D;transition:transform .18s ease,box-shadow .2s ease}
+  .play:active{transform:scale(.96)}
+  .play svg{width:64px;height:64px;margin-left:6px}
+  .play .pauseIcon{display:none}
+  .phone.playing .play .playIcon{display:none}
+  .phone.playing .play .pauseIcon{display:block;margin-left:0}
+
+  .vu{position:absolute;left:64px;right:64px;top:1870px;z-index:15;display:flex;gap:20px;align-items:flex-end;justify-content:space-between}
+  .vu .meter{flex:1;height:92px;border:1px solid var(--line);border-radius:18px;background:rgba(12,31,33,.45);padding:12px 16px;display:flex;flex-direction:column;justify-content:space-between}
+  .vu .meter .lab{display:flex;justify-content:space-between;font-size:13px;letter-spacing:.18em;color:var(--dim)}
+  .vu .bars{display:flex;gap:4px;align-items:flex-end;height:34px}
+  .vu .bars i{flex:1;background:linear-gradient(var(--mint),var(--teal));border-radius:2px;opacity:.85;animation:vu 1.4s ease-in-out infinite alternate}
+  .vu .bars i:nth-child(2n){animation-delay:.2s;background:linear-gradient(var(--pink),#B42C69)}
+  .vu .bars i:nth-child(3n){animation-delay:.45s}
+  .vu .right{width:230px;text-align:right;font-size:14px;letter-spacing:.16em;color:var(--dim);line-height:1.7}
+  .vu .right b{display:block;color:var(--mint);font-size:18px;letter-spacing:.08em}
+
+  .hint{position:absolute;left:64px;right:64px;z-index:18;display:flex;align-items:center;justify-content:center;gap:12px;font-size:15px;letter-spacing:.22em;color:var(--dim);text-transform:uppercase}
+  .hint.up{top:116px}
+  .hint.down{top:2070px}
+  .hint svg{width:20px;height:20px;stroke:var(--mint);opacity:.8;animation:bob 2.2s ease-in-out infinite}
+  .hint.down svg{animation-direction:reverse}
+
+  .dock{position:absolute;left:64px;right:64px;bottom:74px;z-index:30;display:flex;gap:14px;align-items:center;justify-content:center;padding:14px;border-radius:999px;background:rgba(8,24,26,.86);border:1px solid var(--line);box-shadow:0 20px 60px rgba(0,0,0,.45)}
+  .dock button{flex:1;display:flex;align-items:center;justify-content:center;gap:10px;height:72px;border-radius:999px;font-size:15px;letter-spacing:.16em;color:var(--muted);text-transform:uppercase}
+  .dock button svg{width:22px;height:22px}
+  .dock button:hover{color:var(--mint);background:rgba(57,197,187,.06)}
+  .dock button.active{color:#06201D;background:var(--mint);font-weight:700}
+
+  .volume{position:absolute;right:8px;top:190px;width:86px;height:900px;z-index:25;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;user-select:none;touch-action:none}
+  .volume .vlabel{font-size:13px;letter-spacing:.2em;color:var(--dim);writing-mode:vertical-rl}
+  .volume .wheel{position:relative;width:56px;height:620px;border-radius:28px;background:linear-gradient(90deg,#041011,#0C2627 45%,#02090A);border:1px solid rgba(127,247,232,.18);box-shadow:inset 10px 0 20px rgba(0,0,0,.5),inset -8px 0 18px rgba(0,0,0,.35)}
+  .volume .wheel::before{content:"";position:absolute;inset:8px 14px;border-radius:20px;background:repeating-linear-gradient(0deg,rgba(127,247,232,.23) 0 2px,transparent 2px 15px);opacity:.65}
+  .volume .thumb{position:absolute;left:5px;right:5px;height:56px;border-radius:18px;background:linear-gradient(180deg,var(--mint),#1A8F86);box-shadow:0 0 24px rgba(127,247,232,.35);top:50%;transform:translateY(-50%);transition:top .05s linear}
+  .volume .vval{font-size:20px;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums}
+  .volume .vval small{display:block;font-size:10px;letter-spacing:.2em;color:var(--dim);font-weight:400;text-align:center}
+
+  /* ---------- LIBRARY ---------- */
+  .screen-head{position:absolute;top:104px;left:64px;right:64px;display:flex;align-items:flex-end;justify-content:space-between;z-index:5}
+  .screen-head h2{margin:0;font-family:'Inter Display','Inter',sans-serif;font-size:72px;letter-spacing:-.05em;font-weight:700}
+  .screen-head .sub{font-size:14px;letter-spacing:.22em;color:var(--dim);margin-bottom:12px}
+  .head-actions{display:flex;gap:12px;align-items:center}
+  .icon-btn{width:64px;height:64px;border-radius:50%;border:1px solid var(--line);background:rgba(12,31,33,.6);display:grid;place-items:center;color:var(--muted)}
+  .icon-btn svg{width:28px;height:28px}
+  .back{width:64px;height:64px;border-radius:50%;border:1px solid var(--line);background:rgba(12,31,33,.6);display:grid;place-items:center;color:var(--mint);margin-right:18px}
+  .back svg{width:30px;height:30px}
+  .screen-head .left{display:flex;align-items:center}
+  .tabs{position:absolute;top:250px;left:64px;right:64px;display:flex;gap:10px;z-index:5}
+  .tabs button{padding:14px 22px;border-radius:999px;border:1px solid var(--line);color:var(--muted);font-size:16px;letter-spacing:.08em;background:rgba(12,31,33,.45)}
+  .tabs button.active{background:var(--pink);color:#20040F;border-color:transparent;font-weight:700}
+  .lib-grid{position:absolute;top:340px;left:64px;right:64px;display:grid;grid-template-columns:1fr 1fr;gap:26px;z-index:4}
+  .album{position:relative;border-radius:26px;overflow:hidden;background:linear-gradient(145deg,#0C3331,#102A3A 52%,#3A1632);aspect-ratio:1/1;box-shadow:0 20px 40px rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.06)}
+  .album::before{content:"";position:absolute;inset:0;background:radial-gradient(circle at 70% 25%,rgba(127,247,232,.28),transparent 35%),radial-gradient(circle at 25% 75%,rgba(255,79,154,.22),transparent 42%)}
+  .album::after{content:"";position:absolute;left:18%;top:18%;width:64%;height:64%;border:1px solid rgba(255,255,255,.2);border-radius:50%}
+  .album .tag{position:absolute;left:16px;top:14px;font-size:11px;letter-spacing:.18em;color:rgba(244,255,253,.7)}
+  .album .name{position:absolute;left:18px;right:18px;bottom:44px;font-size:18px;font-weight:700;letter-spacing:-.02em;z-index:2;text-shadow:0 2px 14px rgba(0,0,0,.65)}
+  .album .artist{position:absolute;left:18px;right:18px;bottom:18px;font-size:13px;color:var(--muted);z-index:2}
+  .album .badge-mini{position:absolute;right:14px;top:14px;font-size:11px;padding:5px 8px;border-radius:999px;background:rgba(6,16,18,.7);color:var(--mint);border:1px solid rgba(127,247,232,.3)}
+  .lib-list{position:absolute;top:1820px;left:64px;right:64px;z-index:4}
+  .lib-list .row{display:flex;align-items:center;gap:18px;height:82px;border-bottom:1px solid rgba(127,247,232,.07);font-size:18px}
+  .lib-list .row .n{width:26px;color:var(--dim);font-size:13px;letter-spacing:.1em}
+  .lib-list .row .t{flex:1;font-weight:600}
+  .lib-list .row .a{width:230px;color:var(--muted);font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .lib-list .row .d{width:70px;text-align:right;color:var(--dim);font-variant-numeric:tabular-nums;font-size:15px}
+  .lib-list .row .f{width:110px;text-align:right;color:var(--teal);font-size:11px;letter-spacing:.1em}
+  .az{position:absolute;right:18px;top:340px;bottom:240px;display:flex;flex-direction:column;justify-content:center;gap:2px;font-size:12px;color:var(--dim);z-index:6}
+
+  /* ---------- DAC ---------- */
+  .dac-head{position:absolute;top:104px;left:64px;right:64px;z-index:5}
+  .dac-head h2{margin:0;font-family:'Inter Display','Inter',sans-serif;font-size:70px;letter-spacing:-.05em}
+  .dac-status{display:flex;align-items:center;gap:10px;margin-top:8px;font-size:15px;letter-spacing:.2em;color:var(--pink);text-transform:uppercase}
+  .dac-status i{width:8px;height:8px;border-radius:50%;background:var(--pink);box-shadow:0 0 16px var(--pink)}
+  .dac-rate{position:absolute;top:290px;left:64px;right:64px;z-index:5;font-family:'Inter Display','Inter',sans-serif;font-size:184px;line-height:.9;letter-spacing:-.07em;font-weight:600}
+  .dac-rate span{font-size:54px;color:var(--teal);letter-spacing:-.02em;margin-left:12px}
+  .dac-sub{position:absolute;top:486px;left:64px;right:64px;z-index:5;font-size:26px;color:var(--muted);display:flex;justify-content:space-between}
+  .dac-sub b{color:var(--text);font-weight:600}
+  .dac-vu{position:absolute;top:560px;left:64px;right:64px;height:110px;z-index:5;display:flex;gap:18px}
+  .dac-vu .meter{flex:1;border:1px solid var(--line);border-radius:18px;background:rgba(12,31,33,.45);padding:14px 18px;display:flex;flex-direction:column;justify-content:space-between}
+  .dac-vu .lab{display:flex;justify-content:space-between;font-size:12px;letter-spacing:.18em;color:var(--dim)}
+  .dac-vu .bars{display:flex;gap:4px;align-items:flex-end;height:40px}
+  .dac-vu .bars i{flex:1;background:linear-gradient(var(--mint),var(--teal));border-radius:2px;opacity:.85;animation:vu 1.3s ease-in-out infinite alternate}
+  .dac-vu .bars i:nth-child(2n){animation-delay:.2s;background:linear-gradient(var(--pink),#B42C69)}
+  .dac-card{position:absolute;left:64px;right:64px;z-index:5;border-radius:28px;background:linear-gradient(150deg,rgba(18,48,51,.8),rgba(7,21,23,.88));border:1px solid var(--line);padding:26px 30px;box-shadow:0 20px 50px rgba(0,0,0,.25)}
+  .dac-card .k{font-size:14px;letter-spacing:.2em;color:var(--dim);text-transform:uppercase}
+  .dac-card .v{font-size:44px;font-weight:600;letter-spacing:-.03em;margin-top:6px;font-variant-numeric:tabular-nums}
+  .dac-card .note{font-size:14px;color:var(--dim);margin-top:4px}
+  .host{top:710px}
+  .host .icon{position:absolute;right:32px;top:38px;color:var(--muted)}
+  .host .icon svg{width:48px;height:48px}
+  .quality{top:940px}
+  .quality .chips{display:flex;gap:12px;margin-top:18px}
+  .qchip{padding:12px 18px;border-radius:999px;border:1px solid var(--line);font-size:17px;color:var(--muted)}
+  .qchip.on{background:var(--pink);color:#20040F;border-color:transparent;font-weight:700}
+  .quality .note{margin-top:30px}
+  .auto{position:absolute;top:1240px;left:64px;right:64px;z-index:5;display:flex;align-items:center;justify-content:space-between;border-top:1px solid rgba(127,247,232,.08);border-bottom:1px solid rgba(127,247,232,.08);padding:22px 0}
+  .auto .l{font-size:23px;font-weight:600}
+  .auto .s{font-size:14px;color:var(--dim);margin-top:4px}
+  .switch{width:86px;height:48px;border-radius:999px;background:var(--pink);position:relative;box-shadow:0 0 24px rgba(255,79,154,.25)}
+  .switch i{position:absolute;right:4px;top:4px;width:40px;height:40px;border-radius:50%;background:#fff;transition:.2s}
+  .switch.off{background:#173436}
+  .switch.off i{right:42px;background:var(--muted)}
+  .adb{position:absolute;top:1370px;left:64px;right:64px;z-index:5;display:flex;gap:16px;align-items:flex-start}
+  .adb .shield{width:44px;height:44px;color:var(--teal);flex:0 0 auto}
+  .adb .t{font-size:22px;font-weight:600}
+  .adb .s{font-size:14px;color:var(--dim);margin-top:4px;line-height:1.45}
+  .trouble{position:absolute;top:1510px;left:64px;right:64px;z-index:5;border-radius:22px;background:rgba(12,31,33,.55);border:1px solid var(--line);padding:20px 24px;display:flex;align-items:center;justify-content:space-between}
+  .trouble .t{font-size:21px;font-weight:600}
+  .trouble .s{font-size:14px;color:var(--dim);margin-top:4px}
+  .trouble svg{width:24px;height:24px;color:var(--muted)}
+  .path{top:1660px;padding:24px 28px}
+  .path .row{display:flex;align-items:center;justify-content:space-between;margin-top:16px;font-size:16px;letter-spacing:.08em;color:var(--muted)}
+  .path .row span{padding:8px 12px;border:1px solid rgba(127,247,232,.16);border-radius:10px;background:rgba(6,16,18,.35)}
+  .path .row i{color:var(--dim);font-style:normal}
+  .path .note{margin-top:16px}
+  .session{top:1850px;padding:24px 28px}
+  .session .row{display:flex;align-items:center;justify-content:space-between;margin-top:16px;font-size:14px;letter-spacing:.08em;color:var(--dim)}
+  .session .row b{color:var(--mint);font-weight:600;font-size:16px;letter-spacing:.04em}
+
+  /* ---------- PANELS ---------- */
+  .panel{position:absolute;top:0;bottom:0;width:78%;z-index:60;background:linear-gradient(160deg,#0A2224,#061012 70%);border:1px solid var(--line);box-shadow:0 0 80px rgba(0,0,0,.7);transition:transform .5s cubic-bezier(.2,.85,.2,1);padding:86px 42px 40px;overflow:hidden}
+  .panel.left{left:0;transform:translateX(-102%);border-radius:0 36px 36px 0}
+  .panel.right{right:0;transform:translateX(102%);border-radius:36px 0 0 36px}
+  .panel.open{transform:translateX(0)}
+  .panel h3{margin:0 0 8px;font-family:'Inter Display','Inter',sans-serif;font-size:44px;letter-spacing:-.04em}
+  .panel .p-sub{font-size:13px;letter-spacing:.2em;color:var(--dim);text-transform:uppercase;margin-bottom:26px}
+  .panel .close{position:absolute;top:34px;right:34px;width:56px;height:56px;border-radius:50%;border:1px solid var(--line);display:grid;place-items:center;color:var(--muted)}
+  .panel .close svg{width:26px;height:26px}
+  .qrow{display:flex;align-items:center;gap:16px;padding:18px 0;border-bottom:1px solid rgba(127,247,232,.07)}
+  .qrow .qart{width:58px;height:58px;border-radius:14px;background:linear-gradient(145deg,#0C3331,#3A1632);flex:0 0 auto;position:relative;overflow:hidden}
+  .qrow .qart::after{content:"";position:absolute;inset:16px;border:1px solid rgba(255,255,255,.2);border-radius:50%}
+  .qrow .qt{flex:1;font-size:17px;font-weight:600}
+  .qrow .qa{font-size:13px;color:var(--dim);margin-top:3px}
+  .qrow .qd{font-size:13px;color:var(--dim);font-variant-numeric:tabular-nums}
+  .qrow.now .qt{color:var(--mint)}
+  .qrow.now::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--pink);box-shadow:0 0 12px var(--pink)}
+  .inspector .avatar{width:200px;height:200px;margin:10px 0 26px;position:relative}
+  .inspector .avatar .ring{position:absolute;inset:0;border-radius:50%;border:1px solid rgba(127,247,232,.3)}
+  .inspector .avatar .ring:nth-child(2){inset:18px;border-color:rgba(255,79,154,.3)}
+  .inspector .avatar .shape{position:absolute;left:50%;top:50%;width:100px;height:130px;transform:translate(-50%,-50%);background:linear-gradient(180deg,var(--mint),var(--teal));clip-path:polygon(50% 0,68% 22%,62% 42%,86% 58%,70% 100%,30% 100%,14% 58%,38% 42%,32% 22%);opacity:.9;filter:drop-shadow(0 0 18px rgba(127,247,232,.45))}
+  .inspector .singer{position:absolute;inset:0;width:100%;height:100%}
+  .lyrics{display:flex;flex-direction:column;gap:16px;margin:8px 0 24px;font-size:22px;line-height:1.25;color:var(--dim)}
+  .lyrics .on{color:var(--text);font-weight:600}
+  .lyrics .on span{color:var(--pink)}
+  .lyrics .past{color:var(--muted)}
+  .spectrum{display:flex;align-items:flex-end;gap:4px;height:92px;margin:10px 0 8px;padding:14px;border:1px solid var(--line);border-radius:16px;background:rgba(12,31,33,.4)}
+  .spectrum i{flex:1;border-radius:2px;background:linear-gradient(var(--mint),var(--teal));opacity:.8;height:30%}
+  .spectrum i:nth-child(2n){background:linear-gradient(var(--pink),#B42C69);height:64%}
+  .spectrum i:nth-child(3n){height:88%}
+  .spectrum i:nth-child(4n){height:46%}
+  .spectrum i:nth-child(5n){height:74%}
+  .spec-label{font-size:11px;letter-spacing:.2em;color:var(--dim);margin-bottom:18px}
+  .inspector .lyric{font-size:26px;line-height:1.35;color:var(--text);font-weight:600;margin:18px 0 26px;letter-spacing:-.02em}
+  .inspector .lyric span{color:var(--pink)}
+  .inspector .spec{font-size:14px;color:var(--dim);line-height:2;border-top:1px solid rgba(127,247,232,.08);padding-top:18px}
+  .inspector .spec b{color:var(--muted);font-weight:500}
+  .settings .srow{display:flex;align-items:center;justify-content:space-between;padding:20px 0;border-bottom:1px solid rgba(127,247,232,.07);font-size:19px}
+  .settings .srow .h{font-size:13px;color:var(--dim);margin-top:3px}
+  .queue-foot{position:absolute;left:42px;right:42px;bottom:42px;display:flex;gap:12px}
+  .queue-foot button{flex:1;height:64px;border-radius:999px;border:1px solid var(--line);color:var(--muted);font-size:13px;letter-spacing:.16em}
+  .queue-foot button:first-child{background:var(--mint);color:#06201D;border-color:transparent;font-weight:700}
+
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @keyframes bob{0%,100%{transform:translateY(0);opacity:.55}50%{transform:translateY(-6px);opacity:1}}
+  @keyframes vu{0%{height:34%}22%{height:78%}48%{height:42%}72%{height:88%}100%{height:58%}}
+  .phone.still .reel .spokes{animation:none}
+  .phone.still .bars i{animation:none;height:42%}
+  .phone.still .bars i:nth-child(2n){height:68%}
+  .phone.still .bars i:nth-child(3n){height:86%}
+  .phone.still .bars i:nth-child(4n){height:56%}
+  .phone.still .bars i:nth-child(5n){height:76%}
+  @media (prefers-reduced-motion:reduce){*{animation-duration:.001ms!important;transition-duration:.001ms!important}}
+</style>
+</head>
+<body>
+<div class="phone playing" id="phone">
+  <div class="bg"><div class="wave w1"></div><div class="wave w2"></div><div class="wave w3"></div><div class="glow g1"></div><div class="glow g2"></div><div class="glow g3"></div></div>
+
+  <div class="status">
+    <div class="time">9:41</div>
+    <div class="brand"><i></i>ELYVAEN</div>
+    <div class="right"><span class="chip">24/192</span><span class="battery"><i><b></b></i></span></div>
+  </div>
+
+  <!-- NOW PLAYING -->
+  <section class="screen now" id="now">
+    <div class="topline">
+      <div class="left"><b>USB DAC</b><span>/ 192 kHz</span></div>
+      <div class="right">SIDE A · 01</div>
+    </div>
+    <div class="hint up" data-open="library">BIBLIOTECA <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M6 15l6-6 6 6"/></svg></div>
+
+    <div class="deck">
+      <div class="deck-head"><span><b>SIDE A</b> · TYPE II</span><span>HIGH BIAS · 90 Hz</span><span class="screw"></span></div>
+      <div class="cassette">
+        <div class="reel"><div class="spokes"><i></i><i></i><i></i><i></i><i></i><i></i></div><div class="hub"></div></div>
+        <div class="art">
+          <div class="mark">ELV · 001</div>
+          <div class="vinyl"></div>
+          <div class="label"><b>MIDNIGHT CITY</b><span>M83</span></div>
+        </div>
+        <div class="reel"><div class="spokes"><i></i><i></i><i></i><i></i><i></i><i></i></div><div class="hub"></div></div>
+      </div>
+      <div class="tapewindow">
+        <div class="reels"><i></i><i></i></div>
+        <div class="mid"><b>AUTO REVERSE</b><span>90 Hz · TYPE II · DOLBY NR</span></div>
+        <div class="side">SIDE A</div>
+      </div>
+      <div class="deck-foot"><span>CHROME</span><span>DOLBY · NR</span><span>MADE IN ELYVAEN</span></div>
+    </div>
+
+    <div class="track">
+      <div class="meta">NOW PLAYING · USB DAC</div>
+      <h1>Midnight City</h1>
+      <div class="artist">M83 <span>·</span> Hurry Up, We're Dreaming</div>
+      <div class="badges"><span class="badge teal">24/192</span><span class="badge">PCM</span><span class="badge mint">NATIVO</span><span class="badge pink">USB DAC</span></div>
+    </div>
+
+    <div class="tape">
+      <div class="rail"><div class="fill"></div><div class="head"></div></div>
+      <div class="times"><span><b>1:42</b></span><span>−2:18</span></div>
+    </div>
+
+    <div class="transport">
+      <button class="tbtn" aria-label="Shuffle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h3l10 10h3M4 17h3L17 7h3"/><path d="M17 4l3 3-3 3M17 14l3 3-3 3"/></svg></button>
+      <button class="tbtn" aria-label="Previous"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 5h2v14H7zM19 5v14L9 12z"/></svg></button>
+      <button class="play" id="play" aria-label="Play/Pause">
+        <svg class="playIcon" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l12-7z"/></svg>
+        <svg class="pauseIcon" viewBox="0 0 24 24" fill="currentColor"><path d="M7 5h4v14H7zM14 5h4v14h-4z"/></svg>
+      </button>
+      <button class="tbtn" aria-label="Next"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M15 5h2v14h-2zM5 5v14l10-7z"/></svg></button>
+      <button class="tbtn" aria-label="Repeat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 7H7a4 4 0 0 0 0 8h1M7 17h10a4 4 0 0 0 0-8h-1"/><path d="M17 4l3 3-3 3M7 14l-3 3 3 3"/></svg></button>
+    </div>
+
+    <div class="vu">
+      <div class="meter"><div class="lab"><span>L</span><span>−12 dB</span></div><div class="bars"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
+      <div class="meter"><div class="lab"><span>R</span><span>−12 dB</span></div><div class="bars"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
+      <div class="right"><b>192.0 kHz</b>BUFFER 128<br>2.7 ms · LOCKED</div>
+    </div>
+
+    <div class="hint down" data-open="dac">DAC USB <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></div>
+
+    <div class="volume" id="volume">
+      <div class="vlabel">VOLUME</div>
+      <div class="wheel"><div class="thumb" id="thumb"></div></div>
+      <div class="vval"><span id="vval">68</span><small>STEP</small></div>
+    </div>
+
+    <div class="dock">
+      <button data-panel="queue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h16M4 18h10"/><circle cx="19" cy="18" r="2"/></svg>COLA</button>
+      <button data-panel="inspector"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 19V9M12 19V4M19 19v-7"/></svg>INSPECTOR</button>
+      <button data-panel="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3.2"/><path d="M12 3v2.2M12 18.8V21M3 12h2.2M18.8 12H21M5.6 5.6l1.6 1.6M16.8 16.8l1.6 1.6M18.4 5.6l-1.6 1.6M7.2 16.8l-1.6 1.6"/></svg>AJUSTES</button>
+    </div>
+  </section>
+
+  <!-- LIBRARY -->
+  <section class="screen library" id="library">
+    <div class="screen-head">
+      <div class="left"><button class="back" data-close="library" aria-label="Volver"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 9l6 6 6-6"/></svg></button><div><div class="sub">ELYVAEN · 1,248 PISTAS</div><h2>Biblioteca</h2></div></div>
+      <div class="head-actions"><button class="icon-btn" aria-label="Buscar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></svg></button><button class="icon-btn" aria-label="Ordenar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M7 12h10M10 17h4"/></svg></button></div>
+    </div>
+    <div class="tabs"><button class="active">Álbumes</button><button>Artistas</button><button>Carpetas</button><button>Hi-Res</button></div>
+    <div class="lib-grid">
+      <div class="album"><div class="tag">ELV · 001</div><div class="badge-mini">24/192</div><div class="name">Midnight City</div><div class="artist">M83</div></div>
+      <div class="album" style="background:linear-gradient(145deg,#3A1B22,#4A1635 55%,#122A32)"><div class="tag">ELV · 014</div><div class="badge-mini">DSD256</div><div class="name">Random Access</div><div class="artist">Daft Punk</div></div>
+      <div class="album" style="background:linear-gradient(145deg,#14343B,#1E3A4A 50%,#0B2D2A)"><div class="tag">ELV · 027</div><div class="badge-mini">24/96</div><div class="name">Untitled</div><div class="artist">The Midnight</div></div>
+      <div class="album" style="background:linear-gradient(145deg,#3D1B4A,#2A1B4A 55%,#0E3B3A)"><div class="tag">ELV · 031</div><div class="badge-mini">24/48</div><div class="name">Genesis</div><div class="artist">Grimes</div></div>
+      <div class="album" style="background:linear-gradient(145deg,#123B36,#1C2A4A 52%,#4A2A18)"><div class="tag">ELV · 044</div><div class="badge-mini">24/192</div><div class="name">Bloom</div><div class="artist">ODESZA</div></div>
+      <div class="album" style="background:linear-gradient(145deg,#1B3A4A,#123B36 50%,#3A1B22)"><div class="tag">ELV · 052</div><div class="badge-mini">24/96</div><div class="name">Awake</div><div class="artist">Tycho</div></div>
+    </div>
+    <div class="lib-list">
+      <div class="row"><span class="n">01</span><span class="t">Midnight City</span><span class="a">M83</span><span class="f">FLAC 24/192</span><span class="d">4:03</span></div>
+      <div class="row"><span class="n">02</span><span class="t">Out of Time</span><span class="a">The Weeknd</span><span class="f">FLAC 24/96</span><span class="d">3:34</span></div>
+      <div class="row"><span class="n">03</span><span class="t">Nightcall</span><span class="a">Kavinsky</span><span class="f">ALAC 16/44</span><span class="d">4:18</span></div>
+    </div>
+    <div class="az">A<br>B<br>C<br>D<br>E<br>F<br>G<br>H<br>I<br>J<br>K<br>L<br>M<br>N<br>O<br>P<br>Q<br>R<br>S<br>T<br>U<br>V<br>W<br>X<br>Y<br>Z</div>
+    <div class="dock"><button data-panel="queue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h16M4 18h10"/><circle cx="19" cy="18" r="2"/></svg>COLA</button><button data-panel="inspector"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 19V9M12 19V4M19 19v-7"/></svg>INSPECTOR</button><button data-close="library"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 15l6-6 6 6"/></svg>VOLVER</button></div>
+  </section>
+
+  <!-- DAC -->
+  <section class="screen dac" id="dac">
+    <div class="dac-head"><button class="back" data-close="dac" aria-label="Volver"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 15l6-6 6 6"/></svg></button><h2>DAC USB</h2><div class="dac-status"><i></i>PC reproduciendo</div></div>
+    <div class="dac-rate">192.0<span>kHz</span></div>
+    <div class="dac-sub"><span><b>24-bit</b> · Nativo</span><span>USB 2.0 · LOCKED</span></div>
+    <div class="dac-vu">
+      <div class="meter"><div class="lab"><span>L</span><span>−6 dB</span></div><div class="bars"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
+      <div class="meter"><div class="lab"><span>R</span><span>−6 dB</span></div><div class="bars"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
+    </div>
+    <div class="dac-card host"><div class="k">Volumen del host</div><div class="v">0.0 dB</div><div class="note">Lo controla el PC</div><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M17 8a6 6 0 0 1 0 8M19.5 5.5a10 10 0 0 1 0 13"/></svg></div></div>
+    <div class="dac-card quality"><div class="k">Calidad</div><div class="chips"><span class="qchip on">Nativo 24/192</span><span class="qchip">48 kHz estable</span></div><div class="note">Sin remuestreo; el reloj lo manda el host</div></div>
+    <div class="auto"><div><div class="l">Iniciar con el sistema</div><div class="s">Abre el puente DAC al arrancar</div></div><div class="switch" id="autosw"><i></i></div></div>
+    <div class="adb"><svg class="shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 3l7 3v5c0 4.5-2.9 8.1-7 10-4.1-1.9-7-5.5-7-10V6l7-3z"/><path d="M9 12l2 2 4-4"/></svg><div><div class="t">ADB desactivado automáticamente</div><div class="s">Windows detecta el DAC sin tocar Depuración USB</div></div></div>
+    <button class="trouble"><div><div class="t">Windows no lo detecta</div><div class="s">Comprobar ADB, USB 2.0 y formato 24/192</div></div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 6l6 6-6 6"/></svg></button>
+    <div class="dac-card path"><div class="k">Ruta de señal</div><div class="row"><span>USB</span><i>›</i><span>UAC2</span><i>›</i><span>AF</span><i>›</i><span>CODEC</span></div><div class="note">24/192 · 2.7 ms · reloj bloqueado · bit-perfect hasta el mezclador</div></div>
+    <div class="dac-card session"><div class="k">Sesión USB</div><div class="row"><span>Buffer</span><b>128 spl</b><span>Latencia</span><b>2.7 ms</b><span>Reloj</span><b>Locked</b></div></div>
+    <div class="dock"><button data-close="dac"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 15l6-6 6 6"/></svg>VOLVER</button><button data-panel="queue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h16M4 18h10"/><circle cx="19" cy="18" r="2"/></svg>COLA</button><button data-panel="inspector"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 19V9M12 19V4M19 19v-7"/></svg>INSPECTOR</button></div>
+  </section>
+
+  <!-- PANELS -->
+  <aside class="panel left" id="queue"><button class="close" data-close-panel><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 6l12 12M18 6L6 18"/></svg></button><h3>Cola</h3><div class="p-sub">Tape reel · 04 pistas</div>
+    <div class="qrow now"><div class="qart"></div><div><div class="qt">Midnight City</div><div class="qa">M83 · 4:03</div></div><div class="qd">−2:18</div></div>
+    <div class="qrow"><div class="qart"></div><div><div class="qt">Out of Time</div><div class="qa">The Weeknd · 3:34</div></div><div class="qd">3:34</div></div>
+    <div class="qrow"><div class="qart"></div><div><div class="qt">Nightcall</div><div class="qa">Kavinsky · 4:18</div></div><div class="qd">4:18</div></div>
+    <div class="qrow"><div class="qart"></div><div><div class="qt">Genesis</div><div class="qa">Grimes · 4:15</div></div><div class="qd">4:15</div></div>
+    <div class="qrow"><div class="qart"></div><div><div class="qt">Bloom</div><div class="qa">ODESZA · 3:41</div></div><div class="qd">3:41</div></div>
+    <div class="qrow"><div class="qart"></div><div><div class="qt">Awake</div><div class="qa">Tycho · 4:22</div></div><div class="qd">4:22</div></div>
+    <div class="qrow"><div class="qart"></div><div><div class="qt">Sunset</div><div class="qa">The Midnight · 5:01</div></div><div class="qd">5:01</div></div>
+    <div class="qrow"><div class="qart"></div><div><div class="qt">Resonance</div><div class="qa">HOME · 3:32</div></div><div class="qd">3:32</div></div>
+    <div class="queue-foot"><button>GUARDAR COLA</button><button>LIMPIAR</button></div>
+  </aside>
+
+  <aside class="panel right inspector" id="inspector"><button class="close" data-close-panel><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 6l12 12M18 6L6 18"/></svg></button><h3>Inspector</h3><div class="p-sub">Virtual singer · 001</div>
+    <div class="avatar"><div class="ring"></div><div class="ring"></div><svg class="singer" viewBox="0 0 200 200" fill="none"><path d="M62 84 C30 62 24 112 46 136 C56 148 68 142 70 128" stroke="#39C5BB" stroke-width="10" stroke-linecap="round"/><path d="M138 84 C170 62 176 112 154 136 C144 148 132 142 130 128" stroke="#39C5BB" stroke-width="10" stroke-linecap="round"/><circle cx="100" cy="82" r="27" fill="#F4FFFD"/><path d="M72 78 Q100 48 128 78 L120 96 L108 84 L100 96 L90 84 L78 96 Z" fill="#39C5BB"/><path d="M78 146 Q78 112 100 112 Q122 112 122 146 Z" fill="#0E3B3A" stroke="#39C5BB" stroke-width="2"/><circle cx="72" cy="76" r="6" fill="#FF4F9A"/><circle cx="128" cy="76" r="6" fill="#FF4F9A"/></svg></div>
+    <div class="lyric">“Waiting for the <span>night</span> to fall...”</div>
+    <div class="lyrics"><div class="past">Waiting for the night to fall...</div><div class="on">I can hear the <span>city</span> call</div><div>Neon rivers, after all</div></div>
+    <div class="spectrum"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    <div class="spec-label">LIVE SPECTRUM · 192 kHz · 24-bit</div>
+    <div class="spec"><b>FLAC</b> · 24-bit / 192 kHz<br><b>DR</b> 12 · <b>PEAK</b> −1.2 dB<br><b>RUTA</b> USB DAC · bit-perfect<br><b>BUFFER</b> 128 spl / 2.7 ms</div>
+  </aside>
+
+  <aside class="panel right settings" id="settings"><button class="close" data-close-panel><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 6l12 12M18 6L6 18"/></svg></button><h3>Ajustes</h3><div class="p-sub">Elyvaen OS · Miku Night</div>
+    <div class="srow"><div>Pure Audio<div class="h">Desactiva EQ y DSP</div></div><div class="switch" onclick="this.classList.toggle('off')"><i></i></div></div>
+    <div class="srow"><div>Iniciar con el sistema<div class="h">Abre el puente DAC al arrancar</div></div><div class="switch" onclick="this.classList.toggle('off')"><i></i></div></div>
+    <div class="srow"><div>Miku Night<div class="h">Teal + neon pink · 90 Hz</div></div><div class="switch" onclick="this.classList.toggle('off')"><i></i></div></div>
+    <div class="srow"><div>Volumen del host<div class="h">Lo controla el PC</div></div><span style="color:var(--mint)">0.0 dB</span></div>
+  </aside>
+</div>
+
+<script>
+(() => {
+  const phone = document.getElementById('phone');
+  const now = document.getElementById('now');
+  const library = document.getElementById('library');
+  const dac = document.getElementById('dac');
+  const screens = { now, library, dac };
+  const params = new URLSearchParams(location.search);
+
+  function fit(){
+    if (params.get('still') === '1') phone.classList.add('still');
+    if (params.get('full') === '1') { phone.style.transform = 'none'; return; }
+    const s = Math.min(innerWidth / 1080, innerHeight / 2460, 1);
+    phone.style.transform = `scale(${s})`;
+  }
+  addEventListener('resize', fit); fit();
+
+  function openScreen(name){
+    if (name === 'now') {
+      library.classList.remove('active'); dac.classList.remove('active');
+      now.classList.remove('pushed');
+      return;
+    }
+    now.classList.add('pushed');
+    library.classList.toggle('active', name === 'library');
+    dac.classList.toggle('active', name === 'dac');
+  }
+  document.querySelectorAll('[data-open]').forEach(el => el.addEventListener('click', () => openScreen(el.dataset.open)));
+  document.querySelectorAll('[data-close]').forEach(el => el.addEventListener('click', () => openScreen('now')));
+
+  const initial = params.get('screen');
+  if (initial && screens[initial]) openScreen(initial);
+  const initialPanel = params.get('panel');
+  if (initialPanel) document.getElementById(initialPanel)?.classList.add('open');
+
+  // play/pause
+  const play = document.getElementById('play');
+  play.addEventListener('click', () => phone.classList.toggle('playing'));
+
+  // volume wheel
+  const vol = document.getElementById('volume');
+  const thumb = document.getElementById('thumb');
+  const vval = document.getElementById('vval');
+  let volume = 68;
+  function setVolume(v){
+    volume = Math.max(0, Math.min(100, Math.round(v)));
+    vval.textContent = volume;
+    thumb.style.top = `calc(${100 - volume}% - 28px + 28px)`;
+    thumb.style.top = `${Math.max(2, Math.min(88, 100 - volume))}%`;
+    if (navigator.vibrate) navigator.vibrate(4);
+  }
+  setVolume(volume);
+  let dragging = false, startY = 0, startV = volume;
+  vol.addEventListener('pointerdown', e => { dragging = true; startY = e.clientY; startV = volume; vol.setPointerCapture(e.pointerId); });
+  vol.addEventListener('pointermove', e => { if (!dragging) return; setVolume(startV + (startY - e.clientY) * 0.35); });
+  vol.addEventListener('pointerup', () => { dragging = false; });
+  vol.addEventListener('wheel', e => { e.preventDefault(); setVolume(volume + (e.deltaY > 0 ? -2 : 2)); }, {passive:false});
+
+  // vertical swipes on the deck area
+  let sy = 0, sx = 0, tracking = false;
+  now.addEventListener('pointerdown', e => {
+    if (e.target.closest('button, .volume, .dock, .tape')) return;
+    tracking = true; sy = e.clientY; sx = e.clientX;
+  });
+  now.addEventListener('pointerup', e => {
+    if (!tracking) return; tracking = false;
+    const dy = e.clientY - sy, dx = e.clientX - sx;
+    if (Math.abs(dy) < 80 || Math.abs(dy) < Math.abs(dx) * 1.2) return;
+    openScreen(dy < 0 ? 'library' : 'dac');
+  });
+
+  // panels
+  document.querySelectorAll('[data-panel]').forEach(el => el.addEventListener('click', () => {
+    document.querySelectorAll('.panel.open').forEach(p => p.classList.remove('open'));
+    const p = document.getElementById(el.dataset.panel);
+    if (p) p.classList.add('open');
+    document.querySelectorAll('.dock button').forEach(b => b.classList.remove('active'));
+    el.classList.add('active');
+  }));
+  document.querySelectorAll('[data-close-panel]').forEach(el => el.addEventListener('click', () => {
+    document.querySelectorAll('.panel.open').forEach(p => p.classList.remove('open'));
+  }));
+
+  // settings switches / autostart in DAC
+  document.querySelectorAll('.switch').forEach(sw => sw.addEventListener('click', () => sw.classList.toggle('off')));
+  document.getElementById('autosw').addEventListener('click', e => { e.stopPropagation(); e.currentTarget.classList.toggle('off'); });
+
+  // seek click
+  document.querySelector('.tape .rail')?.addEventListener('pointerdown', e => {
+    const r = e.currentTarget.getBoundingClientRect();
+    const pct = Math.max(0, Math.min(100, (e.clientX - r.left) / r.width * 100));
+    document.querySelector('.tape .fill').style.width = pct + '%';
+    document.querySelector('.tape .head').style.left = pct + '%';
+  });
+})();
+</script>
+</body>
+</html>
