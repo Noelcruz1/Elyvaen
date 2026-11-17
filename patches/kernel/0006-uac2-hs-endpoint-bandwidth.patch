@@ -1,0 +1,21 @@
+diff --git a/drivers/usb/gadget/function/f_uac2.c b/drivers/usb/gadget/function/f_uac2.c
+--- a/drivers/usb/gadget/function/f_uac2.c
++++ b/drivers/usb/gadget/function/f_uac2.c
+@@ -307,7 +307,7 @@
+ 
+ 	.bmAttributes = USB_ENDPOINT_XFER_ISOC | USB_ENDPOINT_SYNC_SYNC,
+ 	/* .wMaxPacketSize = DYNAMIC */
+-	.bInterval = 4,
++	.bInterval = 1,
+ };
+ 
+ static struct usb_ss_ep_comp_descriptor ss_epout_comp_desc = {
+@@ -391,7 +391,7 @@
+ 
+ 	.bmAttributes = USB_ENDPOINT_XFER_ISOC | USB_ENDPOINT_SYNC_SYNC,
+ 	/* .wMaxPacketSize = DYNAMIC */
+-	.bInterval = 4,
++	.bInterval = 1,
+ };
+ 
+ static struct usb_ss_ep_comp_descriptor ss_epin_comp_desc = {

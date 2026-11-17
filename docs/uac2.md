@@ -160,3 +160,17 @@ reproduce; al reactivar ADB, desaparece.
 - Mejora pendiente: que el helper desenganche el enlace `ffs.adb` de
   `configs/b.1` mientras UAC2 está activo y lo restaure al apagar, y/o un
   aviso en el panel DAP.
+
+## 192 kHz en Windows: ancho de banda del endpoint
+
+Windows limita la salida a 24/96 aunque el DAC y el gadget acepten 192k
+porque el endpoint isócrono de alta velocidad usa `bInterval=4` y
+`wMaxPacketSize=1024`: 1024 B cada 1 ms = 1,024 MB/s, y 192k/24-bit estéreo
+necesita 1,152 MB/s. Windows redondea al siguiente formato válido, 96k.
+
+`patches/kernel/0006-uac2-hs-endpoint-bandwidth.patch` pone `bInterval=1`
+en `hs_epout_desc`/`hs_epin_desc`. Con 8000 microframes/s el paquete baja a
+150 B (1,2 MB/s), suficiente para 192k; Windows debería ofrecer 24/192.
+
+Requiere kernel #9. En full-speed (USB 1.1, cable/hub malo) 192k sigue
+siendo imposible: usar un puerto/cable USB 2.0 de alta velocidad.

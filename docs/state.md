@@ -447,3 +447,12 @@ si se quiere usar la app y el DAC a la vez.
   leyendo el FIFO), no confirma que el host esté reproduciendo.
 - Pendiente opcional: desenganchar ADB automáticamente en modo DAC o mostrar
   un aviso en el panel.
+
+## Windows 24/96 → 24/192 (2026-11-17)
+
+- Windows ofrecía como máximo 24/96 porque el endpoint HS del gadget
+  anunciaba `bInterval=4` + `wMaxPacketSize=1024` (1,024 MB/s); 192k/24-bit
+  estéreo necesita 1,152 MB/s.
+- `patches/kernel/0006-uac2-hs-endpoint-bandwidth.patch` cambia a
+  `bInterval=1` (150 B/microframe, 1,2 MB/s).
+- Kernel #9 (`boot_uac2_fu9.img`); solo cambia `boot_a`, no el super.
