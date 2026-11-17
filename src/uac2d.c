@@ -2372,6 +2372,26 @@ static int read_mode_file(const char *path)
     return -1;
 }
 
+static int write_mode_file(const char *path, int native)
+{
+    char buf[32];
+    int n;
+    int fd;
+
+    if (!path || !*path)
+        return -1;
+    n = snprintf(buf, sizeof(buf), "%s\n", native ? "native" : "48000");
+    fd = open(path, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0666);
+    if (fd < 0) {
+        log_msg("uac2d: mode file %s: %s\n", path, strerror(errno));
+        return -1;
+    }
+    (void)fchmod(fd, 0666);
+    (void)write(fd, buf, (size_t)n);
+    close(fd);
+    return 0;
+}
+
 struct fifo_resamp {
     double phase;
     float prev[8];
@@ -2431,6 +2451,10 @@ static int run_fifo(struct opts *o)
         return -ENODEV;
     }
     mode_state = read_mode_file(mode_file);
+    if (mode_state < 0) {
+        if (write_mode_file(mode_file, 1) == 0)
+            mode_state = 1;
+    }
     if (mode_state == 0) {
         native_mode = 0;
         fixed_rate = 48000;
@@ -2620,6 +2644,10 @@ static int run_fifo(struct opts *o)
             int live_rate = uac2_control_rate(cap.card);
             int new_mode = read_mode_file(mode_file);
 
+            if (new_mode < 0) {
+                (void)write_mode_file(mode_file, native_mode);
+                new_mode = native_mode;
+            }
             if (new_mode >= 0) {
                 int old_native = mode_state != 0;
                 int new_native = new_mode != 0;

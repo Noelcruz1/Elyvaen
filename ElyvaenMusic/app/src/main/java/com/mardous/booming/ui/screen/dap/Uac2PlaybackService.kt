@@ -40,6 +40,7 @@ class Uac2PlaybackService : Service() {
         private const val CHANNELS = 2
         private const val FRAME_BYTES = CHANNELS * 4
         private const val CHANNEL_ID = "elyvaen_uac2"
+        private const val NOTIFICATION_ID = 225
         private const val MAX_RATE = 192000
     }
 
@@ -63,7 +64,7 @@ class Uac2PlaybackService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        startForeground(1, buildNotification())
+        startForeground(NOTIFICATION_ID, buildNotification())
         if (!running) {
             running = true
             thread = Thread({ playLoop() }, "elyvaen-uac2-fifo").also {

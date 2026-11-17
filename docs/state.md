@@ -401,3 +401,37 @@ si se quiere usar la app y el DAC a la vez.
   errors) y acepta `.mode` (`native`/`48000`) para el selector de calidad.
 - La app añade estado real del enlace, calidad nativa/48k, volumen del host,
   auto-arranque y un toggle Pure Audio que desactiva el ecualizador.
+
+## Estado final DAP nativo (2026-11-17)
+
+- **Kernel #8** (`boot_uac2_fu8.img`, SHA `6174ba84…`): Feature Unit con
+  `bmaControls=0x0f` (volumen+mute UAC2). Image `7bcc5e54…`, mismo release y
+  ramdisk que #7; flasheado en `boot_a`.
+- **Super** (`dde2ace8…`, 5 810 980 056 B): política `cb6a29cf…`, daemon
+  `500e9822…` (crea `.mode` si falta), app `95a07a02…` (la app final
+  `fe7bc624…` se instaló como actualización en `/data/app`).
+- **App final `fe7bc624…`**: estado de enlace real, calidad Nativo 24/192 /
+  48 kHz estable, volumen del host, auto-arranque, Pure Audio, textos es-ES y
+  notificación propia (ID 225, canal `elyvaen_uac2`).
+- **Puente** `0e55281b…` sin cambios; config `2ee9419f…` (`out_rate=0`,
+  `mode_file`, `status_file`).
+- Pruebas superadas:
+  - 24/192 nativo de punta a punta; 1 kHz confirmado por Goertzel (1000 Hz
+    dominante; 500/2000/4000 Hz despreciables).
+  - 44.1/48/96/192 en caliente, AudioTrack recreado a la tasa correcta.
+  - 60 s a 192k estable (`fifo_errors=0`).
+  - Volumen del host: −6 dB → RMS 0.0453 → 0.0221 (mitad exacta); mute baja
+    al ruido de fondo; `.status` refleja `host_volume`/`host_mute`.
+  - Selector de calidad desde la UI en ambos sentidos; `.mode` se crea
+    root:root 0666 al arrancar y la app lo sobrescribe.
+  - Toggle UAC2 off/on desde la UI; off detiene daemon/servicio y restaura
+    ADB USB; on vuelve a enlazar a 192k.
+  - Auto-arranque tras force-stop/relanzar la app; Pure Audio desactiva el
+    ecualizador.
+  - Notificación UAC2 ID 225 independiente de la notificación de reproducción.
+- Rollback: boot #7 `cypfq_backup/boot_uac2_fu7.img` (`553294d7…`); super
+  cámara estable `build-camera-vol/super.sparse.img` (`8e641155…`).
+- Nota: el super contiene la app `95a07a02…`; la `fe7bc624…` vive como
+  actualización en `/data/app`. Un factory reset volvería a la app del super
+  (funcional, sin las últimas traducciones/notificación). El diálogo VINTF
+  "Sistema Android" es preexistente; se descarta con Aceptar.
