@@ -54,7 +54,7 @@ enum class NowPlayingScreen(
         R.layout.fragment_album_cover_elyvaen,
         buttonStyle = NowPlayingButtonStyle.Normal,
         supportsCoverLyrics = true,
-        supportsCarouselEffect = false,
+        supportsCarouselEffect = true,
         supportsCustomCornerRadius = false,
         supportsSmallImage = false
     ),
