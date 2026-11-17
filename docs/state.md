@@ -461,3 +461,20 @@ si se quiere usar la app y el DAC a la vez.
   `655bc1e4…`, release `#9`. Endpoint HS OUT verificado en el host:
   `wMaxPacketSize=150` (0x96), `bInterval=1`; ALSA reporta
   `RATE: [44100 192000]`. Pendiente de confirmar la lista 24/192 en Windows.
+
+## UAC2 cerrado: Windows 24/192 confirmado (2026-11-17)
+
+- Con kernel #9 (`bInterval=1`) Windows 11 ya ofrece y reproduce **24 bits /
+  192000 Hz**. Confirmado por el usuario.
+- UAC2 queda funcional en Linux y Windows: 44.1/48/88.2/96/176.4/192 nativo,
+  volumen/mute del host, auto-arranque, selector 48k/nativo, Pure Audio,
+  estado en el panel y notificación propia.
+- Requisito en Windows: **ADB/USB debugging apagado**; si está activo, el
+  composite Android impide que Windows cargue `usbaudio2.sys`.
+- Pendientes opcionales (no bloquean el UAC2):
+  - Desenganchar ADB automáticamente al activar UAC2 (modo Windows).
+  - Distinguir en la UI “host reproduciendo” de “servicio de la app conectado”.
+  - Alinear la app del super (`95a07a02`) con la actualización `fe7bc624`.
+  - Limpiar el servicio UAC2 sin uso del puente.
+  - QA final: reinicio real con UAC2+Windows, 176.4k, desconexión/reconexión,
+    volumen/mute desde Windows y deriva larga.
