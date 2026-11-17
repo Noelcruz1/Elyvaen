@@ -174,3 +174,7 @@ en `hs_epout_desc`/`hs_epin_desc`. Con 8000 microframes/s el paquete baja a
 
 Requiere kernel #9. En full-speed (USB 1.1, cable/hub malo) 192k sigue
 siendo imposible: usar un puerto/cable USB 2.0 de alta velocidad.
+
+La app ya automatiza esto: al activar UAC2 desde el Panel DAP guarda el
+estado de ADB, lo desactiva y lo restaura al apagar UAC2. Si ADB se reactiva
+manualmente, el panel muestra el aviso.

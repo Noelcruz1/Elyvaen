@@ -478,3 +478,18 @@ si se quiere usar la app y el DAC a la vez.
   - Limpiar el servicio UAC2 sin uso del puente.
   - QA final: reinicio real con UAC2+Windows, 176.4k, desconexión/reconexión,
     volumen/mute desde Windows y deriva larga.
+
+## Automatización ADB + QA final (2026-11-17)
+
+- La app ahora guarda el estado en `SharedPreferences` (las claves
+  `Settings.Global` se perdían en algún reinicio) y tiene
+  `Uac2BootReceiver` para `BOOT_COMPLETED`.
+- Al activar UAC2 desde la UI: guarda si ADB estaba activo, lo desactiva y
+  enlaza UAC2. Verificado: ADB desaparece, UAC2 sigue enumerando y
+  reproduciendo 192k en Linux, y al apagar UAC2 ADB se restaura.
+- Auto-arranque real tras reiniciar: el servicio de la app se conecta solo a
+  192k (el primer chequeo justo tras boot era demasiado pronto; el log
+  `fifo connected at 192000 Hz` lo confirma).
+- QA: 176.4k validado (rate file, daemon, AudioTrack y línea), y 600 s a 192k
+  con `fifo_errors=0`.
+- El aviso de ADB en el panel aparece si por algún motivo ADB sigue activo.
