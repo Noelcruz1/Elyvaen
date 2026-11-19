@@ -37,6 +37,7 @@ import androidx.activity.OnBackPressedCallback
 import androidx.core.animation.doOnEnd
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.doOnLayout
 import androidx.core.view.get
 import androidx.core.view.isGone
 import androidx.core.view.isVisible
@@ -198,6 +199,12 @@ abstract class AbsSlidingMusicPanelActivity : AbsBaseActivity(),
         setupSlidingUpPanel()
         setupBottomSheet()
 
+        navigationView.doOnLayout {
+            if (playerViewModel.queue.isNotEmpty() && !isHiddenByDestination) {
+                hideBottomSheet(false)
+            }
+        }
+
         launchAndRepeatWithViewLifecycle {
             playerViewModel.colorSchemeFlow.collect { scheme ->
                 paletteColor = scheme.surfaceColor
@@ -357,8 +364,11 @@ abstract class AbsSlidingMusicPanelActivity : AbsBaseActivity(),
         val bottomNavHeight = dip(R.dimen.bottom_nav_height)
 
         val bottomInsets = windowInsets.getBottomInsets(this)
-        val heightOfBar =  bottomInsets + miniPlayerHeight
-        val heightOfBarWithTabs = heightOfBar + bottomNavHeight
+        // The BottomNavigationView includes its own bottom inset and label padding.
+        // Using the measured height avoids the mini player being covered by the nav bar.
+        val resolvedNavHeight = navigationView.height.takeIf { it > 0 } ?: bottomNavHeight
+        val heightOfBar = bottomInsets + miniPlayerHeight
+        val heightOfBarWithTabs = miniPlayerHeight + resolvedNavHeight
         if (hide) {
             bottomSheetBehavior.peekHeight = (-bottomInsets).coerceAtLeast(0)
             panelState = STATE_COLLAPSED
@@ -385,12 +395,12 @@ abstract class AbsSlidingMusicPanelActivity : AbsBaseActivity(),
                     }
                     libraryViewModel.setLibraryMargins(
                         fabBottomMargin = LibraryMargin(
-                            margin = miniPlayerHeight + bottomNavHeight,
+                            margin = miniPlayerHeight + resolvedNavHeight,
                             additionalSpace = dip(R.dimen.fab_margin_top_left_right),
                             bottomInsets = windowInsets.getBottomInsets(this)
                         ),
                         bottomSheetMargin = LibraryMargin(
-                            margin = miniPlayerHeight,
+                            margin = miniPlayerHeight + resolvedNavHeight,
                             bottomInsets = windowInsets.getBottomInsets(this)
                         )
                     )

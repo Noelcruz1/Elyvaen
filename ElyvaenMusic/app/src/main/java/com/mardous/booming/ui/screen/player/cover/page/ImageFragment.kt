@@ -1,6 +1,7 @@
 package com.mardous.booming.ui.screen.player.cover.page
 
 import android.os.Bundle
+import android.util.LruCache
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -19,6 +20,7 @@ import com.google.android.material.imageview.ShapeableImageView
 import com.mardous.booming.R
 import com.mardous.booming.coil.songImage
 import com.mardous.booming.core.model.PaletteColor
+import com.mardous.booming.core.model.player.PlayerColorSchemeMode
 import com.mardous.booming.core.model.theme.NowPlayingScreen
 import com.mardous.booming.core.palette.PaletteProcessor
 import com.mardous.booming.data.model.Song
@@ -49,7 +51,11 @@ class ImageFragment : Fragment() {
     private fun getLayoutWithPlayerTheme(): Int {
         if (nowPlayingScreen.supportsCarouselEffect) {
             if (Preferences.isCarouselEffect) {
-                return R.layout.fragment_album_cover_carousel
+                return if (nowPlayingScreen == NowPlayingScreen.Elyvaen) {
+                    R.layout.fragment_album_cover_carousel_elyvaen
+                } else {
+                    R.layout.fragment_album_cover_carousel
+                }
             }
         }
         return nowPlayingScreen.albumCoverLayoutRes
@@ -116,6 +122,17 @@ class ImageFragment : Fragment() {
                     }
                 },
                 onSuccess = { request, result ->
+                    paletteCache.get(song.id)?.let { cachedColor ->
+                        setPalette(cachedColor)
+                        return@listener
+                    }
+                    // AppTheme does not use the cover palette. Skip the expensive
+                    // bitmap conversion/palette extraction while swiping covers.
+                    if (Preferences.getNowPlayingColorSchemeMode(nowPlayingScreen) ==
+                        PlayerColorSchemeMode.AppTheme
+                    ) {
+                        return@listener
+                    }
                     viewLifecycleOwner.lifecycleScope.launch {
                         val color = withContext(Dispatchers.Default) {
                             context?.let { fragmentCtx ->
@@ -123,6 +140,7 @@ class ImageFragment : Fragment() {
                             }
                         }
                         if (isActive && color != null) {
+                            paletteCache.put(song.id, color)
                             setPalette(color)
                         }
                     }
@@ -146,6 +164,13 @@ class ImageFragment : Fragment() {
         } else {
             this.colorReceiver = paletteReceiver
             this.request = request
+            // AppTheme clears the palette on load. If the user switches to a
+            // palette-based scheme while this page is alive, reload on demand.
+            if (Preferences.getNowPlayingColorSchemeMode(nowPlayingScreen) !=
+                PlayerColorSchemeMode.AppTheme
+            ) {
+                loadAlbumCover()
+            }
         }
     }
 
@@ -154,6 +179,8 @@ class ImageFragment : Fragment() {
     }
 
     companion object {
+        private val paletteCache = LruCache<Long, PaletteColor>(12)
+
         fun newInstance(song: Song) = ImageFragment().withArgs {
             putParcelable(EXTRA_SONG, song)
         }

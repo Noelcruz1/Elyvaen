@@ -93,11 +93,40 @@ El flag `-PelyvaenNoSuffix` permite instalar el build de depuración sobre la
 app existente (misma firma de depuración) sin perder datos. Sin el flag, el
 paquete es `com.elyvaen.booming.debug`.
 
+## Iteración 2 — rendimiento y barra inferior (2026-11-19)
+
+Feedback de uso: carátulas lentas al pasar el carrusel, caída de FPS con
+imágenes y mini-player oculto por la barra inferior.
+
+Cambios:
+
+- **90 Hz por defecto** en `MainActivity.applyPreferredDisplayMode()`
+  (antes elegía 120 Hz). Si no hay 90, usa 60.
+- **Paleta saltada en AppTheme**: el estilo Elyvaen usa colores del tema, así
+  que ya no se convierte la carátula a bitmap ni se ejecuta PaletteProcessor
+  en cada swipe. Se añadió una caché LRU por canción para esquemas Vibrant/Blur.
+- **Carrusel plano**: el estilo Elyvaen usa un `ShapeableImageView` con borde,
+  sin `MaterialCardView` ni sombra/elevación, y sin transformaciones caras.
+- **Mini-player corregido**: la altura de la barra inferior se toma de la vista
+  medida (`navigationView.height`) en lugar del dimen fijo; el mini-player y el
+  padding de las listas quedan por encima de la barra.
+- **Header de biblioteca**: título alineado a la izquierda, 76 dp y degradado
+  teal sutil, más cerca de APlayer/Symphony.
+- **APK release no minificado** (`ElyvaenBooming-latest.apk`) firmado con la
+  misma clave que la app instalada. Se generó con `-PelyvaenNoMinify` porque
+  R8 agota la memoria del contenedor; no es debuggable, así que debe ir más
+  fluido que el build de depuración.
+
+Pendiente de verificar en el dispositivo (se desconectó ADB durante el día):
+
+- posición final del mini-player y padding de listas;
+- FPS reales del carrusel con el APK release;
+- capturas nuevas del header de biblioteca.
+
 ## Pendiente / siguiente iteración
 
+- Instalar `ElyvaenBooming-latest.apk` y medir frames con `dumpsys gfxinfo`.
 - Revisar en el dispositivo la rejilla de álbumes con bibliotecas grandes.
-- Pulir el header de biblioteca (título alineado a la izquierda + tabs) si se
-  quiere acercar aún más a APlayer.
+- Pulir el header de biblioteca con tabs si se quiere acercar aún más a APlayer.
 - Revisar el panel DAP en formato apaisado.
 - Opcional: icono/splash Elyvaen y textos “Booming” residuales del About.
-- Medir frames reales a 90 Hz con `dumpsys gfxinfo`.

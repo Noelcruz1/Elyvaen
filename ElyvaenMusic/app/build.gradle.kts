@@ -146,8 +146,9 @@ android {
     }
     buildTypes {
         release {
-            isMinifyEnabled = true
-            isShrinkResources = true
+            val skipMinify = providers.gradleProperty("elyvaenNoMinify").isPresent
+            isMinifyEnabled = !skipMinify
+            isShrinkResources = !skipMinify
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = releaseSigning
         }

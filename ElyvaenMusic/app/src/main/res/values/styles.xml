@@ -136,6 +136,11 @@
         <item name="cornerFamily">rounded</item>
     </style>
 
+    <style name="ShapeAppearanceOverlay.Elyvaen.Cover" parent="">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">28dp</item>
+    </style>
+
     <style name="Base.SquigglySlider" parent="Widget.AppCompat.ProgressBar.Horizontal">
         <item name="android:progressTint">?colorPrimary</item>
         <item name="android:thumbTint">?colorPrimary</item>

@@ -423,8 +423,13 @@ class MainActivity : AbsSlidingMusicPanelActivity(), MediaController.Listener {
 
     @Suppress("DEPRECATION")
     private fun applyPreferredDisplayMode() {
-        val bestMode = windowManager.defaultDisplay.supportedModes
-            .maxByOrNull { it.refreshRate } ?: return
+        val modes = windowManager.defaultDisplay.supportedModes
+        // 90 Hz is the sweet spot for this DAP: noticeably smoother than 60 Hz
+        // without the thermal/frame-budget pressure of 120 Hz.
+        val bestMode = modes.firstOrNull { kotlin.math.abs(it.refreshRate - 90f) < 1f }
+            ?: modes.firstOrNull { kotlin.math.abs(it.refreshRate - 60f) < 1f }
+            ?: modes.maxByOrNull { it.refreshRate }
+            ?: return
         window.attributes = window.attributes.apply {
             preferredDisplayModeId = bestMode.modeId
         }
