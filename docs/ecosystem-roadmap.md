@@ -231,8 +231,34 @@ Qobuz/Tidal/Bandcamp o la compra directa son mejores fuentes.
 
 - Probar en dispositivo la pantalla Deezer y el preview (ADB sigue
   desconectado).
-- Añadir login ARL y el proveedor de reproducción completa.
-- Cola unificada local + Deezer y descargas.
+- Cola unificada local + Deezer y streaming sin descarga completa.
+
+## Deezer nativo experimental (implementado sin probar en dispositivo)
+
+Se añadió la base del proveedor privado, siguiendo el enfoque de Sonora:
+
+- `DeezerAccountStore`: guarda el ARL en preferencias privadas.
+- `DeezerPrivateClient`: handshake `deezer.ping` → `getUserData` →
+  `song.getData` → `media.get_url`, con cookies `arl`/`sid`, `checkForm`,
+  `license_token` y selección de formato (`FLAC_24`, `FLAC`, `MP3_320`,
+  `MP3_128`).
+- Descifrado BF_CBC_STRIPE en Kotlin (Bloque de 2048 bytes, uno de cada tres,
+  Blowfish/CBC, IV fijo, clave derivada del id efectivo).
+- `DeezerDownloadManager`: descarga a caché, valida la cabecera FLAC/MP3,
+  escribe etiquetas y portada con TagLib y publica en `MediaStore` en
+  `Music/Elyvaen/Deezer/<artista>/<álbum>`.
+- UI: tarjeta de conexión ARL en la pantalla Deezer, botón de descarga por
+  pista, descarga de álbum/playlist/top de artista y estado por pista
+  (en cola, descargando, etiquetando, descargado, error).
+- Las descargas se ejecutan en un `CoroutineScope` de aplicación; falta
+  pasarlas a un foreground service/WorkManager para que sobrevivan al cierre
+  de la app.
+- Es una integración **no oficial**; puede romperse si Deezer cambia el web
+  player. El ARL es personal y no se registra en logs.
+
+No se pudo validar el flujo completo sin el ARL del usuario ni con el móvil
+conectado. El catálogo público y las previews sí están compilados y listos
+para probar.
 
 ## Decisiones pendientes
 

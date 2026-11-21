@@ -19,6 +19,10 @@ package com.mardous.booming.ui.screen.deezer
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.mardous.booming.data.remote.deezer.DeezerAccount
+import com.mardous.booming.data.remote.deezer.DeezerAccountStore
+import com.mardous.booming.data.remote.deezer.DeezerDownloadManager
+import com.mardous.booming.data.remote.deezer.DeezerPrivateClient
 import com.mardous.booming.data.remote.deezer.DeezerService
 import com.mardous.booming.data.remote.deezer.model.DeezerAlbumDetail
 import com.mardous.booming.data.remote.deezer.model.DeezerAlbumItem
@@ -61,6 +65,9 @@ sealed interface DeezerDetail {
 }
 
 data class DeezerUiState(
+    val account: DeezerAccount? = null,
+    val connectLoading: Boolean = false,
+    val connectError: Boolean = false,
     val chartLoading: Boolean = true,
     val chartError: Boolean = false,
     val chart: DeezerChart = DeezerChart(),
@@ -78,16 +85,62 @@ data class DeezerUiState(
 )
 
 class DeezerViewModel(
-    private val deezerService: DeezerService
+    private val deezerService: DeezerService,
+    private val privateClient: DeezerPrivateClient,
+    private val accountStore: DeezerAccountStore,
+    private val downloadManager: DeezerDownloadManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(DeezerUiState())
     val uiState = _uiState.asStateFlow()
 
+    val downloadStates = downloadManager.states
+
     private var searchJob: Job? = null
 
     init {
         loadChart()
+        restoreAccount()
+    }
+
+    private fun restoreAccount() {
+        if (!accountStore.isConnected) return
+        viewModelScope.launch {
+            val account = privateClient.restore()
+            if (account != null) {
+                _uiState.update { it.copy(account = account) }
+            }
+        }
+    }
+
+    fun connect(arl: String) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(connectLoading = true, connectError = false) }
+            runCatching { privateClient.connect(arl) }
+                .onSuccess { account ->
+                    _uiState.update {
+                        it.copy(account = account, connectLoading = false)
+                    }
+                }
+                .onFailure {
+                    _uiState.update {
+                        it.copy(connectLoading = false, connectError = true)
+                    }
+                }
+        }
+    }
+
+    fun disconnect() {
+        privateClient.disconnect()
+        _uiState.update { it.copy(account = null, connectError = false) }
+    }
+
+    fun downloadTrack(track: DeezerTrackItem) {
+        downloadManager.downloadTrack(track)
+    }
+
+    fun downloadAll(tracks: List<DeezerTrackItem>) {
+        downloadManager.downloadAll(tracks)
     }
 
     fun loadChart() {

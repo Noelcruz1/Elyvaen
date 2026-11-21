@@ -1169,4 +1169,24 @@
     <string name="deezer_source">Deezer</string>
     <string name="deezer_downloads_source">Downloads</string>
     <string name="deezer_coming_soon">Coming soon</string>
+    <string name="deezer_connect">Connect</string>
+    <string name="deezer_connect_title">Connect Deezer</string>
+    <string name="deezer_connect_hint">Paste the ARL cookie from deezer.com. This is an unofficial personal integration.</string>
+    <string name="deezer_connect_arl">ARL cookie</string>
+    <string name="deezer_connect_action">Connect</string>
+    <string name="deezer_connect_error">Could not connect. Check the ARL and your connection.</string>
+    <string name="deezer_disconnect">Disconnect</string>
+    <string name="deezer_connected_as">Connected as %1$s</string>
+    <string name="deezer_account_title">Deezer account</string>
+    <string name="deezer_plan">Plan: %1$s</string>
+    <string name="deezer_download">Download</string>
+    <string name="deezer_download_all">Download all</string>
+    <string name="deezer_downloading">Downloading…</string>
+    <string name="deezer_downloaded">Downloaded</string>
+    <string name="deezer_download_failed">Download failed</string>
+    <string name="deezer_download_queued">Queued</string>
+    <string name="deezer_tagging">Tagging…</string>
+    <string name="deezer_not_connected">Connect Deezer to download</string>
+    <string name="deezer_download_complete">Download complete</string>
+    <string name="deezer_download_error">Download error</string>
 </resources>

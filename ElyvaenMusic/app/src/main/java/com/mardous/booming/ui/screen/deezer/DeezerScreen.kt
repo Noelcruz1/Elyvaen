@@ -20,6 +20,7 @@ package com.mardous.booming.ui.screen.deezer
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -40,6 +41,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -48,17 +50,21 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
@@ -86,6 +92,7 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -97,6 +104,8 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import com.mardous.booming.R
+import com.mardous.booming.data.remote.deezer.DeezerAccount
+import com.mardous.booming.data.remote.deezer.DeezerDownloadState
 import com.mardous.booming.data.remote.deezer.model.DeezerAlbumDetail
 import com.mardous.booming.data.remote.deezer.model.DeezerAlbumItem
 import com.mardous.booming.data.remote.deezer.model.DeezerArtistItem
@@ -121,13 +130,61 @@ fun DeezerScreen(
     viewModel: DeezerViewModel = koinViewModel(),
     playerViewModel: PlayerViewModel = koinActivityViewModel()
 ) {
+    val context = LocalContext.current
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val downloadStates by viewModel.downloadStates.collectAsStateWithLifecycle()
     var previewTrack by remember { mutableStateOf<DeezerTrackItem?>(null) }
+    var showConnectDialog by remember { mutableStateOf(false) }
+    var showAccountDialog by remember { mutableStateOf(false) }
+    var previousDownloads by remember {
+        mutableStateOf<Map<Long, DeezerDownloadState>>(emptyMap())
+    }
+
+    LaunchedEffect(state.account) {
+        if (state.account != null) {
+            showConnectDialog = false
+        }
+    }
+    LaunchedEffect(downloadStates) {
+        downloadStates.forEach { (id, current) ->
+            val previous = previousDownloads[id]
+            if (current is DeezerDownloadState.Done && previous !is DeezerDownloadState.Done) {
+                Toast.makeText(
+                    context,
+                    context.getString(R.string.deezer_download_complete),
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+            if (current is DeezerDownloadState.Failed && previous !is DeezerDownloadState.Failed) {
+                Toast.makeText(
+                    context,
+                    context.getString(R.string.deezer_download_error),
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+        previousDownloads = downloadStates
+    }
+
     val openPreview: (DeezerTrackItem) -> Unit = { track ->
         if (playerViewModel.isPlaying) {
             playerViewModel.togglePlayPause()
         }
         previewTrack = track
+    }
+    val openDownload: (DeezerTrackItem) -> Unit = { track ->
+        if (state.account == null) {
+            showConnectDialog = true
+        } else {
+            viewModel.downloadTrack(track)
+        }
+    }
+    val openDownloadAll: (List<DeezerTrackItem>) -> Unit = { tracks ->
+        if (state.account == null) {
+            showConnectDialog = true
+        } else {
+            viewModel.downloadAll(tracks)
+        }
     }
 
     val handleBack: () -> Unit = {
@@ -144,8 +201,16 @@ fun DeezerScreen(
                 query = state.query,
                 showSearch = state.detail == null,
                 isSearching = state.searchLoading,
+                account = state.account,
                 onQueryChange = viewModel::onQueryChange,
                 onClearSearch = viewModel::clearSearch,
+                onAccountClick = {
+                    if (state.account != null) {
+                        showAccountDialog = true
+                    } else {
+                        showConnectDialog = true
+                    }
+                },
                 onBack = handleBack
             )
         },
@@ -171,7 +236,10 @@ fun DeezerScreen(
                 state.detailError -> DeezerDetailError(onBack = viewModel::closeDetail)
                 state.detail != null -> DeezerDetailContent(
                     detail = state.detail!!,
+                    downloadStates = downloadStates,
                     onPreview = openPreview,
+                    onDownload = openDownload,
+                    onDownloadAll = openDownloadAll,
                     onAlbum = viewModel::openAlbum,
                     onArtist = viewModel::openArtist,
                     onPlaylist = viewModel::openPlaylist
@@ -189,9 +257,11 @@ fun DeezerScreen(
 
                 else -> DeezerSearchContent(
                     state = state,
+                    downloadStates = downloadStates,
                     onTypeChange = viewModel::onSearchTypeChange,
                     onRetry = { viewModel.onSearchTypeChange(state.searchType) },
                     onPreview = openPreview,
+                    onDownload = openDownload,
                     onAlbum = viewModel::openAlbum,
                     onArtist = viewModel::openArtist,
                     onPlaylist = viewModel::openPlaylist
@@ -201,7 +271,31 @@ fun DeezerScreen(
     }
 
     previewTrack?.let { track ->
-        DeezerPreviewSheet(track = track, onDismiss = { previewTrack = null })
+        DeezerPreviewSheet(
+            track = track,
+            downloadState = downloadStates[track.id],
+            onDownload = { openDownload(track) },
+            onDismiss = { previewTrack = null }
+        )
+    }
+
+    if (showConnectDialog) {
+        DeezerConnectDialog(
+            loading = state.connectLoading,
+            error = state.connectError,
+            onDismiss = { showConnectDialog = false },
+            onConnect = viewModel::connect
+        )
+    }
+    if (showAccountDialog && state.account != null) {
+        DeezerAccountDialog(
+            account = state.account!!,
+            onDismiss = { showAccountDialog = false },
+            onDisconnect = {
+                viewModel.disconnect()
+                showAccountDialog = false
+            }
+        )
     }
 }
 
@@ -210,8 +304,10 @@ private fun DeezerTopBar(
     query: String,
     showSearch: Boolean,
     isSearching: Boolean,
+    account: DeezerAccount?,
     onQueryChange: (String) -> Unit,
     onClearSearch: () -> Unit,
+    onAccountClick: () -> Unit,
     onBack: () -> Unit
 ) {
     val focusManager = LocalFocusManager.current
@@ -243,20 +339,50 @@ private fun DeezerTopBar(
                         fontWeight = FontWeight.SemiBold
                     )
                 }
-                Surface(
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.secondaryContainer,
-                    border = BorderStroke(
-                        1.dp,
-                        MaterialTheme.colorScheme.secondary.copy(alpha = 0.35f)
-                    )
-                ) {
-                    Text(
-                        text = stringResource(R.string.deezer_preview),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
-                    )
+                if (account != null) {
+                    Surface(
+                        onClick = onAccountClick,
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        border = BorderStroke(
+                            1.dp,
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
+                        )
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_person_24dp),
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(Modifier.width(5.dp))
+                            Text(
+                                text = account.userName,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.widthIn(max = 110.dp)
+                            )
+                        }
+                    }
+                } else {
+                    TextButton(onClick = onAccountClick) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_cloud_24dp),
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(Modifier.width(5.dp))
+                        Text(
+                            text = stringResource(R.string.deezer_connect),
+                            style = MaterialTheme.typography.labelMedium
+                        )
+                    }
                 }
             }
 
@@ -310,6 +436,99 @@ private fun DeezerTopBar(
             )
         }
     }
+}
+
+@Composable
+private fun DeezerConnectDialog(
+    loading: Boolean,
+    error: Boolean,
+    onDismiss: () -> Unit,
+    onConnect: (String) -> Unit
+) {
+    var arl by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(text = stringResource(R.string.deezer_connect_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    text = stringResource(R.string.deezer_connect_hint),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                OutlinedTextField(
+                    value = arl,
+                    onValueChange = { arl = it },
+                    singleLine = true,
+                    label = { Text(text = stringResource(R.string.deezer_connect_arl)) },
+                    visualTransformation = PasswordVisualTransformation(),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                if (error) {
+                    Text(
+                        text = stringResource(R.string.deezer_connect_error),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConnect(arl) },
+                enabled = !loading && arl.isNotBlank()
+            ) {
+                if (loading) {
+                    CircularProgressIndicator(
+                        strokeWidth = 2.dp,
+                        modifier = Modifier.size(18.dp)
+                    )
+                } else {
+                    Text(text = stringResource(R.string.deezer_connect_action))
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(text = stringResource(R.string.action_cancel))
+            }
+        }
+    )
+}
+
+@Composable
+private fun DeezerAccountDialog(
+    account: DeezerAccount,
+    onDismiss: () -> Unit,
+    onDisconnect: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(text = stringResource(R.string.deezer_account_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    text = stringResource(R.string.deezer_connected_as, account.userName),
+                    style = MaterialTheme.typography.bodyLarge
+                )
+                Text(
+                    text = stringResource(R.string.deezer_plan, account.plan),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDisconnect) {
+                Text(text = stringResource(R.string.deezer_disconnect))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(text = stringResource(R.string.close_action))
+            }
+        }
+    )
 }
 
 @Composable
@@ -620,9 +839,11 @@ private fun DeezerArtistCard(artist: DeezerArtistItem, onClick: () -> Unit) {
 @Composable
 private fun DeezerSearchContent(
     state: DeezerUiState,
+    downloadStates: Map<Long, DeezerDownloadState>,
     onTypeChange: (DeezerSearchType) -> Unit,
     onRetry: () -> Unit,
     onPreview: (DeezerTrackItem) -> Unit,
+    onDownload: (DeezerTrackItem) -> Unit,
     onAlbum: (Long) -> Unit,
     onArtist: (Long) -> Unit,
     onPlaylist: (Long) -> Unit
@@ -696,7 +917,12 @@ private fun DeezerSearchContent(
             }
 
             state.searchType == DeezerSearchType.Tracks -> items(state.tracks, key = { it.id }) { track ->
-                DeezerTrackRow(track = track, onClick = { onPreview(track) })
+                DeezerTrackRow(
+                    track = track,
+                    downloadState = downloadStates[track.id],
+                    onClick = { onPreview(track) },
+                    onDownload = { onDownload(track) }
+                )
             }
 
             state.searchType == DeezerSearchType.Albums -> items(state.albums, key = { it.id }) { album ->
@@ -723,7 +949,12 @@ private val DeezerSearchType.labelRes: Int
     }
 
 @Composable
-private fun DeezerTrackRow(track: DeezerTrackItem, onClick: () -> Unit) {
+private fun DeezerTrackRow(
+    track: DeezerTrackItem,
+    downloadState: DeezerDownloadState?,
+    onClick: () -> Unit,
+    onDownload: () -> Unit
+) {
     Surface(
         onClick = onClick,
         shape = DeezerRowShape,
@@ -766,13 +997,58 @@ private fun DeezerTrackRow(track: DeezerTrackItem, onClick: () -> Unit) {
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(4.dp))
             Icon(
                 painter = painterResource(R.drawable.ic_play_24dp),
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(20.dp)
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(16.dp)
             )
+            Spacer(Modifier.width(4.dp))
+            when (downloadState) {
+                is DeezerDownloadState.Done -> Icon(
+                    painter = painterResource(R.drawable.ic_check_24dp),
+                    contentDescription = stringResource(R.string.deezer_downloaded),
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+
+                is DeezerDownloadState.Downloading -> CircularProgressIndicator(
+                    progress = { downloadState.progress },
+                    strokeWidth = 2.dp,
+                    modifier = Modifier.size(20.dp)
+                )
+
+                is DeezerDownloadState.Queued,
+                is DeezerDownloadState.Tagging -> CircularProgressIndicator(
+                    strokeWidth = 2.dp,
+                    modifier = Modifier.size(20.dp)
+                )
+
+                is DeezerDownloadState.Failed -> IconButton(
+                    onClick = onDownload,
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_error_24dp),
+                        contentDescription = stringResource(R.string.deezer_download_failed),
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+
+                null -> IconButton(
+                    onClick = onDownload,
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_download_24dp),
+                        contentDescription = stringResource(R.string.deezer_download),
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
         }
     }
 }
@@ -917,7 +1193,10 @@ private fun DeezerPlaylistRow(playlist: DeezerPlaylistItem, onClick: () -> Unit)
 @Composable
 private fun DeezerDetailContent(
     detail: DeezerDetail,
+    downloadStates: Map<Long, DeezerDownloadState>,
     onPreview: (DeezerTrackItem) -> Unit,
+    onDownload: (DeezerTrackItem) -> Unit,
+    onDownloadAll: (List<DeezerTrackItem>) -> Unit,
     onAlbum: (Long) -> Unit,
     onArtist: (Long) -> Unit,
     onPlaylist: (Long) -> Unit
@@ -925,18 +1204,27 @@ private fun DeezerDetailContent(
     when (detail) {
         is DeezerDetail.Album -> DeezerAlbumDetailContent(
             album = detail.album,
-            onPreview = onPreview
+            downloadStates = downloadStates,
+            onPreview = onPreview,
+            onDownload = onDownload,
+            onDownloadAll = onDownloadAll
         )
 
         is DeezerDetail.Artist -> DeezerArtistDetailContent(
             detail = detail,
+            downloadStates = downloadStates,
             onPreview = onPreview,
+            onDownload = onDownload,
+            onDownloadAll = onDownloadAll,
             onAlbum = onAlbum
         )
 
         is DeezerDetail.Playlist -> DeezerPlaylistDetailContent(
             playlist = detail.playlist,
-            onPreview = onPreview
+            downloadStates = downloadStates,
+            onPreview = onPreview,
+            onDownload = onDownload,
+            onDownloadAll = onDownloadAll
         )
     }
 }
@@ -944,7 +1232,10 @@ private fun DeezerDetailContent(
 @Composable
 private fun DeezerAlbumDetailContent(
     album: DeezerAlbumDetail,
-    onPreview: (DeezerTrackItem) -> Unit
+    downloadStates: Map<Long, DeezerDownloadState>,
+    onPreview: (DeezerTrackItem) -> Unit,
+    onDownload: (DeezerTrackItem) -> Unit,
+    onDownloadAll: (List<DeezerTrackItem>) -> Unit
 ) {
     val context = LocalContext.current
     val firstPreview = album.tracks.data.firstOrNull { it.isPreviewAvailable }
@@ -969,7 +1260,8 @@ private fun DeezerAlbumDetailContent(
             DeezerDetailActions(
                 previewEnabled = firstPreview != null,
                 onPreview = { firstPreview?.let(onPreview) },
-                onOpenDeezer = { openDeezerLink(context, album.link) }
+                onOpenDeezer = { openDeezerLink(context, album.link) },
+                onDownload = { onDownloadAll(album.tracks.data) }
             )
         }
         item {
@@ -981,7 +1273,12 @@ private fun DeezerAlbumDetailContent(
             )
         }
         items(album.tracks.data, key = { it.id }) { track ->
-            DeezerTrackRow(track = track, onClick = { onPreview(track) })
+            DeezerTrackRow(
+                track = track,
+                downloadState = downloadStates[track.id],
+                onClick = { onPreview(track) },
+                onDownload = { onDownload(track) }
+            )
         }
     }
 }
@@ -989,7 +1286,10 @@ private fun DeezerAlbumDetailContent(
 @Composable
 private fun DeezerArtistDetailContent(
     detail: DeezerDetail.Artist,
+    downloadStates: Map<Long, DeezerDownloadState>,
     onPreview: (DeezerTrackItem) -> Unit,
+    onDownload: (DeezerTrackItem) -> Unit,
+    onDownloadAll: (List<DeezerTrackItem>) -> Unit,
     onAlbum: (Long) -> Unit
 ) {
     val context = LocalContext.current
@@ -1015,7 +1315,8 @@ private fun DeezerArtistDetailContent(
             DeezerDetailActions(
                 previewEnabled = firstPreview != null,
                 onPreview = { firstPreview?.let(onPreview) },
-                onOpenDeezer = { openDeezerLink(context, detail.artist.link) }
+                onOpenDeezer = { openDeezerLink(context, detail.artist.link) },
+                onDownload = { onDownloadAll(detail.topTracks) }
             )
         }
         item {
@@ -1027,7 +1328,12 @@ private fun DeezerArtistDetailContent(
             )
         }
         items(detail.topTracks, key = { it.id }) { track ->
-            DeezerTrackRow(track = track, onClick = { onPreview(track) })
+            DeezerTrackRow(
+                track = track,
+                downloadState = downloadStates[track.id],
+                onClick = { onPreview(track) },
+                onDownload = { onDownload(track) }
+            )
         }
         if (detail.albums.isNotEmpty()) {
             item {
@@ -1057,7 +1363,10 @@ private fun DeezerArtistDetailContent(
 @Composable
 private fun DeezerPlaylistDetailContent(
     playlist: DeezerPlaylistDetail,
-    onPreview: (DeezerTrackItem) -> Unit
+    downloadStates: Map<Long, DeezerDownloadState>,
+    onPreview: (DeezerTrackItem) -> Unit,
+    onDownload: (DeezerTrackItem) -> Unit,
+    onDownloadAll: (List<DeezerTrackItem>) -> Unit
 ) {
     val context = LocalContext.current
     val firstPreview = playlist.tracks.data.firstOrNull { it.isPreviewAvailable }
@@ -1087,7 +1396,8 @@ private fun DeezerPlaylistDetailContent(
             DeezerDetailActions(
                 previewEnabled = firstPreview != null,
                 onPreview = { firstPreview?.let(onPreview) },
-                onOpenDeezer = { openDeezerLink(context, playlist.link) }
+                onOpenDeezer = { openDeezerLink(context, playlist.link) },
+                onDownload = { onDownloadAll(playlist.tracks.data) }
             )
         }
         item {
@@ -1099,7 +1409,12 @@ private fun DeezerPlaylistDetailContent(
             )
         }
         items(playlist.tracks.data, key = { it.id }) { track ->
-            DeezerTrackRow(track = track, onClick = { onPreview(track) })
+            DeezerTrackRow(
+                track = track,
+                downloadState = downloadStates[track.id],
+                onClick = { onPreview(track) },
+                onDownload = { onDownload(track) }
+            )
         }
     }
 }
@@ -1164,7 +1479,8 @@ private fun DeezerDetailHeader(
 private fun DeezerDetailActions(
     previewEnabled: Boolean,
     onPreview: () -> Unit,
-    onOpenDeezer: () -> Unit
+    onOpenDeezer: () -> Unit,
+    onDownload: () -> Unit
 ) {
     Row(
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -1197,6 +1513,118 @@ private fun DeezerDetailActions(
             Spacer(Modifier.width(8.dp))
             Text(text = stringResource(R.string.deezer_open_in_deezer))
         }
+        FilledTonalIconButton(
+            onClick = onDownload,
+            modifier = Modifier.size(48.dp)
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_download_24dp),
+                contentDescription = stringResource(R.string.deezer_download_all),
+                modifier = Modifier.size(20.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun DeezerDownloadAction(
+    state: DeezerDownloadState?,
+    onDownload: () -> Unit
+) {
+    when (state) {
+        null -> OutlinedButton(
+            onClick = onDownload,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_download_24dp),
+                contentDescription = null,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(text = stringResource(R.string.deezer_download))
+        }
+
+        is DeezerDownloadState.Queued -> Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
+            Text(
+                text = stringResource(R.string.deezer_download_queued),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        is DeezerDownloadState.Downloading -> Column(
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            LinearProgressIndicator(
+                progress = { state.progress },
+                modifier = Modifier.fillMaxWidth()
+            )
+            Text(
+                text = "${stringResource(R.string.deezer_downloading)} ${(state.progress * 100).toInt()}%",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        is DeezerDownloadState.Tagging -> Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
+            Text(
+                text = stringResource(R.string.deezer_tagging),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        is DeezerDownloadState.Done -> Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_check_24dp),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp)
+            )
+            Text(
+                text = stringResource(R.string.deezer_downloaded),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+
+        is DeezerDownloadState.Failed -> Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_error_24dp),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.error,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = state.message,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.weight(1f)
+            )
+            TextButton(onClick = onDownload) {
+                Text(text = stringResource(R.string.deezer_retry))
+            }
+        }
     }
 }
 
@@ -1204,6 +1632,8 @@ private fun DeezerDetailActions(
 @Composable
 private fun DeezerPreviewSheet(
     track: DeezerTrackItem,
+    downloadState: DeezerDownloadState?,
+    onDownload: () -> Unit,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
@@ -1294,6 +1724,11 @@ private fun DeezerPreviewSheet(
                     )
                 }
             }
+            Spacer(Modifier.height(10.dp))
+            DeezerDownloadAction(
+                state = downloadState,
+                onDownload = onDownload
+            )
             Spacer(Modifier.height(12.dp))
             if (!previewUrl.isNullOrBlank() && !playbackError) {
                 Slider(
