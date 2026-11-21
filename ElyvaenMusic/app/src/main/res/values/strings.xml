@@ -1174,6 +1174,9 @@
     <string name="deezer_connect_hint">Paste the ARL cookie from deezer.com. This is an unofficial personal integration.</string>
     <string name="deezer_connect_arl">ARL cookie</string>
     <string name="deezer_connect_action">Connect</string>
+    <string name="deezer_login_button">Sign in to Deezer</string>
+    <string name="deezer_login_or">or use an ARL cookie</string>
+    <string name="deezer_login_hint">Sign in with your Deezer account in the official page. Your password is never stored by Elyvaen.</string>
     <string name="deezer_connect_error">Could not connect. Check the ARL and your connection.</string>
     <string name="deezer_disconnect">Disconnect</string>
     <string name="deezer_connected_as">Connected as %1$s</string>

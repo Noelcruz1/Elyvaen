@@ -17,11 +17,14 @@
 
 package com.mardous.booming.ui.screen.deezer
 
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
@@ -133,6 +136,14 @@ fun DeezerScreen(
     val context = LocalContext.current
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val downloadStates by viewModel.downloadStates.collectAsStateWithLifecycle()
+    val loginLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            result.data?.getStringExtra(DeezerLoginActivity.EXTRA_ARL)
+                ?.let(viewModel::connect)
+        }
+    }
     var previewTrack by remember { mutableStateOf<DeezerTrackItem?>(null) }
     var showConnectDialog by remember { mutableStateOf(false) }
     var showAccountDialog by remember { mutableStateOf(false) }
@@ -284,6 +295,9 @@ fun DeezerScreen(
             loading = state.connectLoading,
             error = state.connectError,
             onDismiss = { showConnectDialog = false },
+            onLogin = {
+                loginLauncher.launch(Intent(context, DeezerLoginActivity::class.java))
+            },
             onConnect = viewModel::connect
         )
     }
@@ -443,6 +457,7 @@ private fun DeezerConnectDialog(
     loading: Boolean,
     error: Boolean,
     onDismiss: () -> Unit,
+    onLogin: () -> Unit,
     onConnect: (String) -> Unit
 ) {
     var arl by remember { mutableStateOf("") }
@@ -452,8 +467,26 @@ private fun DeezerConnectDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
-                    text = stringResource(R.string.deezer_connect_hint),
+                    text = stringResource(R.string.deezer_login_hint),
                     style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Button(
+                    onClick = onLogin,
+                    enabled = !loading,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_person_24dp),
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(text = stringResource(R.string.deezer_login_button))
+                }
+                Text(
+                    text = stringResource(R.string.deezer_login_or),
+                    style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 OutlinedTextField(

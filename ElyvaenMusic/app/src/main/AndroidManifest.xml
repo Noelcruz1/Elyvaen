@@ -101,6 +101,12 @@
         </activity>
 
         <activity
+            android:name=".ui.screen.deezer.DeezerLoginActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Booming"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
             android:name=".ui.screen.AudioPreviewActivity"
             android:exported="true"
             android:excludeFromRecents="true"
