@@ -9,4 +9,4 @@
     app:layout_scrollFlags="scroll|enterAlways"
     app:navigationIcon="@drawable/ic_search_24dp"
     app:titleCentered="false"
-    app:titleTextAppearance="?textAppearanceHeadlineSmall" />
+    app:titleTextAppearance="@style/TextAppearance.Elyvaen.LibraryTitle" />

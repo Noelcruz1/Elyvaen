@@ -123,9 +123,24 @@ Pendiente de verificar en el dispositivo (se desconectó ADB durante el día):
 - FPS reales del carrusel con el APK release;
 - capturas nuevas del header de biblioteca.
 
+## Iteración 3 — biblioteca con identidad propia (2026-11-21)
+
+- **Título de biblioteca editorial**: mayúsculas, tracking amplio, 76 dp y
+  alineación a la izquierda (`TextAppearance.Elyvaen.LibraryTitle`).
+- **Filas tipo tarjeta**: `item_list` y `item_song` usan
+  `bg_library_row.xml` con superficie elevada, borde sutil, esquinas de 18 dp
+  y estado `activated` para la selección múltiple. Se conserva el ripple.
+- **Carátula de fila a 52 dp** para dar más presencia sin perder densidad.
+- Encabezado con degradado teal sutil (`bg_library_header.xml`).
+
+Esto cambia canciones, carpetas, playlists, búsqueda y listas de detalle de
+álbum/artista, no solo el Home y el player.
+
 ## Pendiente / siguiente iteración
 
 - Instalar `ElyvaenBooming-latest.apk` y medir frames con `dumpsys gfxinfo`.
+- Verificar en dispositivo el header y las filas tipo tarjeta (no se pudo
+  instalar porque ADB sigue desconectado).
 - Revisar en el dispositivo la rejilla de álbumes con bibliotecas grandes.
 - Pulir el header de biblioteca con tabs si se quiere acercar aún más a APlayer.
 - Revisar el panel DAP en formato apaisado.
