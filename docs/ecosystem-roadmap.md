@@ -247,9 +247,11 @@ Se añadió la base del proveedor privado, siguiendo el enfoque de Sonora:
 - `DeezerDownloadManager`: descarga a caché, valida la cabecera FLAC/MP3,
   escribe etiquetas y portada con TagLib y publica en `MediaStore` en
   `Music/Elyvaen/Deezer/<artista>/<álbum>`.
-- UI: tarjeta de conexión ARL en la pantalla Deezer, botón de descarga por
-  pista, descarga de álbum/playlist/top de artista y estado por pista
-  (en cola, descargando, etiquetando, descargado, error).
+- UI: tarjeta de conexión en la pantalla Deezer con **login oficial en
+  WebView** (la contraseña se escribe solo en deezer.com) y opción avanzada
+  para pegar una cookie ARL; botón de descarga por pista, descarga de
+  álbum/playlist/top de artista y estado por pista (en cola, descargando,
+  etiquetando, descargado, error).
 - Las descargas se ejecutan en un `CoroutineScope` de aplicación; falta
   pasarlas a un foreground service/WorkManager para que sobrevivan al cierre
   de la app.
