@@ -17,6 +17,7 @@
 
 package com.mardous.booming.data.remote.deezer
 
+import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
 import android.media.MediaScannerConnection
@@ -27,6 +28,8 @@ import android.os.ParcelFileDescriptor
 import android.provider.MediaStore
 import com.kyant.taglib.Picture
 import com.kyant.taglib.TagLib
+import com.mardous.booming.data.remote.deezer.model.DeezerAlbumRef
+import com.mardous.booming.data.remote.deezer.model.DeezerArtistRef
 import com.mardous.booming.data.remote.deezer.model.DeezerTrackItem
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -35,7 +38,19 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import java.io.File
+
+private const val DOWNLOAD_STORE = "deezer_downloads"
+private const val DOWNLOAD_STORE_KEY = "completed_v2"
+
+@Serializable
+private data class StoredDownload(
+    val track: DeezerTrackItem,
+    val uri: String
+)
 
 sealed interface DeezerDownloadState {
     data object Queued : DeezerDownloadState
@@ -64,16 +79,123 @@ class DeezerDownloadManager(
 ) {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val store = context.getSharedPreferences(DOWNLOAD_STORE, Context.MODE_PRIVATE)
+    private val json = Json { ignoreUnknownKeys = true }
 
-    private val _states = MutableStateFlow<Map<Long, DeezerDownloadState>>(emptyMap())
+    private val _entries = MutableStateFlow(restoreEntries())
+    val entries = _entries.asStateFlow()
+
+    private val _states = MutableStateFlow(_entries.value.mapValues { it.value.state })
     val states = _states.asStateFlow()
 
-    private val _entries = MutableStateFlow<Map<Long, DeezerDownloadEntry>>(emptyMap())
-    val entries = _entries.asStateFlow()
+    init {
+        // Older builds kept no history, so import what is already in the
+        // Deezer folder once. The query runs off the main thread.
+        if (store.getString(DOWNLOAD_STORE_KEY, null) == null) {
+            scope.launch {
+                val scanned = scanExistingDownloads()
+                if (scanned.isNotEmpty()) {
+                    _entries.update { current -> scanned + current }
+                    _states.update { current ->
+                        scanned.mapValues { it.value.state } + current
+                    }
+                }
+                persistEntries()
+            }
+        }
+    }
+
+    private fun restoreEntries(): Map<Long, DeezerDownloadEntry> = runCatching {
+        val raw = store.getString(DOWNLOAD_STORE_KEY, null) ?: return emptyMap()
+        json.decodeFromString<List<StoredDownload>>(raw).associate { stored ->
+            stored.track.id to DeezerDownloadEntry(
+                track = stored.track,
+                state = DeezerDownloadState.Done(Uri.parse(stored.uri))
+            )
+        }
+    }.getOrDefault(emptyMap())
+
+    /**
+     * One-time import of files this manager wrote before it kept a history.
+     * A later clear writes an empty list, so the folder is not rescanned.
+     */
+    private fun scanExistingDownloads(): Map<Long, DeezerDownloadEntry> = runCatching {
+        val collection = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+        val supportsRelativePath = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
+        val pathColumn = if (supportsRelativePath) {
+            MediaStore.Audio.Media.RELATIVE_PATH
+        } else {
+            MediaStore.Audio.Media.DATA
+        }
+        val selection = "$pathColumn LIKE ?"
+        val arguments = if (supportsRelativePath) {
+            arrayOf("Music/Elyvaen/Deezer/%")
+        } else {
+            arrayOf("%/Music/Elyvaen/Deezer/%")
+        }
+        val projection = arrayOf(
+            MediaStore.Audio.Media._ID,
+            MediaStore.Audio.Media.TITLE,
+            MediaStore.Audio.Media.ARTIST,
+            MediaStore.Audio.Media.ALBUM,
+            MediaStore.Audio.Media.ALBUM_ID,
+            MediaStore.Audio.Media.DURATION
+        )
+        val albumArtBase = Uri.parse("content://media/external/audio/albumart")
+        val restored = mutableMapOf<Long, DeezerDownloadEntry>()
+        context.contentResolver.query(collection, projection, selection, arguments, null)
+            ?.use { cursor ->
+                val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
+                val titleColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
+                val artistColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
+                val albumColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
+                val albumIdColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
+                val durationColumn =
+                    cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
+                while (cursor.moveToNext()) {
+                    val mediaId = cursor.getLong(idColumn)
+                    val albumId = cursor.getLong(albumIdColumn)
+                    val track = DeezerTrackItem(
+                        id = mediaId,
+                        title = cursor.getString(titleColumn).orEmpty(),
+                        duration = (cursor.getLong(durationColumn) / 1000L).toInt(),
+                        artist = DeezerArtistRef(
+                            name = cursor.getString(artistColumn).orEmpty()
+                        ),
+                        album = DeezerAlbumRef(
+                            title = cursor.getString(albumColumn).orEmpty(),
+                            coverSmall = if (albumId > 0) {
+                                ContentUris.withAppendedId(albumArtBase, albumId).toString()
+                            } else {
+                                null
+                            }
+                        )
+                    )
+                    restored[mediaId] = DeezerDownloadEntry(
+                        track = track,
+                        state = DeezerDownloadState.Done(
+                            ContentUris.withAppendedId(collection, mediaId)
+                        )
+                    )
+                }
+            }
+        restored
+    }.getOrDefault(emptyMap())
+
+    private fun persistEntries() {
+        val completed = _entries.value.values.mapNotNull { entry ->
+            val state = entry.state as? DeezerDownloadState.Done ?: return@mapNotNull null
+            StoredDownload(track = entry.track, uri = state.uri.toString())
+        }
+        store.edit().putString(DOWNLOAD_STORE_KEY, json.encodeToString(completed)).apply()
+    }
 
     private fun updateState(track: DeezerTrackItem, state: DeezerDownloadState) {
         _states.update { it + (track.id to state) }
         _entries.update { it + (track.id to DeezerDownloadEntry(track, state)) }
+        if (state is DeezerDownloadState.Done) {
+            persistEntries()
+        }
     }
 
     fun clearFinished() {
@@ -87,6 +209,7 @@ class DeezerDownloadManager(
                 it !is DeezerDownloadState.Done && it !is DeezerDownloadState.Failed
             }
         }
+        persistEntries()
     }
 
     fun downloadTrack(track: DeezerTrackItem, trackNumber: Int? = null) {

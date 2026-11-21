@@ -68,18 +68,27 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mardous.booming.R
 import com.mardous.booming.data.remote.deezer.DeezerDownloadEntry
 import com.mardous.booming.data.remote.deezer.DeezerDownloadState
+import com.mardous.booming.playback.library.MediaIDs
 import com.mardous.booming.ui.component.compose.EmptyView
 import com.mardous.booming.ui.component.compose.MediaImage
+import com.mardous.booming.ui.screen.player.PlayerViewModel
+import org.koin.compose.viewmodel.koinActivityViewModel
 import org.koin.compose.viewmodel.koinViewModel
 
 @Composable
 fun DownloadsScreen(
     onBack: () -> Unit,
     onOpenDeezer: () -> Unit,
-    viewModel: DownloadsViewModel = koinViewModel()
+    viewModel: DownloadsViewModel = koinViewModel(),
+    playerViewModel: PlayerViewModel = koinActivityViewModel()
 ) {
     val context = LocalContext.current
     val entries by viewModel.entries.collectAsStateWithLifecycle()
+    val playDownloaded: (android.net.Uri) -> Unit = { uri ->
+        uri.lastPathSegment?.toLongOrNull()?.let { songId ->
+            playerViewModel.playMediaId(MediaIDs.getPathId(MediaIDs.SONGS, songId))
+        }
+    }
     val active = entries.values.filter {
         it.state is DeezerDownloadState.Queued ||
                 it.state is DeezerDownloadState.Downloading ||
@@ -157,7 +166,8 @@ fun DownloadsScreen(
                         items(active, key = { it.track.id }) { entry ->
                             DownloadRow(
                                 entry = entry,
-                                onRetry = { viewModel.retry(entry.track) }
+                                onRetry = { viewModel.retry(entry.track) },
+                                onPlay = null
                             )
                         }
                     }
@@ -168,7 +178,9 @@ fun DownloadsScreen(
                         items(finished, key = { it.track.id }) { entry ->
                             DownloadRow(
                                 entry = entry,
-                                onRetry = { viewModel.retry(entry.track) }
+                                onRetry = { viewModel.retry(entry.track) },
+                                onPlay = (entry.state as? DeezerDownloadState.Done)
+                                    ?.let { { playDownloaded(it.uri) } }
                             )
                         }
                     }
@@ -277,8 +289,14 @@ private fun DownloadsSectionHeader(title: String) {
 }
 
 @Composable
-private fun DownloadRow(entry: DeezerDownloadEntry, onRetry: () -> Unit) {
+private fun DownloadRow(
+    entry: DeezerDownloadEntry,
+    onRetry: () -> Unit,
+    onPlay: (() -> Unit)?
+) {
     Surface(
+        onClick = { onPlay?.invoke() },
+        enabled = onPlay != null,
         shape = RoundedCornerShape(18.dp),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
@@ -317,6 +335,12 @@ private fun DownloadRow(entry: DeezerDownloadEntry, onRetry: () -> Unit) {
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_play_24dp),
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp)
+                    )
                     Icon(
                         painter = painterResource(R.drawable.ic_check_24dp),
                         contentDescription = null,
