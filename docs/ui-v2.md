@@ -66,8 +66,10 @@ Estado: **fase 1 y 2 implementadas y verificadas en el Moto G51** (2026-11-17).
 - `screens/library-songs.png` — biblioteca de canciones con filas tipo tarjeta.
 - `screens/library-albums.png` — biblioteca de álbumes.
 - `screens/library-genres.png` — cabecera editorial y rejilla de géneros.
-- `screens/deezer-offline.png` — pantalla Deezer sin red (el DAP estaba en modo avión).
-- `screens/deezer-connect.png` — diálogo de conexión por cookie ARL.
+- `screens/deezer-catalog.png` — catálogo Deezer con éxitos, álbumes y playlists.
+- `screens/deezer-login.png` — login oficial de Deezer en WebView.
+- `screens/deezer-offline.png` — pantalla Deezer sin red.
+- `screens/deezer-connect.png` — diálogo con login oficial y alternativa ARL.
 - `screens/downloads.png` — pantalla Descargas vacía.
 - `screens/stats.png` — estadísticas de escucha.
 - `screens/settings.png` — ajustes.
