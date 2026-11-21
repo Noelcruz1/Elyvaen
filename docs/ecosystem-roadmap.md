@@ -1,0 +1,222 @@
+# Ecosistema Elyvaen — referencias, arquitectura y roadmap
+
+Fecha: 2026-11-21.
+
+Objetivo: convertir el DAP en un ecosistema completo alrededor de la música
+local, Deezer y el servidor de casa, sin sacrificar reproducción bit-perfect,
+UAC2 ni la biblioteca existente.
+
+## Referencias evaluadas
+
+| Proyecto | Plataforma | Licencia | Papel para Elyvaen |
+|---|---|---|---|
+| [ArchiveTune](https://github.com/rukamori/ArchiveTune) | Android · Kotlin/Compose | GPL-3.0 | Referencia de UI móvil: bottom nav, tarjetas, estadísticas, letras, temas, player. No es fuente Deezer (es YouTube Music + local). |
+| [Sonora](https://github.com/sonorahq/sonora) | Desktop · Rust/GPUI | GPL-3.0 | **Mejor referencia de UI de escritorio** (sidebar, cola/letras, barra now-playing, tablas densas) y **referencia técnica de Deezer**: ARL, gateway, descifrado BF_CBC_STRIPE, playlists, descargas. |
+| [Redomi](https://github.com/acszo/Redomi) | Android · Compose | GPL-3.0 | Cliente de song.link/Odesli. Sirve para resolver enlaces Deezer/Spotify/YouTube y abrir o descargar la canción equivalente. No descarga audio. |
+| [Metadator](https://github.com/BobbyESP/Metadator) | Android · Compose | GPL-3.0 | Editor de etiquetas, portadas y letras con búsqueda en MusicBrainz/Deezer y LRCLIB. Referencia para “salud de biblioteca” y enriquecimiento. |
+| [Elixium](https://github.com/jaylex32/Elixium) | Node/TS · CLI/Web | MIT | Descargador Deezer/Qobuz con watchlists y Web UI. Buen backend para el puente del NAS. |
+| [streamrip](https://github.com/nathom/streamrip) | Python CLI | GPL-3.0 | Descargador Deezer/Qobuz/Tidal/SoundCloud, bases de datos de descargas y automatización. Alternativa al puente. |
+| [Music Presence](https://github.com/ungive/discord-music-presence) | Desktop C++ | No open source (source-available) | Referencia de Rich Presence. **No se puede ejecutar en Android** y no se puede reutilizar su código; sirve para el protocolo/idea y para un companion en PC. |
+
+## Lo importante de cada una
+
+### Sonora (UI + Deezer)
+
+Sonora demuestra que una app nativa puede combinar servicios y biblioteca local
+con una UI de escritorio muy limpia:
+
+- sidebar con Home/Search/Library/Local/History/Settings;
+- contenido central con cabecera de álbum/artista y tabla de canciones;
+- panel derecho de **Queue** y **Lyrics**;
+- barra inferior de now-playing con transporte, seek, volumen y cola;
+- estética oscura, tipografía grande y acentos por carátula;
+- **proveedor Deezer real**: login con cookie `arl`, catálogo por API pública,
+  sesión/gateway web, descifrado de audio y descargas para reproducción offline.
+
+Eso último es la referencia técnica clave. En Rust usa:
+
+- `crates/music/src/deezer/auth.rs`: ARL;
+- `crates/music/src/deezer/client.rs`: API/gateway;
+- `crates/music/src/deezer/decrypt.rs`: BF_CBC_STRIPE;
+- `crates/music/src/deezer/playback.rs`: stream descifrado;
+- `crates/state/src/downloads.rs`: cola de descargas y progreso.
+
+La licencia GPL-3.0 es compatible con Elyvaen (GPL-3.0), así que se puede
+portar el enfoque conservando atribución. No se copiarán iconos ni branding.
+
+### ArchiveTune (UI móvil)
+
+Aporta ideas directamente aplicables a la versión teléfono:
+
+- Home con “Quick picks”, “Speed dial” y tarjetas grandes;
+- player con carátula, fondo degradado, letras vivas y acciones;
+- biblioteca con búsqueda, filtros y listas;
+- pantalla de **estadísticas** (tiempo escuchado, artistas/álbumes top,
+  rachas, descubrimientos);
+- temas y personalización;
+- scrobbling Last.fm/ListenBrainz y Discord Rich Presence (en su caso,
+  mediante su propia integración).
+
+No es una fuente Deezer: es YouTube Music. Se usa como referencia visual y de
+producto, no como backend.
+
+### Redomi, Metadator, Elixium, streamrip
+
+- **Redomi**: resolver un enlace compartido de Deezer/Spotify/Tidal/YouTube a
+  la canción equivalente. En Elyvaen puede servir para “pegar enlace Deezer”,
+  buscar la versión local o añadirla a la cola de descarga.
+- **Metadator**: pantalla de salud de biblioteca (sin portada, sin tags, sin
+  letra), búsqueda Deezer/MusicBrainz, edición por lotes y letras LRCLIB.
+- **Elixium/streamrip**: no son librerías Android. Se ejecutan en el NAS o en
+  Termux. La opción limpia es un **puente Elyvaen** en Docker que descargue,
+  etiquete y deje los archivos en una carpeta compartida.
+
+### Discord
+
+`discord-music-presence` lee la sesión multimedia del sistema (MPRIS/SMTC) y
+publica Rich Presence mediante el IPC local de Discord. En Android no existe
+ese IPC y Discord Android no acepta RPC de terceros. Opciones reales:
+
+1. **Webhook de Discord** desde la app o el puente: embeds de “Ahora suena”
+   con portada, título, artista y progreso. Fácil, pero no es presencia de
+   perfil.
+2. **Companion en PC**: un pequeño servicio en Windows/Linux recibe el estado
+   por WebSocket/LAN y publica Rich Presence con el cliente de Discord abierto.
+   Es la única forma de tener RPC real en el perfil.
+3. **Bot/voice channel status**: un bot puede poner el estado en un canal de
+   voz, no en el perfil del usuario. Menos útil.
+
+Recomendación: empezar por **webhook** (sin dependencias) y añadir el
+companion de PC después. Last.fm/ListenBrainz ya existen en Booming y se
+mantienen.
+
+## Arquitectura propuesta
+
+```
+┌────────────────────────────────────────────────────┐
+│ Elyvaen DAP (Android · Kotlin/Compose/Media3)       │
+│                                                    │
+│  Fuente local ──┐                                  │
+│  Fuente Deezer ─┼── cola unificada ── Media3/UAC2  │
+│  Descargas ─────┘                                  │
+│                                                    │
+│  Home · Search · Library · Album/Artist · Queue     │
+│  Downloads · Stats · Metadata · Settings            │
+└───────────────────────┬────────────────────────────┘
+                        │ LAN / WebDAV / HTTP (opcional)
+┌───────────────────────▼────────────────────────────┐
+│ Elyvaen Bridge (NAS · Docker)                      │
+│                                                    │
+│  streamrip / Elixium · ARL Deezer                  │
+│  Watchlists · descargas · etiquetas · LRCLIB       │
+│  Sincronización de archivos · cola remota          │
+│  Discord RPC / webhook · Last.fm / ListenBrainz    │
+└────────────────────────────────────────────────────┘
+```
+
+La app debe funcionar **sin el puente** para música local y catálogo Deezer.
+El puente es opcional para descargas masivas, watchlists, metadatos y presencia.
+
+## Deezer: fases técnicas
+
+### Fase D1 — Catálogo y sesión
+
+- Login con ARL (pegado o capturado en WebView).
+- Perfil, playlists, favoritos, búsqueda, álbum/artista.
+- Portada y metadatos vía API pública.
+- Pantallas Compose de Deezer y selector de fuente.
+- Sin audio todavía.
+
+### Fase D2 — Reproducción
+
+- Resolver stream y clave con el gateway.
+- Implementar descifrado BF_CBC_STRIPE en Kotlin.
+- `DataSource` de Media3 que descifra al leer, o caché local + reproducción.
+- Calidad: 128/320/FLAC; probar con la cuenta del usuario.
+- Manejo de errores, expiración de ARL, rate limits.
+
+### Fase D3 — Descargas locales
+
+- Cola de descargas con WorkManager.
+- Archivos descifrados a `Music/Elyvaen/Deezer/…`.
+- Etiquetas, portada y letras con Deezer/MusicBrainz/LRCLIB.
+- Escaneo de biblioteca y reproducción offline.
+- Progreso, pausa, reintento, espacio libre.
+
+### Fase D4 — Puente NAS
+
+- Contenedor `elyvaen-bridge` con streamrip/Elixium.
+- API REST/WebSocket: búsqueda, descarga, estado, watchlists.
+- Carpeta compartida / Syncthing / WebDAV.
+- La app muestra la cola remota y descarga los archivos al DAP.
+
+### Nota legal
+
+Deezer no ofrece reproducción de audio completo por API pública. Usar ARL y
+descifrar streams es una integración no oficial que puede violar los términos
+de Deezer y romperse con cambios del servicio. Se implementará como módulo
+**experimental y opcional**, para uso personal con la suscripción del usuario,
+sin redistribuir contenido ni claves. Para descargas legales y estables,
+Qobuz/Tidal/Bandcamp o la compra directa son mejores fuentes.
+
+## UI v3 propuesta
+
+### Shell responsive
+
+- **Retrato**: bottom nav Elyvaen (Inicio, Buscar, Biblioteca, Descargas,
+  Ajustes) + mini-player + panel de cola/letras.
+- **Paisaje/tablet**: rail lateral tipo Sonora (Home/Search/Library/Local/
+  Downloads/Settings), contenido central, panel derecho de cola/letras y barra
+  now-playing inferior. Es el modo “DAP de escritorio”.
+- **Source switcher** en Home/Biblioteca: Local · Deezer · Descargas.
+- **Búsqueda unificada** con resultados agrupados por fuente.
+- **Stats** con tiempo escuchado, top artistas/álbumes, racha y descubrimientos.
+- **Metadata health** con filtros (sin portada/tags/letra) y arreglo por lotes.
+
+### Pantallas nuevas
+
+1. **Deezer Home**: playlists editoriales, álbumes, artistas, “para ti”.
+2. **Deezer Search**: pistas/álbumes/artistas/playlists; botón Descargar.
+3. **Album/Artist/Playlist Deezer**: play, queue, download, favorito.
+4. **Downloads**: cola local/remota, progreso, almacenamiento, sync.
+5. **Stats**: local + Deezer.
+6. **Metadata Health**: Metadator-inspired.
+7. **Bridge/Presence**: URL del NAS, token, Discord webhook, Last.fm/
+   ListenBrainz, estado de conexión.
+8. **Link resolver**: share intent de Deezer/Spotify/YouTube → coincidencia
+   local o descarga.
+
+### Lo que se toma de cada referencia
+
+- **Sonora**: shell responsive, panel de cola/letras, barra now-playing,
+  tablas densas, conmutador de fuentes.
+- **ArchiveTune**: Home de tarjetas, stats, letras, personalización, bottom nav.
+- **Metadator**: salud de biblioteca y edición masiva.
+- **Redomi**: resolución de enlaces y share sheet.
+- **Elixium/streamrip**: backend de descargas del puente.
+- **Music Presence**: concepto de presencia; companion/webhook, no código.
+
+## Roadmap sugerido
+
+| Fase | Entregable | Valor |
+|---|---|---|
+| 0 | UI Elyvaen actual + fixes de rendimiento + biblioteca | Base visual |
+| 1 | Shell v3: fuentes, búsqueda, descargas, ajustes de ecosistema | Estructura |
+| 2 | Deezer catálogo (ARL, perfil, búsqueda, playlists) | Integración visible |
+| 3 | Deezer playback nativo (descifrado + Media3) | Streaming |
+| 4 | Deezer downloads + metadata/lyrics | Offline real |
+| 5 | Puente NAS (streamrip/Elixium) + sync | Descargas masivas |
+| 6 | Discord webhook + companion PC + stats | Social |
+| 7 | Subsonic/Navidrome y otras fuentes | Ecosistema |
+
+## Decisiones pendientes
+
+1. **Deezer primero**: ¿catálogo + playback nativo en el DAP, o puente NAS
+   primero? Recomendación: catálogo nativo, luego playback, y el puente para
+   descargas masivas.
+2. **Discord**: ¿webhook primero o companion de PC desde el inicio?
+   Recomendación: webhook primero; companion después.
+3. **UI**: ¿priorizar retrato o el modo paisaje tipo Sonora? Recomendación:
+   retrato primero, paisaje como segundo entregable.
+4. **Fuentes extra**: ¿Subsonic/Navidrome? Sonora lo soporta y es una vía
+   legal para tu biblioteca del NAS.
