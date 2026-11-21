@@ -1109,4 +1109,26 @@
     <string name="elyvaen_play_all">Reproducir todo</string>
     <string name="elyvaen_view_all">Ver todo</string>
     <string name="elyvaen_mix">Mezcla</string>
+    <string name="deezer_title">Deezer</string>
+    <string name="deezer_search_placeholder">Buscar en Deezer…</string>
+    <string name="deezer_trending_tracks">Éxitos en Deezer</string>
+    <string name="deezer_featured_albums">Álbumes destacados</string>
+    <string name="deezer_editorial_playlists">Playlists editoriales</string>
+    <string name="deezer_popular_artists">Artistas populares</string>
+    <string name="deezer_error">No se pudo conectar con Deezer. Revisa tu conexión.</string>
+    <string name="deezer_retry">Reintentar</string>
+    <string name="deezer_preview">Vista previa 30 s</string>
+    <string name="deezer_open_in_deezer">Abrir en Deezer</string>
+    <string name="deezer_tracks_tab">Pistas</string>
+    <string name="deezer_albums_tab">Álbumes</string>
+    <string name="deezer_artists_tab">Artistas</string>
+    <string name="deezer_playlists_tab">Listas</string>
+    <string name="deezer_album">Álbum</string>
+    <string name="deezer_artist">Artista</string>
+    <string name="deezer_playlist">Lista</string>
+    <string name="deezer_preview_unavailable">Vista previa no disponible</string>
+    <string name="deezer_local_source">Local</string>
+    <string name="deezer_source">Deezer</string>
+    <string name="deezer_downloads_source">Descargas</string>
+    <string name="deezer_coming_soon">Pronto</string>
 </resources>

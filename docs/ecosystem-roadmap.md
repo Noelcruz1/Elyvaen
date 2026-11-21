@@ -209,6 +209,31 @@ Qobuz/Tidal/Bandcamp o la compra directa son mejores fuentes.
 | 6 | Discord webhook + companion PC + stats | Social |
 | 7 | Subsonic/Navidrome y otras fuentes | Ecosistema |
 
+## Implementado en esta iteración (UI v3 · fase 1)
+
+- **Entrada al ecosistema desde Home**: fila de fuentes `Local · Deezer ·
+  Descargas` (Descargas todavía deshabilitada).
+- **Pantalla Deezer** (`ui/screen/deezer/`):
+  - catálogo público: éxitos, álbumes destacados, playlists editoriales y
+    artistas populares;
+  - búsqueda con pestañas Pistas/Álbumes/Artistas/Listas;
+  - detalle de álbum, artista y playlist;
+  - reproducción de **vista previa de 30 s** con ExoPlayer;
+  - botón “Abrir en Deezer” para usar la suscripción en la app oficial.
+- **Navegación** `nav_deezer` en `graph_main.xml`; la barra inferior se oculta
+  en esa pantalla y vuelve al volver a Home.
+- **Sin auth todavía**: el catálogo usa la API pública. La sesión ARL,
+  reproducción completa y descargas son la siguiente fase.
+- **Sin romper nada**: la biblioteca local, UAC2, cola, letras, EQ y ajustes
+  siguen igual.
+
+### Pendiente inmediato de esta fase
+
+- Probar en dispositivo la pantalla Deezer y el preview (ADB sigue
+  desconectado).
+- Añadir login ARL y el proveedor de reproducción completa.
+- Cola unificada local + Deezer y descargas.
+
 ## Decisiones pendientes
 
 1. **Deezer primero**: ¿catálogo + playback nativo en el DAP, o puente NAS

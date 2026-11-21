@@ -184,6 +184,101 @@ fun ElyvaenStatusCard(
 }
 
 @Composable
+fun ElyvaenSourceRow(
+    onDeezerClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = modifier.fillMaxWidth()
+    ) {
+        ElyvaenSourceChip(
+            text = stringResource(R.string.deezer_local_source),
+            icon = R.drawable.ic_library_music_24dp,
+            selected = true,
+            onClick = {},
+            modifier = Modifier.weight(1f)
+        )
+        ElyvaenSourceChip(
+            text = stringResource(R.string.deezer_source),
+            icon = R.drawable.ic_cloud_24dp,
+            selected = false,
+            onClick = onDeezerClick,
+            modifier = Modifier.weight(1f)
+        )
+        ElyvaenSourceChip(
+            text = stringResource(R.string.deezer_downloads_source),
+            icon = R.drawable.ic_download_24dp,
+            selected = false,
+            enabled = false,
+            onClick = {},
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
+
+@Composable
+private fun ElyvaenSourceChip(
+    text: String,
+    icon: Int,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true
+) {
+    val containerColor = if (selected) {
+        MaterialTheme.colorScheme.primaryContainer
+    } else {
+        MaterialTheme.colorScheme.surfaceContainerLow
+    }
+    val contentColor = if (selected) {
+        MaterialTheme.colorScheme.onPrimaryContainer
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    Surface(
+        onClick = onClick,
+        enabled = enabled,
+        shape = RoundedCornerShape(15.dp),
+        color = containerColor,
+        contentColor = contentColor,
+        border = BorderStroke(
+            1.dp,
+            if (selected) {
+                MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+            } else {
+                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+            }
+        ),
+        modifier = modifier.height(54.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 8.dp)
+        ) {
+            Icon(
+                painter = painterResource(icon),
+                contentDescription = null,
+                tint = if (enabled) contentColor else contentColor.copy(alpha = 0.45f),
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = text,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold,
+                color = if (enabled) contentColor else contentColor.copy(alpha = 0.45f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@Composable
 fun ElyvaenHomeIntro(
     onPlayAllClick: () -> Unit,
     onShuffleClick: () -> Unit,

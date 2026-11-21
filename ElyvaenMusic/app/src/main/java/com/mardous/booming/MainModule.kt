@@ -66,6 +66,7 @@ import com.mardous.booming.playback.equalizer.EqualizerManager
 import com.mardous.booming.playback.processor.BalanceAudioProcessor
 import com.mardous.booming.playback.processor.ReplayGainAudioProcessor
 import com.mardous.booming.ui.screen.backup.BackupViewModel
+import com.mardous.booming.ui.screen.deezer.DeezerViewModel
 import com.mardous.booming.ui.screen.equalizer.EqualizerViewModel
 import com.mardous.booming.ui.screen.info.InfoViewModel
 import com.mardous.booming.ui.screen.library.LibraryViewModel
@@ -294,6 +295,10 @@ private val viewModule = module {
 
     viewModel {
         HomeViewModel(repository = get(), eventBus = get())
+    }
+
+    viewModel {
+        DeezerViewModel(deezerService = get())
     }
 
     viewModel {

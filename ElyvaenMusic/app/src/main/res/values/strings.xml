@@ -1147,4 +1147,26 @@
     <string name="elyvaen_play_all">Play all</string>
     <string name="elyvaen_view_all">View all</string>
     <string name="elyvaen_mix">Mix</string>
+    <string name="deezer_title">Deezer</string>
+    <string name="deezer_search_placeholder">Search Deezer…</string>
+    <string name="deezer_trending_tracks">Trending on Deezer</string>
+    <string name="deezer_featured_albums">Featured albums</string>
+    <string name="deezer_editorial_playlists">Editorial playlists</string>
+    <string name="deezer_popular_artists">Popular artists</string>
+    <string name="deezer_error">Could not reach Deezer. Check your connection.</string>
+    <string name="deezer_retry">Retry</string>
+    <string name="deezer_preview">30 s preview</string>
+    <string name="deezer_open_in_deezer">Open in Deezer</string>
+    <string name="deezer_tracks_tab">Tracks</string>
+    <string name="deezer_albums_tab">Albums</string>
+    <string name="deezer_artists_tab">Artists</string>
+    <string name="deezer_playlists_tab">Playlists</string>
+    <string name="deezer_album">Album</string>
+    <string name="deezer_artist">Artist</string>
+    <string name="deezer_playlist">Playlist</string>
+    <string name="deezer_preview_unavailable">Preview not available</string>
+    <string name="deezer_local_source">Local</string>
+    <string name="deezer_source">Deezer</string>
+    <string name="deezer_downloads_source">Downloads</string>
+    <string name="deezer_coming_soon">Coming soon</string>
 </resources>

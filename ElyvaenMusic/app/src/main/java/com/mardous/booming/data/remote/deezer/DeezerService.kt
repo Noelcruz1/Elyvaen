@@ -18,11 +18,19 @@
 package com.mardous.booming.data.remote.deezer
 
 import com.mardous.booming.data.remote.deezer.model.DeezerAlbum
+import com.mardous.booming.data.remote.deezer.model.DeezerAlbumDetail
+import com.mardous.booming.data.remote.deezer.model.DeezerAlbumItem
 import com.mardous.booming.data.remote.deezer.model.DeezerArtist
+import com.mardous.booming.data.remote.deezer.model.DeezerArtistItem
+import com.mardous.booming.data.remote.deezer.model.DeezerPage
+import com.mardous.booming.data.remote.deezer.model.DeezerPlaylistDetail
+import com.mardous.booming.data.remote.deezer.model.DeezerPlaylistItem
 import com.mardous.booming.data.remote.deezer.model.DeezerTrack
+import com.mardous.booming.data.remote.deezer.model.DeezerTrackItem
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
+import io.ktor.client.request.parameter
 import io.ktor.http.encodeURLParameter
 
 class DeezerService(private val client: HttpClient) {
@@ -48,4 +56,69 @@ class DeezerService(private val client: HttpClient) {
                 parameters.append("q", artistName)
             }
         }.body<DeezerArtist>()
+
+    // ---- Read-only catalog (public API) -------------------------------------
+
+    suspend fun chartTracks(limit: Int = 20): DeezerPage<DeezerTrackItem> =
+        client.get("https://api.deezer.com/chart/0/tracks") {
+            parameter("limit", limit)
+        }.body()
+
+    suspend fun chartAlbums(limit: Int = 12): DeezerPage<DeezerAlbumItem> =
+        client.get("https://api.deezer.com/chart/0/albums") {
+            parameter("limit", limit)
+        }.body()
+
+    suspend fun chartPlaylists(limit: Int = 12): DeezerPage<DeezerPlaylistItem> =
+        client.get("https://api.deezer.com/chart/0/playlists") {
+            parameter("limit", limit)
+        }.body()
+
+    suspend fun chartArtists(limit: Int = 12): DeezerPage<DeezerArtistItem> =
+        client.get("https://api.deezer.com/chart/0/artists") {
+            parameter("limit", limit)
+        }.body()
+
+    suspend fun searchTracks(query: String, limit: Int = 30): DeezerPage<DeezerTrackItem> =
+        client.get("https://api.deezer.com/search/track") {
+            parameter("q", query)
+            parameter("limit", limit)
+        }.body()
+
+    suspend fun searchAlbums(query: String, limit: Int = 30): DeezerPage<DeezerAlbumItem> =
+        client.get("https://api.deezer.com/search/album") {
+            parameter("q", query)
+            parameter("limit", limit)
+        }.body()
+
+    suspend fun searchArtists(query: String, limit: Int = 30): DeezerPage<DeezerArtistItem> =
+        client.get("https://api.deezer.com/search/artist") {
+            parameter("q", query)
+            parameter("limit", limit)
+        }.body()
+
+    suspend fun searchPlaylists(query: String, limit: Int = 30): DeezerPage<DeezerPlaylistItem> =
+        client.get("https://api.deezer.com/search/playlist") {
+            parameter("q", query)
+            parameter("limit", limit)
+        }.body()
+
+    suspend fun albumDetail(id: Long): DeezerAlbumDetail =
+        client.get("https://api.deezer.com/album/$id").body()
+
+    suspend fun artistDetail(id: Long): DeezerArtistItem =
+        client.get("https://api.deezer.com/artist/$id").body()
+
+    suspend fun artistTopTracks(id: Long, limit: Int = 20): DeezerPage<DeezerTrackItem> =
+        client.get("https://api.deezer.com/artist/$id/top") {
+            parameter("limit", limit)
+        }.body()
+
+    suspend fun artistAlbums(id: Long, limit: Int = 20): DeezerPage<DeezerAlbumItem> =
+        client.get("https://api.deezer.com/artist/$id/albums") {
+            parameter("limit", limit)
+        }.body()
+
+    suspend fun playlistDetail(id: Long): DeezerPlaylistDetail =
+        client.get("https://api.deezer.com/playlist/$id").body()
 }
