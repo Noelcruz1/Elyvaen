@@ -158,27 +158,37 @@ class MainActivity : AbsSlidingMusicPanelActivity(), MediaController.Listener {
                 Preferences.lastPage = categoryInfo.category.id
                 navGraph.setStartDestination(categoryInfo.category.id)
             } else {
+                val preferredStart = if (Preferences.isRememberLastPage) {
+                    lastPage.let {
+                        if (it == 0) categoryInfo.category.id else it
+                    }
+                } else {
+                    categoryInfo.category.id
+                }
+                // Only resume a category that is actually in the bottom bar.
+                // Otherwise the bar shows no selection and Home can become unreachable.
                 navGraph.setStartDestination(
-                    if (Preferences.isRememberLastPage) {
-                        lastPage.let {
-                            if (it == 0) {
-                                categoryInfo.category.id
-                            } else {
-                                it
-                            }
-                        }
-                    } else categoryInfo.category.id
+                    if (navigationView.menu.findItem(preferredStart) != null) {
+                        preferredStart
+                    } else {
+                        R.id.nav_home
+                    }
                 )
             }
         }
 
         navController.graph = navGraph
         navigationView.setupWithNavController(navController)
-        // Scroll Fragment to top
-        navigationView.setOnItemReselectedListener {
-            currentFragment(R.id.fragment_container).apply {
-                if (this is IScrollHelper) {
-                    scrollToTop()
+        // Scroll Fragment to top, or recover when a category outside the
+        // bottom bar left a stale selection behind.
+        navigationView.setOnItemReselectedListener { item ->
+            if (navController.currentDestination?.id != item.itemId) {
+                navController.navigate(item.itemId)
+            } else {
+                currentFragment(R.id.fragment_container).apply {
+                    if (this is IScrollHelper) {
+                        scrollToTop()
+                    }
                 }
             }
         }

@@ -1151,4 +1151,16 @@
     <string name="deezer_not_connected">Conecta Deezer para descargar</string>
     <string name="deezer_download_complete">Descarga completada</string>
     <string name="deezer_download_error">Error de descarga</string>
+    <string name="downloads_title">Descargas</string>
+    <string name="downloads_empty_title">Aún no hay descargas</string>
+    <string name="downloads_empty_subtitle">Conecta Deezer y descarga una pista o un álbum.</string>
+    <string name="downloads_open_deezer">Abrir Deezer</string>
+    <string name="downloads_storage">Almacenamiento</string>
+    <string name="downloads_storage_summary">%1$s libres de %2$s</string>
+    <string name="downloads_clear_finished">Limpiar completadas</string>
+    <string name="downloads_active">En curso</string>
+    <string name="downloads_finished">Completadas</string>
+    <string name="downloads_folder">Música/Elyvaen/Deezer</string>
+    <string name="downloads_folder_label">Carpeta: %1$s</string>
+    <string name="downloads_in_library">En tu biblioteca</string>
 </resources>

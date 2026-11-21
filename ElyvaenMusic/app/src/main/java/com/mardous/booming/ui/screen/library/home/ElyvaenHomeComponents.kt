@@ -186,6 +186,7 @@ fun ElyvaenStatusCard(
 @Composable
 fun ElyvaenSourceRow(
     onDeezerClick: () -> Unit,
+    onDownloadsClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Row(
@@ -210,8 +211,7 @@ fun ElyvaenSourceRow(
             text = stringResource(R.string.deezer_downloads_source),
             icon = R.drawable.ic_download_24dp,
             selected = false,
-            enabled = false,
-            onClick = {},
+            onClick = onDownloadsClick,
             modifier = Modifier.weight(1f)
         )
     }

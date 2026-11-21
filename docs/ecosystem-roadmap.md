@@ -256,11 +256,17 @@ Se añadió la base del proveedor privado, siguiendo el enfoque de Sonora:
 - Es una integración **no oficial**; puede romperse si Deezer cambia el web
   player. El ARL es personal y no se registra en logs.
 
-Verificado el 2026-11-21: la navegación a Deezer, el estado offline y el
-diálogo ARL funcionan en el Moto G51. El catálogo público, las previews y las
-descargas no se pudieron probar porque el DAP estaba en modo avión y sin
-Wi-Fi; el ARL del usuario todavía no está configurado. La build release quedó
-instalada y el mini-player/90 Hz verificados.
+También se añadió la pantalla **Descargas** (`ui/screen/deezer/DownloadsScreen.kt`):
+estado vacío, almacenamiento libre/total, descargas en curso, completadas y
+reintento. El chip `Descargas` del Home ya abre esa pantalla.
+
+Verificado el 2026-11-21: la navegación a Deezer, el estado offline, el
+diálogo ARL y la pantalla Descargas vacía funcionan en el Moto G51. El
+catálogo público, las previews y las descargas reales no se pudieron probar
+porque el DAP estaba en modo avión y sin Wi-Fi; el ARL del usuario todavía no
+está configurado. La build release quedó instalada y el mini-player/90 Hz
+verificados. También se corrigió el arranque para que una categoría fuera de
+la barra inferior (p. ej. Géneros) no deje la Home inaccesible.
 
 ## Decisiones pendientes
 

@@ -83,6 +83,9 @@ class HomeFragment : AbsMainActivityFragment(), IScrollHelper {
                         onDeezerClick = {
                             findNavController().navigate(R.id.nav_deezer)
                         },
+                        onDownloadsClick = {
+                            findNavController().navigate(R.id.nav_downloads)
+                        },
                         onSongItemClick = { songs, index ->
                             playerViewModel.openQueue(songs, index, shuffleMode = OpenShuffleMode.Off)
                         },

@@ -45,6 +45,11 @@ sealed interface DeezerDownloadState {
     data class Failed(val message: String) : DeezerDownloadState
 }
 
+data class DeezerDownloadEntry(
+    val track: DeezerTrackItem,
+    val state: DeezerDownloadState
+)
+
 /**
  * Downloads a Deezer track into the local Music library.
  *
@@ -63,11 +68,30 @@ class DeezerDownloadManager(
     private val _states = MutableStateFlow<Map<Long, DeezerDownloadState>>(emptyMap())
     val states = _states.asStateFlow()
 
+    private val _entries = MutableStateFlow<Map<Long, DeezerDownloadEntry>>(emptyMap())
+    val entries = _entries.asStateFlow()
+
+    private fun updateState(track: DeezerTrackItem, state: DeezerDownloadState) {
+        _states.update { it + (track.id to state) }
+        _entries.update { it + (track.id to DeezerDownloadEntry(track, state)) }
+    }
+
+    fun clearFinished() {
+        _entries.update { map ->
+            map.filterValues {
+                it.state !is DeezerDownloadState.Done && it.state !is DeezerDownloadState.Failed
+            }
+        }
+        _states.update { map ->
+            map.filterValues {
+                it !is DeezerDownloadState.Done && it !is DeezerDownloadState.Failed
+            }
+        }
+    }
+
     fun downloadTrack(track: DeezerTrackItem, trackNumber: Int? = null) {
         if (!accountStore.isConnected || !client.isConnected) {
-            _states.update {
-                it + (track.id to DeezerDownloadState.Failed("Conecta tu cuenta de Deezer"))
-            }
+            updateState(track, DeezerDownloadState.Failed("Conecta tu cuenta de Deezer"))
             return
         }
         val current = _states.value[track.id]
@@ -85,10 +109,8 @@ class DeezerDownloadManager(
 
     fun downloadAll(tracks: List<DeezerTrackItem>) {
         if (!accountStore.isConnected || !client.isConnected) {
-            _states.update { current ->
-                current + tracks.associate {
-                    it.id to DeezerDownloadState.Failed("Conecta tu cuenta de Deezer")
-                }
+            tracks.forEach {
+                updateState(it, DeezerDownloadState.Failed("Conecta tu cuenta de Deezer"))
             }
             return
         }
@@ -110,28 +132,24 @@ class DeezerDownloadManager(
     private suspend fun downloadInternal(track: DeezerTrackItem, trackNumber: Int?) {
         var tempFile: File? = null
         try {
-            _states.update { it + (track.id to DeezerDownloadState.Queued) }
+            updateState(track, DeezerDownloadState.Queued)
             val stream = client.openStream(track.id.toString())
             val extension = if (stream.format.startsWith("FLAC")) "flac" else "mp3"
             tempFile = File(context.cacheDir, "deezer-${track.id}.$extension")
-            _states.update { it + (track.id to DeezerDownloadState.Downloading(0f)) }
+            updateState(track, DeezerDownloadState.Downloading(0f))
             client.download(stream, tempFile) { progress ->
-                _states.update {
-                    it + (track.id to DeezerDownloadState.Downloading(progress))
-                }
+                updateState(track, DeezerDownloadState.Downloading(progress))
             }
             if (!hasValidHeader(tempFile, extension)) {
                 throw DeezerApiException("La desencriptación de Deezer falló")
             }
-            _states.update { it + (track.id to DeezerDownloadState.Tagging) }
+            updateState(track, DeezerDownloadState.Tagging)
             val cover = track.imageUrl?.let { client.downloadBytes(it) }
             writeTags(tempFile, track, trackNumber, cover)
             val uri = saveToMediaStore(tempFile, track, stream.mimeType, extension)
-            _states.update { it + (track.id to DeezerDownloadState.Done(uri)) }
+            updateState(track, DeezerDownloadState.Done(uri))
         } catch (t: Throwable) {
-            _states.update {
-                it + (track.id to DeezerDownloadState.Failed(t.message ?: "Error de descarga"))
-            }
+            updateState(track, DeezerDownloadState.Failed(t.message ?: "Error de descarga"))
         } finally {
             tempFile?.delete()
         }

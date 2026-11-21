@@ -68,6 +68,7 @@ fun HomeScreen(
     onShuffleClick: () -> Unit,
     onPlayAllClick: () -> Unit,
     onDeezerClick: () -> Unit,
+    onDownloadsClick: () -> Unit,
     onSongItemClick: (List<Song>, Int) -> Unit,
     onItemClick: (Any) -> Unit,
     onPlayAlbumClick: (Album) -> Unit,
@@ -151,6 +152,7 @@ fun HomeScreen(
                         item {
                             ElyvaenSourceRow(
                                 onDeezerClick = onDeezerClick,
+                                onDownloadsClick = onDownloadsClick,
                                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
                             )
                         }

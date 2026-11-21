@@ -68,6 +68,7 @@ Estado: **fase 1 y 2 implementadas y verificadas en el Moto G51** (2026-11-17).
 - `screens/library-genres.png` — cabecera editorial y rejilla de géneros.
 - `screens/deezer-offline.png` — pantalla Deezer sin red (el DAP estaba en modo avión).
 - `screens/deezer-connect.png` — diálogo de conexión por cookie ARL.
+- `screens/downloads.png` — pantalla Descargas vacía.
 - `screens/settings.png` — ajustes.
 - `screens/queue.png` — cola.
 - `screens/lyrics.png` — letras.
@@ -148,6 +149,10 @@ Esto cambia canciones, carpetas, playlists, búsqueda y listas de detalle de
   la barra inferior; ya no se solapan.
 - **90 Hz activos**: `dumpsys display` reporta `modeId 3` (90 Hz).
 - Pantalla Deezer y diálogo ARL abiertos sin crash.
+- Pantalla **Descargas** con estado vacío y botón Abrir Deezer.
+- Corregido el arranque: si la última página es una categoría que no está en
+  la barra inferior (p. ej. Géneros), la app arranca en Home y la barra no deja
+  una selección engañosa.
 - El catálogo Deezer no se pudo validar porque el DAP estaba en **modo avión**
   y la Wi-Fi no estaba conectada; la pantalla mostró correctamente el error de
   conexión y el botón Reintentar.
