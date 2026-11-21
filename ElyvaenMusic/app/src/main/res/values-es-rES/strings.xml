@@ -1139,6 +1139,16 @@
     <string name="deezer_login_button">Iniciar sesión en Deezer</string>
     <string name="deezer_login_or">o usa una cookie ARL</string>
     <string name="deezer_login_hint">Inicia sesión con tu cuenta de Deezer en la página oficial. Elyvaen no guarda tu contraseña.</string>
+    <string name="deezer_my_library">Mi Deezer</string>
+    <string name="deezer_library_title">Tu biblioteca</string>
+    <string name="deezer_library_subtitle">Artistas, álbumes, playlists y pistas guardadas</string>
+    <string name="deezer_library_empty">Sin favoritos en esta sección</string>
+    <string name="deezer_library_refresh">Actualizar</string>
+    <string name="deezer_preview_short">Vista previa</string>
+    <string name="deezer_open_short">Abrir</string>
+    <string name="deezer_add_favorite">Añadir a favoritos</string>
+    <string name="deezer_remove_favorite">Quitar de favoritos</string>
+    <string name="deezer_favorite_error">Deezer no pudo actualizar ese favorito</string>
     <string name="deezer_connect_error">No se pudo conectar. Revisa el ARL y la conexión.</string>
     <string name="deezer_disconnect">Desconectar</string>
     <string name="deezer_connected_as">Conectado como %1$s</string>

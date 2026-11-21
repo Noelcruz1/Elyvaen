@@ -31,6 +31,7 @@ import com.mardous.booming.data.remote.deezer.model.DeezerPlaylistDetail
 import com.mardous.booming.data.remote.deezer.model.DeezerPlaylistItem
 import com.mardous.booming.data.remote.deezer.model.DeezerTrackItem
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -39,6 +40,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 enum class DeezerSearchType {
     Tracks,
@@ -52,6 +54,13 @@ data class DeezerChart(
     val albums: List<DeezerAlbumItem> = emptyList(),
     val playlists: List<DeezerPlaylistItem> = emptyList(),
     val artists: List<DeezerArtistItem> = emptyList()
+)
+
+data class DeezerLibrary(
+    val artists: List<DeezerArtistItem> = emptyList(),
+    val albums: List<DeezerAlbumItem> = emptyList(),
+    val playlists: List<DeezerPlaylistItem> = emptyList(),
+    val tracks: List<DeezerTrackItem> = emptyList()
 )
 
 sealed interface DeezerDetail {
@@ -68,6 +77,10 @@ data class DeezerUiState(
     val account: DeezerAccount? = null,
     val connectLoading: Boolean = false,
     val connectError: Boolean = false,
+    val library: DeezerLibrary? = null,
+    val libraryLoading: Boolean = false,
+    val libraryError: Boolean = false,
+    val favoriteError: Boolean = false,
     val chartLoading: Boolean = true,
     val chartError: Boolean = false,
     val chart: DeezerChart = DeezerChart(),
@@ -103,12 +116,43 @@ class DeezerViewModel(
         restoreAccount()
     }
 
+    fun setAlbumSaved(albumId: Long, saved: Boolean) {
+        changeFavorite { privateClient.setAlbumSaved(albumId, saved) }
+    }
+
+    fun setArtistSaved(artistId: Long, saved: Boolean) {
+        changeFavorite { privateClient.setArtistSaved(artistId, saved) }
+    }
+
+    fun setTrackSaved(trackId: Long, saved: Boolean) {
+        changeFavorite { privateClient.setTrackSaved(trackId, saved) }
+    }
+
+    fun clearFavoriteError() {
+        _uiState.update { it.copy(favoriteError = false) }
+    }
+
+    private fun changeFavorite(block: () -> Unit) {
+        viewModelScope.launch {
+            runCatching { withContext(Dispatchers.IO) { block() } }
+                .onSuccess { loadLibrary() }
+                .onFailure { error ->
+                    android.util.Log.w(
+                        "DeezerFavorite",
+                        "favorite change failed: ${error.message}"
+                    )
+                    _uiState.update { it.copy(favoriteError = true) }
+                }
+        }
+    }
+
     private fun restoreAccount() {
         if (!accountStore.isConnected) return
         viewModelScope.launch {
             val account = privateClient.restore()
             if (account != null) {
                 _uiState.update { it.copy(account = account) }
+                loadLibrary()
             }
         }
     }
@@ -121,6 +165,7 @@ class DeezerViewModel(
                     _uiState.update {
                         it.copy(account = account, connectLoading = false)
                     }
+                    loadLibrary()
                 }
                 .onFailure {
                     _uiState.update {
@@ -132,7 +177,62 @@ class DeezerViewModel(
 
     fun disconnect() {
         privateClient.disconnect()
-        _uiState.update { it.copy(account = null, connectError = false) }
+        _uiState.update {
+            it.copy(
+                account = null,
+                connectError = false,
+                library = null,
+                libraryLoading = false,
+                libraryError = false
+            )
+        }
+    }
+
+    fun loadLibrary() {
+        if (!privateClient.isConnected) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(libraryLoading = true, libraryError = false) }
+            val previous = _uiState.value.library
+            val artistResult = async(Dispatchers.IO) {
+                runCatching { privateClient.savedArtists() }
+            }
+            val albumResult = async(Dispatchers.IO) {
+                runCatching { privateClient.savedAlbums() }
+            }
+            val playlistResult = async(Dispatchers.IO) {
+                runCatching { privateClient.savedPlaylists() }
+            }
+            val trackResult = async(Dispatchers.IO) {
+                runCatching { privateClient.savedTracks() }
+            }
+            val artists = artistResult.await()
+            val albums = albumResult.await()
+            val playlists = playlistResult.await()
+            val tracks = trackResult.await()
+            val loaded = listOf<Result<*>>(artists, albums, playlists, tracks)
+            loaded.forEachIndexed { index, result ->
+                result.exceptionOrNull()?.let { error ->
+                    android.util.Log.w(
+                        "DeezerLibrary",
+                        "section $index could not load: ${error.message}"
+                    )
+                }
+            }
+            val library = DeezerLibrary(
+                artists = artists.getOrElse { previous?.artists.orEmpty() },
+                albums = albums.getOrElse { previous?.albums.orEmpty() },
+                playlists = playlists.getOrElse { previous?.playlists.orEmpty() },
+                tracks = tracks.getOrElse { previous?.tracks.orEmpty() }
+            )
+            val allFailed = loaded.all { it.isFailure }
+            _uiState.update {
+                it.copy(
+                    library = if (allFailed) previous else library,
+                    libraryLoading = false,
+                    libraryError = allFailed
+                )
+            }
+        }
     }
 
     fun downloadTrack(track: DeezerTrackItem) {

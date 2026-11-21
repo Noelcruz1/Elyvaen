@@ -245,6 +245,178 @@ class DeezerPrivateClient(
         }
     }
 
+    fun savedArtists(): List<com.mardous.booming.data.remote.deezer.model.DeezerArtistItem> =
+        profileTab("artists").mapNotNull { value ->
+            val id = value.long("ART_ID", "id") ?: return@mapNotNull null
+            val name = value.string("ART_NAME", "name") ?: return@mapNotNull null
+            val image = hashImage("artist", value.string("ART_PICTURE", "picture"))
+                ?: value.string("picture_big", "picture_medium")
+            com.mardous.booming.data.remote.deezer.model.DeezerArtistItem(
+                id = id,
+                name = name,
+                pictureSmall = image,
+                pictureMedium = image,
+                pictureBig = image,
+                nbAlbum = value.int("NB_ALBUM", "nb_album") ?: 0,
+                link = "https://www.deezer.com/artist/$id"
+            )
+        }
+
+    fun savedAlbums(): List<com.mardous.booming.data.remote.deezer.model.DeezerAlbumItem> =
+        profileTab("albums").mapNotNull { value ->
+            val id = value.long("ALB_ID", "id") ?: return@mapNotNull null
+            val title = value.string("ALB_TITLE", "title") ?: return@mapNotNull null
+            val artistObject = value["artist"] as? JsonObject
+            val artist = value.string("ART_NAME")
+                ?: artistObject?.string("name")
+                ?: ""
+            val image = hashImage("cover", value.string("md5_image", "ALB_PICTURE", "picture"))
+                ?: value.string("cover_big", "cover_medium")
+            com.mardous.booming.data.remote.deezer.model.DeezerAlbumItem(
+                id = id,
+                title = title,
+                coverSmall = image,
+                coverMedium = image,
+                coverBig = image,
+                artist = com.mardous.booming.data.remote.deezer.model.DeezerArtistRef(
+                    id = value.long("ART_ID") ?: 0,
+                    name = artist
+                ),
+                nbTracks = value.int("NB_TRAK", "NB_TRACK", "nb_tracks") ?: 0,
+                releaseDate = value.string("PHYSICAL_RELEASE_DATE", "release_date"),
+                link = "https://www.deezer.com/album/$id"
+            )
+        }
+
+    fun savedPlaylists(): List<com.mardous.booming.data.remote.deezer.model.DeezerPlaylistItem> =
+        profileTab("playlists").mapNotNull { value ->
+            val id = value.long("PLAYLIST_ID", "id") ?: return@mapNotNull null
+            val title = value.string("TITLE", "title") ?: return@mapNotNull null
+            val creator = value["creator"] as? JsonObject
+            val user = value["user"] as? JsonObject
+            val owner = value.string("PARENT_USERNAME", "CREATOR_NAME")
+                ?: creator?.string("name")
+                ?: user?.string("name")
+                ?: ""
+            val kind = value.string("PICTURE_TYPE") ?: "playlist"
+            val image = hashImage(kind, value.string("PLAYLIST_PICTURE", "picture"))
+                ?: value.string("picture_big", "picture_medium")
+            com.mardous.booming.data.remote.deezer.model.DeezerPlaylistItem(
+                id = id,
+                title = title,
+                pictureSmall = image,
+                pictureMedium = image,
+                pictureBig = image,
+                user = com.mardous.booming.data.remote.deezer.model.DeezerUser(
+                    id = value.long("PARENT_USER_ID") ?: 0,
+                    name = owner
+                ),
+                nbTracks = value.int("NB_SONG", "nb_tracks") ?: 0,
+                link = "https://www.deezer.com/playlist/$id"
+            )
+        }
+
+    fun savedTracks(): List<com.mardous.booming.data.remote.deezer.model.DeezerTrackItem> {        val userId = account?.userId ?: throw DeezerNotConnectedException()
+        val results = gw(
+            "favorite_song.getList",
+            buildJsonObject {
+                put("user_id", userId)
+                put("start", 0)
+                put("nb", 2000)
+            }
+        )
+        val data = results["data"] as? JsonArray ?: return emptyList()
+        return data.mapNotNull { element ->
+            val value = element as? JsonObject ?: return@mapNotNull null
+            val id = value.long("SNG_ID", "id") ?: return@mapNotNull null
+            val title = value.string("SNG_TITLE", "title") ?: return@mapNotNull null
+            val albumObject = value["album"] as? JsonObject
+            val albumId = value.long("ALB_ID") ?: albumObject?.long("id") ?: 0
+            val albumName = value.string("ALB_TITLE")
+                ?: albumObject?.string("title")
+                ?: ""
+            val image = hashImage("cover", value.string("ALB_PICTURE", "md5_image"))
+                ?: albumObject?.string("cover_big", "cover_medium")
+            com.mardous.booming.data.remote.deezer.model.DeezerTrackItem(
+                id = id,
+                title = title,
+                duration = value.int("DURATION", "duration") ?: 0,
+                preview = value.string("preview"),
+                link = "https://www.deezer.com/track/$id",
+                artist = com.mardous.booming.data.remote.deezer.model.DeezerArtistRef(
+                    id = value.long("ART_ID") ?: 0,
+                    name = value.string("ART_NAME")
+                        ?: (value["artist"] as? JsonObject)?.string("name")
+                        ?: ""
+                ),
+                album = com.mardous.booming.data.remote.deezer.model.DeezerAlbumRef(
+                    id = albumId,
+                    title = albumName,
+                    coverSmall = image,
+                    coverMedium = image,
+                    coverBig = image
+                )
+            )
+        }
+    }
+
+    fun setArtistSaved(artistId: Long, saved: Boolean) {
+        val method = if (saved) "artist.addFavorite" else "artist.deleteFavorite"
+        gw(method, buildJsonObject { put("ART_ID", artistId.toString()) })
+    }
+
+    fun setAlbumSaved(albumId: Long, saved: Boolean) {
+        val method = if (saved) "album.addFavorite" else "album.deleteFavorite"
+        gw(method, buildJsonObject { put("ALB_ID", albumId.toString()) })
+    }
+
+    fun setTrackSaved(trackId: Long, saved: Boolean) {
+        val method = if (saved) "favorite_song.add" else "favorite_song.remove"
+        gw(method, buildJsonObject { put("SNG_ID", trackId.toString()) })
+    }
+
+    private fun profileTab(tab: String): List<JsonObject> {
+        val userId = account?.userId ?: throw DeezerNotConnectedException()
+        val results = gw(
+            "deezer.pageProfile",
+            buildJsonObject {
+                put("user_id", userId)
+                put("tab", tab)
+                put("nb", 2000)
+            }
+        )
+        val tabs = results["TAB"] as? JsonObject ?: return emptyList()
+        val section = tabs[tab] as? JsonObject ?: return emptyList()
+        return (section["data"] as? JsonArray)
+            ?.mapNotNull { it as? JsonObject }
+            .orEmpty()
+    }
+
+    private fun hashImage(kind: String, hash: String?): String? {
+        val value = hash?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        if (value.any { it != '-' && !it.isLetterOrDigit() }) return null
+        return "https://cdn-images.dzcdn.net/images/$kind/$value/500x500-000000-80-0-0.jpg"
+    }
+
+    private fun JsonObject.string(vararg keys: String): String? {
+        for (key in keys) {
+            val value = (this[key] as? JsonPrimitive)?.contentOrNull
+            if (!value.isNullOrBlank()) return value
+        }
+        return null
+    }
+
+    private fun JsonObject.long(vararg keys: String): Long? {
+        for (key in keys) {
+            val value = (this[key] as? JsonPrimitive)?.contentOrNull ?: continue
+            value.toLongOrNull()?.let { return it }
+        }
+        return null
+    }
+
+    private fun JsonObject.int(vararg keys: String): Int? =
+        long(*keys)?.toInt()
+
     fun downloadBytes(url: String): ByteArray? = runCatching {
         val request = Request.Builder()
             .url(url)
@@ -344,7 +516,9 @@ class DeezerPrivateClient(
             else -> true
         }
         if (hasError) {
-            throw DeezerApiException("Deezer $method refused the call")
+            throw DeezerApiException(
+                "Deezer $method refused the call: ${error.toString().take(300)}"
+            )
         }
         return root["results"] as? JsonObject ?: JsonObject(emptyMap())
     }
