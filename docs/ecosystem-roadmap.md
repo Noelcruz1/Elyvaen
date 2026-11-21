@@ -256,9 +256,11 @@ Se añadió la base del proveedor privado, siguiendo el enfoque de Sonora:
 - Es una integración **no oficial**; puede romperse si Deezer cambia el web
   player. El ARL es personal y no se registra en logs.
 
-No se pudo validar el flujo completo sin el ARL del usuario ni con el móvil
-conectado. El catálogo público y las previews sí están compilados y listos
-para probar.
+Verificado el 2026-11-21: la navegación a Deezer, el estado offline y el
+diálogo ARL funcionan en el Moto G51. El catálogo público, las previews y las
+descargas no se pudieron probar porque el DAP estaba en modo avión y sin
+Wi-Fi; el ARL del usuario todavía no está configurado. La build release quedó
+instalada y el mini-player/90 Hz verificados.
 
 ## Decisiones pendientes
 

@@ -60,11 +60,14 @@ Estado: **fase 1 y 2 implementadas y verificadas en el Moto G51** (2026-11-17).
 
 ## Capturas
 
-- `screens/home.png` — Home con “Para ti”, estado DAP y mini player.
+- `screens/home.png` — Home con selector Local/Deezer/Descargas y mini player.
 - `screens/home-foryou.png` — sección “Para ti” con carrusel de canciones.
 - `screens/player.png` — player Elyvaen con favorito, portada y próxima pista.
-- `screens/library-songs.png` — biblioteca de canciones.
+- `screens/library-songs.png` — biblioteca de canciones con filas tipo tarjeta.
 - `screens/library-albums.png` — biblioteca de álbumes.
+- `screens/library-genres.png` — cabecera editorial y rejilla de géneros.
+- `screens/deezer-offline.png` — pantalla Deezer sin red (el DAP estaba en modo avión).
+- `screens/deezer-connect.png` — diálogo de conexión por cookie ARL.
 - `screens/settings.png` — ajustes.
 - `screens/queue.png` — cola.
 - `screens/lyrics.png` — letras.
@@ -135,6 +138,19 @@ Pendiente de verificar en el dispositivo (se desconectó ADB durante el día):
 
 Esto cambia canciones, carpetas, playlists, búsqueda y listas de detalle de
 álbum/artista, no solo el Home y el player.
+
+## Verificado en dispositivo (2026-11-21)
+
+- Home con fuente `Local · Deezer · Descargas`.
+- Biblioteca de canciones como tarjetas redondeadas.
+- Cabecera de géneros en mayúsculas, alineada a la izquierda y con degradado.
+- **Mini-player corregido**: sus bounds terminan en `y=2200`, justo donde empieza
+  la barra inferior; ya no se solapan.
+- **90 Hz activos**: `dumpsys display` reporta `modeId 3` (90 Hz).
+- Pantalla Deezer y diálogo ARL abiertos sin crash.
+- El catálogo Deezer no se pudo validar porque el DAP estaba en **modo avión**
+  y la Wi-Fi no estaba conectada; la pantalla mostró correctamente el error de
+  conexión y el botón Reintentar.
 
 ## Pendiente / siguiente iteración
 

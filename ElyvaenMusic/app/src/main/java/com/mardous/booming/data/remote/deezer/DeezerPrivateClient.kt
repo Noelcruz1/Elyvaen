@@ -311,14 +311,12 @@ class DeezerPrivateClient(
             ?.contentOrNull
     }
 
-    private fun preferredFormats(): List<String> {
-        val options = account?.plan
-        return when (options) {
-            "HiFi" -> listOf("FLAC_24", "FLAC", "MP3_320", "MP3_128")
-            "Premium" -> listOf("MP3_320", "MP3_128")
-            else -> listOf("MP3_128")
-        }
-    }
+    private fun preferredFormats(): List<String> = listOf(
+        "FLAC_24",
+        "FLAC",
+        "MP3_320",
+        "MP3_128"
+    )
 
     private fun gw(method: String, body: JsonObject): JsonObject {
         return gwRaw(method, apiToken, body)
