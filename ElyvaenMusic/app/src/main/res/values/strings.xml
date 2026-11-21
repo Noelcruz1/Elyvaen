@@ -1201,4 +1201,15 @@
     <string name="downloads_folder">Music/Elyvaen/Deezer</string>
     <string name="downloads_folder_label">Folder: %1$s</string>
     <string name="downloads_in_library">In your library</string>
+    <string name="stats_title">Statistics</string>
+    <string name="stats_subtitle">Your music in numbers</string>
+    <string name="stats_listening_time">Listening time</string>
+    <string name="stats_plays">Plays</string>
+    <string name="stats_unique_tracks">Unique tracks</string>
+    <string name="stats_top_songs">Top songs</string>
+    <string name="stats_top_artists">Top artists</string>
+    <string name="stats_top_albums">Top albums</string>
+    <string name="stats_history">Recent history</string>
+    <string name="stats_empty_title">No statistics yet</string>
+    <string name="stats_empty_subtitle">Play some music and your listening stats will appear here.</string>
 </resources>

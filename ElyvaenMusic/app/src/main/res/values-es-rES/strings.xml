@@ -1163,4 +1163,15 @@
     <string name="downloads_folder">Música/Elyvaen/Deezer</string>
     <string name="downloads_folder_label">Carpeta: %1$s</string>
     <string name="downloads_in_library">En tu biblioteca</string>
+    <string name="stats_title">Estadísticas</string>
+    <string name="stats_subtitle">Tu música en números</string>
+    <string name="stats_listening_time">Tiempo escuchado</string>
+    <string name="stats_plays">Reproducciones</string>
+    <string name="stats_unique_tracks">Pistas únicas</string>
+    <string name="stats_top_songs">Top canciones</string>
+    <string name="stats_top_artists">Top artistas</string>
+    <string name="stats_top_albums">Top álbumes</string>
+    <string name="stats_history">Historial reciente</string>
+    <string name="stats_empty_title">Aún no hay estadísticas</string>
+    <string name="stats_empty_subtitle">Reproduce música y tus estadísticas aparecerán aquí.</string>
 </resources>

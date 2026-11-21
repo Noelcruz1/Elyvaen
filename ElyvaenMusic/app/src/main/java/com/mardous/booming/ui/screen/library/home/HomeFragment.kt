@@ -139,6 +139,9 @@ class HomeFragment : AbsMainActivityFragment(), IScrollHelper {
                         onSettingsClick = {
                             findNavController().navigate(R.id.nav_settings)
                         },
+                        onStatsClick = {
+                            findNavController().navigate(R.id.nav_stats)
+                        },
                         onDashboardClick = {
                             DapDashboardFragment().show(childFragmentManager, "DAP_DASHBOARD")
                         },

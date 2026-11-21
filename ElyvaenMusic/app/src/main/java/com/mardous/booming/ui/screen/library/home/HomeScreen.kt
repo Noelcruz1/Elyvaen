@@ -75,6 +75,7 @@ fun HomeScreen(
     onOpenSuggestion: (Suggestion) -> Unit,
     onSearchClick: () -> Unit,
     onSettingsClick: () -> Unit,
+    onStatsClick: () -> Unit,
     onDashboardClick: () -> Unit,
     scrollToTopTrigger: Boolean = false,
     onScrollToTopDone: () -> Unit = {},
@@ -102,7 +103,8 @@ fun HomeScreen(
         topBar = {
             ElyvaenHomeTopBar(
                 onSearchClick = onSearchClick,
-                onSettingsClick = onSettingsClick
+                onSettingsClick = onSettingsClick,
+                onStatsClick = onStatsClick
             )
         },
         contentWindowInsets = WindowInsets(0, 0, 0, 0),

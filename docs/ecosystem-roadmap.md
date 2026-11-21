@@ -260,6 +260,11 @@ También se añadió la pantalla **Descargas** (`ui/screen/deezer/DownloadsScree
 estado vacío, almacenamiento libre/total, descargas en curso, completadas y
 reintento. El chip `Descargas` del Home ya abre esa pantalla.
 
+Se añadió **Estadísticas** (`StatsScreen.kt`, inspirada en ArchiveTune):
+tiempo escuchado, reproducciones, pistas únicas, top canciones, top artistas,
+top álbumes e historial reciente, con acceso desde el icono de tendencia del
+Home.
+
 Verificado el 2026-11-21: la navegación a Deezer, el estado offline, el
 diálogo ARL y la pantalla Descargas vacía funcionan en el Moto G51. El
 catálogo público, las previews y las descargas reales no se pudieron probar

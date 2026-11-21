@@ -80,6 +80,7 @@ private val CardShape = RoundedCornerShape(18.dp)
 fun ElyvaenHomeTopBar(
     onSearchClick: () -> Unit,
     onSettingsClick: () -> Unit,
+    onStatsClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Surface(
@@ -107,6 +108,12 @@ fun ElyvaenHomeTopBar(
                         text = "Cypfq DAP",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold
+                    )
+                }
+                IconButton(onClick = onStatsClick) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_trending_up_24dp),
+                        contentDescription = stringResource(R.string.stats_title)
                     )
                 }
                 IconButton(onClick = onSearchClick) {
