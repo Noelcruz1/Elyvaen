@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -97,6 +98,13 @@ fun DapDashboardSheet(
         mutableStateOf(
             context.getSystemService(ActivityManager::class.java)?.isInLockTaskMode == true
         )
+    }
+    LaunchedEffect(Unit) {
+        while (true) {
+            kioskActive =
+                context.getSystemService(ActivityManager::class.java)?.isInLockTaskMode == true
+            delay(1500)
+        }
     }
 
     BottomSheetDialogSurface(
@@ -586,6 +594,11 @@ fun DapDashboardSheet(
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                        Text(
+                            text = stringResource(R.string.dap_kiosk_hint),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                         if (kioskActive) {
                             OutlinedButton(
                                 onClick = {
@@ -595,6 +608,15 @@ fun DapDashboardSheet(
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Text(text = stringResource(R.string.dap_exit_kiosk))
+                            }
+                        } else {
+                            Button(
+                                onClick = {
+                                    context.findMainActivity()?.enterKioskMode()
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(text = stringResource(R.string.dap_kiosk_activate))
                             }
                         }
                     }

@@ -79,6 +79,7 @@ class MainActivity : AbsSlidingMusicPanelActivity(), MediaController.Listener {
     private val updateViewModel: UpdateViewModel by viewModel()
     private val mediaEventBus: MediaEventBus by inject()
     private var kioskPaused = false
+    private var kioskLockTaskRequested = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -462,6 +463,7 @@ class MainActivity : AbsSlidingMusicPanelActivity(), MediaController.Listener {
         if (!kioskPaused && PreferenceManager.getDefaultSharedPreferences(this)
                 .getBoolean("dap_kiosk_enabled", false)) {
             enterKioskFullscreen()
+            requestKioskLockTask()
         }
     }
 
@@ -473,13 +475,42 @@ class MainActivity : AbsSlidingMusicPanelActivity(), MediaController.Listener {
         return super.onKeyDown(keyCode, event)
     }
 
+    fun enterKioskMode() {
+        PreferenceManager.getDefaultSharedPreferences(this)
+            .edit()
+            .putBoolean("dap_kiosk_enabled", true)
+            .apply()
+        kioskPaused = false
+        kioskLockTaskRequested = false
+        enterKioskFullscreen()
+        requestKioskLockTask()
+    }
+
     fun exitKioskMode() {
         kioskPaused = true
+        kioskLockTaskRequested = false
+        PreferenceManager.getDefaultSharedPreferences(this)
+            .edit()
+            .putBoolean("dap_kiosk_enabled", false)
+            .apply()
         if (getSystemService<ActivityManager>()?.isInLockTaskMode == true) {
             stopLockTask()
         }
         WindowInsetsControllerCompat(window, window.decorView)
             .show(WindowInsetsCompat.Type.systemBars())
+    }
+
+    /**
+     * Asks the system to pin this task. Elyvaen is not a device owner, so Android
+     * shows its own screen-pinning confirmation the first time. If the user
+     * declines, the DAP stays in immersive kiosk mode without task pinning.
+     */
+    private fun requestKioskLockTask() {
+        if (kioskLockTaskRequested) return
+        val activityManager = getSystemService<ActivityManager>() ?: return
+        if (activityManager.isInLockTaskMode) return
+        kioskLockTaskRequested = true
+        runCatching { startLockTask() }
     }
 
     private fun enterKioskFullscreen() {

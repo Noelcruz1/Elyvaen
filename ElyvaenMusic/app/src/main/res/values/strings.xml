@@ -578,6 +578,8 @@
     <string name="dap_kiosk">Kiosk</string>
     <string name="dap_kiosk_active">DAP pinned</string>
     <string name="dap_kiosk_inactive">Not pinned</string>
+    <string name="dap_kiosk_activate">Enable kiosk</string>
+    <string name="dap_kiosk_hint">Pins the app in full screen. Hold volume up to exit.</string>
     <string name="dap_exit_kiosk">Exit kiosk</string>
     <string name="dap_internal_dac_info">Internal DAC · 24-bit / 192 kHz · LOHIFI</string>
     <string name="dap_eq_off">EQ off · no DSP</string>

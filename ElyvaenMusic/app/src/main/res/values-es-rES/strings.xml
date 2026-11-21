@@ -473,6 +473,8 @@
     <string name="dap_kiosk">Kiosco</string>
     <string name="dap_kiosk_active">DAP fijado</string>
     <string name="dap_kiosk_inactive">Sin fijar</string>
+    <string name="dap_kiosk_activate">Activar kiosco</string>
+    <string name="dap_kiosk_hint">Fija la app en pantalla completa. Mantén subir volumen para salir.</string>
     <string name="dap_exit_kiosk">Salir del kiosco</string>
     <string name="dap_internal_dac_info">DAC interno · 24-bit / 192 kHz · LOHIFI</string>
     <string name="dap_eq_off">EQ off · sin DSP</string>
