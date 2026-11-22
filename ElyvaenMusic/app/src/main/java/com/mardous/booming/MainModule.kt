@@ -362,9 +362,11 @@ private val viewModule = module {
 
     viewModel {
         NasBrowserViewModel(
+            context = androidContext(),
             store = get(),
             client = get(),
-            downloadManager = get()
+            downloadManager = get(),
+            backupManager = get()
         )
     }
 

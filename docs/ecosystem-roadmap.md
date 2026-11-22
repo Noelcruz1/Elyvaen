@@ -421,7 +421,7 @@ depende del PC para cargar archivos.
 | Fase | Entregable | Valor |
 |---|---|---|
 | H1 | Hub de ingesta: USB OTG + subida por Wi-Fi con QR + gestor de almacenamiento · **implementado 2026-11-22** | Elimina el PC del día a día |
-| H2 | Fuentes NAS: SMB, WebDAV, SFTP, Subsonic/Navidrome; sync y backup · **SMB/WebDAV + descarga implementados 2026-11-22; sync/backup y SFTP/Subsonic pendientes** | Biblioteca en red |
+| H2 | Fuentes NAS: SMB, WebDAV, SFTP, Subsonic/Navidrome; sync y backup · **SMB/WebDAV + descarga + sync/backup implementados 2026-11-22; SFTP/Subsonic pendientes** | Biblioteca en red |
 | H3 | Servidor DLNA/UPnP + WebDAV + control remoto web | El DAP sirve a la casa |
 | H4 | Motor de audio: UAC2 exclusivo, frecuencia nativa, EQ paramétrico, convolución, crossfeed, DoP | Nivel audiófilo |
 | H5 | AudioVisual: visualizador, letras/karaoke, vídeo local, Cast/DLNA | Experiencia de sala |
@@ -599,14 +599,56 @@ la biblioteca remota y traer música al DAP sin PC.
 - El menú de ajustes del navegador conserva los datos; el host y las
   credenciales de prueba se borraron del dispositivo al terminar.
 
+## Fase H2b — sincronización y backup al NAS (2026-11-22)
+
+### Sincronización incremental
+
+- **Sincronizar carpeta** recorre la carpeta remota y descarga únicamente el
+  audio que aún no está en `Music/Elyvaen/NAS`.
+- Si ya existe un archivo con el mismo nombre y tamaño, se cuenta como
+  **ya presente** y no se vuelve a bajar.
+- Si el nombre existe pero el tamaño cambió, se cuenta como **conflicto** y
+  se conserva el archivo local: nunca se sobrescribe.
+- **Descargar todo** sigue disponible para forzar una copia completa; en ese
+  caso los nombres repetidos reciben sufijos `(1)`, `(2)`, etc.
+- El resumen muestra nuevos, ya presentes, conflictos, errores, archivos no
+  reproducibles ignorados y bytes transferidos.
+
+### Backup al NAS
+
+- **Subir copia de seguridad** genera un `.bmgbak` real con
+  **ajustes, playlists, historial de reproducción y letras**, y lo sube a la
+  carpeta NAS que se está explorando.
+- Usa el mismo `BackupManager` de la app: la copia se puede restaurar después
+  desde la pantalla de backup local eligiendo el archivo descargado.
+- El archivo se crea en caché, se sube por SMB o WebDAV y se borra de caché al
+  terminar. No se guarda ninguna credencial ni ruta en el repositorio.
+- La copia se muestra en el navegador NAS como archivo no reproducible; se
+  puede descargar a mano para restaurarla.
+
+### Verificación en el Moto G51
+
+- Servidor SMB local de prueba, sin datos reales en el código:
+  - primera sincronización de `/Albums`: **3 nuevos, 0 presentes, 0 conflictos,
+    0 errores, 529 KB**;
+  - segunda sincronización: **0 nuevos, 3 ya presentes, 0 conflictos**;
+  - tras cambiar el tamaño de un archivo remoto: **1 conflicto**, sin
+    sobrescribir el archivo local.
+- **Subir copia de seguridad** subió un `.bmgbak` de **3,89 KB** con
+  `metadata.json`, `settings/main.json`, una playlist M3U y
+  `play_info/default.json`; el ZIP se abrió y validó desde el PC.
+- La descarga por WebDAV y SMB ya estaba validada en H2a. Los archivos,
+  credenciales y servidores de prueba se borraron del dispositivo y del
+  entorno al terminar.
+
 ### Pendiente de H2
 
-- **Sync/backup** de biblioteca, playlists y ajustes hacia el NAS (incluye
-  generar el `.bmgbak` y subirlo por SMB/WebDAV).
-- SFTP con sshj, Subsonic/Navidrome por REST y sincronización bidireccional
-  con política de conflictos.
+- SFTP con sshj y Subsonic/Navidrome por REST.
+- Restauración directa desde el navegador NAS (hoy se descarga el `.bmgbak`
+  y se usa la pantalla de backup existente).
+- Sincronización programada y política de conflictos configurable.
 - Validar contra el OMV real cuando Tailscale esté instalado y el usuario
-  introduzca sus credenciales.
+  introduzca sus credenciales; **ningún host real se versiona**.
 
 ## NAS general y OMV (2026-11-22)
 

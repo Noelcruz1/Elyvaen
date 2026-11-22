@@ -18,7 +18,9 @@
 package com.mardous.booming.data.remote.nas
 
 import android.content.Context
+import android.provider.MediaStore
 import com.mardous.booming.data.local.AudioImportManager
+import com.mardous.booming.extensions.hasQ
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -36,6 +38,16 @@ data class NasDownloadProgress(
 data class NasDownloadResult(
     val totalFiles: Int,
     val downloadedFiles: Int,
+    val failedFiles: Int,
+    val skippedFiles: Int,
+    val bytes: Long
+)
+
+data class NasSyncResult(
+    val totalFiles: Int,
+    val downloadedFiles: Int,
+    val unchangedFiles: Int,
+    val conflictFiles: Int,
     val failedFiles: Int,
     val skippedFiles: Int,
     val bytes: Long
@@ -106,6 +118,66 @@ class NasDownloadManager(
         )
     }
 
+    /**
+     * Incremental sync: downloads only files that are not already in the
+     * local NAS library. Files with the same name but a different size are
+     * reported as conflicts and never overwritten.
+     */
+    suspend fun syncFolder(
+        session: NasSession,
+        folderPath: String,
+        onProgress: (NasDownloadProgress) -> Unit
+    ): NasSyncResult = withContext(Dispatchers.IO) {
+        val audioFiles = mutableListOf<NasEntry>()
+        var skipped = 0
+        collectAudioFiles(session, folderPath, audioFiles) { skipped++ }
+
+        var downloaded = 0
+        var unchanged = 0
+        var conflicts = 0
+        var failed = 0
+        var processed = 0
+        var bytes = 0L
+        onProgress(NasDownloadProgress(audioFiles.size, 0, 0, null, 0))
+
+        audioFiles.forEachIndexed { index, entry ->
+            currentCoroutineContext().ensureActive()
+            when (localFileStatus(entry)) {
+                LocalFileStatus.UNCHANGED -> unchanged++
+                LocalFileStatus.CONFLICT -> conflicts++
+                LocalFileStatus.MISSING -> {
+                    val copied = runCatching { downloadOne(session, entry) }.getOrNull()
+                    if (copied != null) {
+                        downloaded++
+                        bytes += copied
+                    } else {
+                        failed++
+                    }
+                }
+            }
+            processed++
+            onProgress(
+                NasDownloadProgress(
+                    totalFiles = audioFiles.size,
+                    completedFiles = processed,
+                    failedFiles = failed,
+                    currentName = if (index < audioFiles.lastIndex) audioFiles[index + 1].name else null,
+                    bytes = bytes
+                )
+            )
+        }
+
+        NasSyncResult(
+            totalFiles = audioFiles.size,
+            downloadedFiles = downloaded,
+            unchangedFiles = unchanged,
+            conflictFiles = conflicts,
+            failedFiles = failed,
+            skippedFiles = skipped,
+            bytes = bytes
+        )
+    }
+
     suspend fun downloadFile(
         session: NasSession,
         entry: NasEntry,
@@ -150,6 +222,32 @@ class NasDownloadManager(
         }
     }
 
+    private fun localFileStatus(entry: NasEntry): LocalFileStatus {
+        if (!hasQ()) return LocalFileStatus.MISSING
+        val parent = entry.path.substringBeforeLast('/', "")
+        val relativePath = "Music/Elyvaen/NAS/" +
+                (if (parent.isBlank()) "" else "$parent/")
+        val selection = "${MediaStore.Audio.Media.RELATIVE_PATH} = ? AND " +
+                "${MediaStore.Audio.Media.DISPLAY_NAME} = ?"
+        return context.contentResolver.query(
+            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+            arrayOf(MediaStore.Audio.Media.SIZE),
+            selection,
+            arrayOf(relativePath, entry.name),
+            null
+        )?.use { cursor ->
+            if (!cursor.moveToFirst()) {
+                LocalFileStatus.MISSING
+            } else if (entry.size <= 0L ||
+                cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.SIZE)) == entry.size
+            ) {
+                LocalFileStatus.UNCHANGED
+            } else {
+                LocalFileStatus.CONFLICT
+            }
+        } ?: LocalFileStatus.MISSING
+    }
+
     private suspend fun downloadOne(session: NasSession, entry: NasEntry): Long {
         val temp = File.createTempFile("nas-download-", ".part", context.cacheDir)
         try {
@@ -172,5 +270,11 @@ class NasDownloadManager(
         } finally {
             temp.delete()
         }
+    }
+
+    private enum class LocalFileStatus {
+        MISSING,
+        UNCHANGED,
+        CONFLICT
     }
 }

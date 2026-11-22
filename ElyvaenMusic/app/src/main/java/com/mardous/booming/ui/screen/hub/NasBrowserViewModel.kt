@@ -17,21 +17,33 @@
 
 package com.mardous.booming.ui.screen.hub
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mardous.booming.data.local.NasSettings
 import com.mardous.booming.data.local.NasSettingsStore
+import com.mardous.booming.data.local.backup.BackupContent
+import com.mardous.booming.data.local.backup.BackupManager
 import com.mardous.booming.data.remote.nas.NasClient
 import com.mardous.booming.data.remote.nas.NasDownloadManager
 import com.mardous.booming.data.remote.nas.NasDownloadProgress
 import com.mardous.booming.data.remote.nas.NasDownloadResult
 import com.mardous.booming.data.remote.nas.NasEntry
+import com.mardous.booming.data.remote.nas.NasSyncResult
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
+
+data class NasBackupResult(
+    val name: String,
+    val bytes: Long
+)
 
 data class NasBrowserUiState(
     val configured: Boolean = false,
@@ -42,13 +54,18 @@ data class NasBrowserUiState(
     val error: String? = null,
     val downloading: Boolean = false,
     val progress: NasDownloadProgress? = null,
-    val result: NasDownloadResult? = null
+    val result: NasDownloadResult? = null,
+    val syncResult: NasSyncResult? = null,
+    val backingUp: Boolean = false,
+    val backupResult: NasBackupResult? = null
 )
 
 class NasBrowserViewModel(
+    private val context: Context,
     private val store: NasSettingsStore,
     private val client: NasClient,
-    private val downloadManager: NasDownloadManager
+    private val downloadManager: NasDownloadManager,
+    private val backupManager: BackupManager
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(NasBrowserUiState())
@@ -98,7 +115,9 @@ class NasBrowserViewModel(
                     settings = settings,
                     currentPath = path,
                     error = null,
-                    result = null
+                    result = null,
+                    syncResult = null,
+                    backupResult = null
                 )
             }
             try {
@@ -132,7 +151,7 @@ class NasBrowserViewModel(
     }
 
     fun downloadCurrentFolder() {
-        if (_state.value.downloading) return
+        if (_state.value.downloading || _state.value.backingUp) return
         val settings = store.load()
         if (settings.host.isBlank()) {
             _state.update { it.copy(configured = false, error = "Configura el NAS primero") }
@@ -145,6 +164,8 @@ class NasBrowserViewModel(
                     downloading = true,
                     progress = null,
                     result = null,
+                    syncResult = null,
+                    backupResult = null,
                     error = null
                 )
             }
@@ -172,8 +193,105 @@ class NasBrowserViewModel(
         }
     }
 
+    fun syncCurrentFolder() {
+        if (_state.value.downloading || _state.value.backingUp) return
+        val settings = store.load()
+        if (settings.host.isBlank()) {
+            _state.update { it.copy(configured = false, error = "Configura el NAS primero") }
+            return
+        }
+        val path = _state.value.currentPath
+        downloadJob = viewModelScope.launch {
+            _state.update {
+                it.copy(
+                    downloading = true,
+                    progress = null,
+                    result = null,
+                    syncResult = null,
+                    backupResult = null,
+                    error = null
+                )
+            }
+            try {
+                val result = client.withSession(settings) { session ->
+                    downloadManager.syncFolder(session, path) { progress ->
+                        _state.update { it.copy(progress = progress) }
+                    }
+                }
+                _state.update {
+                    it.copy(downloading = false, progress = null, syncResult = result)
+                }
+            } catch (cancellation: CancellationException) {
+                _state.update { it.copy(downloading = false, progress = null) }
+                throw cancellation
+            } catch (t: Throwable) {
+                _state.update {
+                    it.copy(
+                        downloading = false,
+                        progress = null,
+                        error = readableError(t)
+                    )
+                }
+            }
+        }
+    }
+
+    fun backupToNas() {
+        if (_state.value.downloading || _state.value.backingUp) return
+        val settings = store.load()
+        if (settings.host.isBlank()) {
+            _state.update { it.copy(configured = false, error = "Configura el NAS primero") }
+            return
+        }
+        val path = _state.value.currentPath
+        viewModelScope.launch {
+            _state.update {
+                it.copy(
+                    backingUp = true,
+                    backupResult = null,
+                    result = null,
+                    syncResult = null,
+                    error = null
+                )
+            }
+            val stamp = System.currentTimeMillis()
+            val file = File(context.cacheDir, "elyvaen-backup-$stamp.bmgbak")
+            try {
+                val created = withContext(Dispatchers.IO) {
+                    backupManager.createBackupFile(file, BACKUP_CONTENTS)
+                }
+                if (!created || !file.isFile) {
+                    throw IllegalStateException("No se pudo crear la copia de seguridad")
+                }
+                val remotePath = listOf(path.trim('/'), file.name)
+                    .filter { it.isNotBlank() }
+                    .joinToString("/")
+                client.withSession(settings) { session ->
+                    file.inputStream().use { input ->
+                        session.upload(input, remotePath, file.length())
+                    }
+                }
+                _state.update {
+                    it.copy(
+                        backingUp = false,
+                        backupResult = NasBackupResult(file.name, file.length())
+                    )
+                }
+            } catch (cancellation: CancellationException) {
+                _state.update { it.copy(backingUp = false) }
+                throw cancellation
+            } catch (t: Throwable) {
+                _state.update {
+                    it.copy(backingUp = false, error = readableError(t))
+                }
+            } finally {
+                file.delete()
+            }
+        }
+    }
+
     private fun downloadFile(entry: NasEntry) {
-        if (_state.value.downloading) return
+        if (_state.value.downloading || _state.value.backingUp) return
         val settings = store.load()
         downloadJob = viewModelScope.launch {
             _state.update {
@@ -210,7 +328,9 @@ class NasBrowserViewModel(
     }
 
     fun dismissMessages() {
-        _state.update { it.copy(error = null, result = null) }
+        _state.update {
+            it.copy(error = null, result = null, syncResult = null, backupResult = null)
+        }
     }
 
     private fun readableError(t: Throwable): String {
@@ -229,5 +349,14 @@ class NasBrowserViewModel(
         loadJob?.cancel()
         downloadJob?.cancel()
         super.onCleared()
+    }
+
+    companion object {
+        private val BACKUP_CONTENTS = listOf(
+            BackupContent.Settings,
+            BackupContent.Playlists,
+            BackupContent.PlayInfo,
+            BackupContent.Lyrics
+        )
     }
 }

@@ -895,7 +895,15 @@
     <string name="nas_browser_root">Raíz</string>
     <string name="nas_browser_folder">Carpeta</string>
     <string name="nas_browser_download_folder">Descargar esta carpeta</string>
-    <string name="nas_browser_download_folder_hint">Solo se copia audio compatible a Music/Elyvaen/NAS.</string>
+    <string name="nas_browser_download_all">Descargar todo</string>
+    <string name="nas_browser_download_folder_hint">Solo se copia audio compatible a Music/Elyvaen/NAS. Sincronizar baja únicamente archivos nuevos.</string>
+    <string name="nas_browser_sync_folder">Sincronizar carpeta</string>
+    <string name="nas_browser_sync_result">%1$d nuevos · %2$d ya presentes · %3$d conflictos · %4$d errores · %5$s</string>
+    <string name="nas_browser_conflict_hint">Los conflictos conservan el archivo local y nunca se sobrescriben.</string>
+    <string name="nas_browser_backup">Subir copia de seguridad</string>
+    <string name="nas_browser_backing_up">Creando y subiendo la copia…</string>
+    <string name="nas_browser_backup_result">Copia subida: %1$s · %2$s</string>
+    <string name="nas_browser_backup_hint">Ajustes, listas, letras e historial se suben a esta carpeta como archivo .bmgbak.</string>
     <string name="nas_browser_download_file">Descargar archivo</string>
     <string name="nas_browser_downloading">Descargando %1$d de %2$d</string>
     <string name="nas_browser_cancel">Cancelar</string>

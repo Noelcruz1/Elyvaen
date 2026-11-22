@@ -1106,7 +1106,15 @@
     <string name="nas_browser_root">Root</string>
     <string name="nas_browser_folder">Folder</string>
     <string name="nas_browser_download_folder">Download this folder</string>
-    <string name="nas_browser_download_folder_hint">Only supported audio is copied to Music/Elyvaen/NAS.</string>
+    <string name="nas_browser_download_all">Download all</string>
+    <string name="nas_browser_download_folder_hint">Only supported audio is copied to Music/Elyvaen/NAS. Sync downloads new files only.</string>
+    <string name="nas_browser_sync_folder">Sync folder</string>
+    <string name="nas_browser_sync_result">%1$d new · %2$d already present · %3$d conflicts · %4$d errors · %5$s</string>
+    <string name="nas_browser_conflict_hint">Conflicts keep the local file and are never overwritten.</string>
+    <string name="nas_browser_backup">Upload backup</string>
+    <string name="nas_browser_backing_up">Creating and uploading backup…</string>
+    <string name="nas_browser_backup_result">Backup uploaded: %1$s · %2$s</string>
+    <string name="nas_browser_backup_hint">Settings, playlists, lyrics and play history are uploaded to this folder as a .bmgbak file.</string>
     <string name="nas_browser_download_file">Download file</string>
     <string name="nas_browser_downloading">Downloading %1$d of %2$d</string>
     <string name="nas_browser_cancel">Cancel</string>

@@ -78,6 +78,7 @@ import com.mardous.booming.data.local.NasProtocol
 import com.mardous.booming.data.remote.nas.NasDownloadProgress
 import com.mardous.booming.data.remote.nas.NasDownloadResult
 import com.mardous.booming.data.remote.nas.NasEntry
+import com.mardous.booming.data.remote.nas.NasSyncResult
 import com.mardous.booming.ui.theme.BoomingMusicTheme
 import org.koin.androidx.viewmodel.ext.android.viewModel
 import java.text.SimpleDateFormat
@@ -111,6 +112,8 @@ class NasBrowserFragment : Fragment() {
                         onRefresh = viewModel::refresh,
                         onOpenEntry = viewModel::open,
                         onDownloadFolder = viewModel::downloadCurrentFolder,
+                        onSyncFolder = viewModel::syncCurrentFolder,
+                        onBackupToNas = viewModel::backupToNas,
                         onCancelDownload = viewModel::cancelDownload,
                         onNavigateTo = viewModel::load
                     )
@@ -133,6 +136,8 @@ private fun NasBrowserScreen(
     onRefresh: () -> Unit,
     onOpenEntry: (NasEntry) -> Unit,
     onDownloadFolder: () -> Unit,
+    onSyncFolder: () -> Unit,
+    onBackupToNas: () -> Unit,
     onCancelDownload: () -> Unit,
     onNavigateTo: (String) -> Unit
 ) {
@@ -221,6 +226,8 @@ private fun NasBrowserScreen(
                         FolderHeader(
                             state = state,
                             onDownloadFolder = onDownloadFolder,
+                            onSyncFolder = onSyncFolder,
+                            onBackupToNas = onBackupToNas,
                             onCancelDownload = onCancelDownload
                         )
                     }
@@ -242,6 +249,12 @@ private fun NasBrowserScreen(
                     }
                     state.result?.let { result ->
                         item { DownloadResult(result) }
+                    }
+                    state.syncResult?.let { result ->
+                        item { SyncResult(result) }
+                    }
+                    state.backupResult?.let { result ->
+                        item { BackupResult(result) }
                     }
                     if (state.loading) {
                         item {
@@ -267,7 +280,7 @@ private fun NasBrowserScreen(
                         items(state.entries, key = { it.path }) { entry ->
                             NasEntryRow(
                                 entry = entry,
-                                enabled = !state.downloading,
+                                enabled = !state.downloading && !state.backingUp,
                                 onClick = { onOpenEntry(entry) }
                             )
                         }
@@ -309,6 +322,8 @@ private fun NotConfigured(onOpenSettings: () -> Unit) {
 private fun FolderHeader(
     state: NasBrowserUiState,
     onDownloadFolder: () -> Unit,
+    onSyncFolder: () -> Unit,
+    onBackupToNas: () -> Unit,
     onCancelDownload: () -> Unit
 ) {
     Surface(
@@ -365,16 +380,49 @@ private fun FolderHeader(
                 TextButton(onClick = onCancelDownload) {
                     Text(stringResource(R.string.nas_browser_cancel))
                 }
+            } else if (state.backingUp) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    CircularProgressIndicator(
+                        strokeWidth = 2.dp,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Text(
+                        text = stringResource(R.string.nas_browser_backing_up),
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
             } else {
-                Button(onClick = onDownloadFolder, modifier = Modifier.fillMaxWidth()) {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Button(onClick = onSyncFolder, modifier = Modifier.weight(1f)) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_update_24dp),
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.nas_browser_sync_folder))
+                    }
+                    OutlinedButton(onClick = onDownloadFolder, modifier = Modifier.weight(1f)) {
+                        Text(stringResource(R.string.nas_browser_download_all))
+                    }
+                }
+                OutlinedButton(onClick = onBackupToNas, modifier = Modifier.fillMaxWidth()) {
                     Icon(
-                        painter = painterResource(R.drawable.ic_download_24dp),
+                        painter = painterResource(R.drawable.ic_cloud_24dp),
                         contentDescription = null,
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(Modifier.width(8.dp))
-                    Text(stringResource(R.string.nas_browser_download_folder))
+                    Text(stringResource(R.string.nas_browser_backup))
                 }
+                Text(
+                    text = stringResource(R.string.nas_browser_backup_hint),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
     }
@@ -448,6 +496,73 @@ private fun DownloadResult(result: NasDownloadResult) {
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun SyncResult(result: NasSyncResult) {
+    val context = LocalContext.current
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            verticalArrangement = Arrangement.spacedBy(3.dp),
+            modifier = Modifier.padding(12.dp)
+        ) {
+            Text(
+                text = if (result.totalFiles == 0) {
+                    stringResource(R.string.nas_browser_empty)
+                } else {
+                    stringResource(
+                        R.string.nas_browser_sync_result,
+                        result.downloadedFiles,
+                        result.unchangedFiles,
+                        result.conflictFiles,
+                        result.failedFiles,
+                        Formatter.formatFileSize(context, result.bytes)
+                    )
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+            if (result.conflictFiles > 0) {
+                Text(
+                    text = stringResource(R.string.nas_browser_conflict_hint),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            if (result.skippedFiles > 0) {
+                Text(
+                    text = stringResource(R.string.nas_browser_skipped, result.skippedFiles),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun BackupResult(result: NasBackupResult) {
+    val context = LocalContext.current
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.35f),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Text(
+            text = stringResource(
+                R.string.nas_browser_backup_result,
+                result.name,
+                Formatter.formatFileSize(context, result.bytes)
+            ),
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(12.dp)
+        )
     }
 }
 

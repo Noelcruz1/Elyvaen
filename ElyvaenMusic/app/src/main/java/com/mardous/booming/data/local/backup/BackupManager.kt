@@ -107,73 +107,120 @@ class BackupManager(
             null
         } ?: return@withContext false
 
-        val tempDir = File(context.cacheDir, "/backup_${System.currentTimeMillis()}/")
-        if (tempDir.mkdirs()) {
-            try {
-                val backedUpContents = mutableListOf<BackupContent>()
-                val zipItems = mutableListOf<ZipItem>()
+        val archive = createBackupArchive(contents) ?: return@withContext false
+        try {
+            return@withContext context.contentResolver.openOutputStream(file.uri)
+                ?.use { output ->
+                    archive.inputStream().use { input -> input.copyTo(output) }
+                    true
+                } ?: false
+        } catch (e: Exception) {
+            Log.e(TAG, "Error writing backup file", e)
+            return@withContext false
+        } finally {
+            archive.delete()
+        }
+    }
 
-                // Preferences
-                if (contents.contains(BackupContent.Settings)) {
-                    val mainPreferences = setOf(
-                        "${context.packageName}_preferences",
-                        PersistentStorage.PREFERENCE_NAME,
-                        WidgetConfigStore.PREFERENCES_NAME
-                    )
-                    zipItems.add(
-                        createSettingsContent(
-                            preferences = mainPreferences,
-                            settingsName = MAIN_SETTINGS_NAME
-                        )
-                    )
-                    backedUpContents.add(BackupContent.Settings)
-                }
+    /**
+     * Creates the same .bmgbak archive used by the backup screen, but in a
+     * plain cache file so the NAS layer can upload it without a SAF picker.
+     * The caller owns and must delete [target].
+     */
+    suspend fun createBackupFile(
+        target: File,
+        contents: List<BackupContent>
+    ): Boolean = withContext(IO) {
+        if (contents.isEmpty()) return@withContext false
+        val archive = createBackupArchive(contents) ?: return@withContext false
+        try {
+            target.outputStream().use { output ->
+                archive.inputStream().use { input -> input.copyTo(output) }
+            }
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Error creating backup file", e)
+            target.delete()
+            false
+        } finally {
+            archive.delete()
+        }
+    }
 
-                // Lyrics
-                if (contents.contains(BackupContent.Lyrics)) {
-                    if (zipItems.addNotNull(createLyricsContent())) {
-                        backedUpContents.add(BackupContent.Lyrics)
-                    }
-                }
+    private suspend fun createBackupArchive(contents: List<BackupContent>): File? = withContext(IO) {
+        val stamp = System.currentTimeMillis()
+        val archive = File(context.cacheDir, "elyvaen-backup-$stamp.$BACKUP_EXTENSION")
+        val tempDir = File(context.cacheDir, "backup-work-$stamp/")
+        if (!tempDir.mkdirs()) return@withContext null
+        try {
+            val zipItems = buildBackupItems(contents, tempDir)
+            val created = archive.outputStream().use { createZipFile(zipItems, it) }
+            if (created) archive else null
+        } catch (e: Exception) {
+            Log.e(TAG, "Error creating backup archive", e)
+            archive.delete()
+            null
+        } finally {
+            tempDir.deleteRecursively()
+        }
+    }
 
-                // Custom Artist Images
-                if (contents.contains(BackupContent.ArtistImages)) {
-                    if (zipItems.addAll(createCustomArtistImagesContent())) {
-                        backedUpContents.add(BackupContent.ArtistImages)
-                    }
-                }
+    private suspend fun buildBackupItems(
+        contents: List<BackupContent>,
+        tempDir: File
+    ): List<ZipItem> {
+        val backedUpContents = mutableListOf<BackupContent>()
+        val zipItems = mutableListOf<ZipItem>()
 
-                // Playlists
-                if (contents.contains(BackupContent.Playlists)) {
-                    if (zipItems.addAll(createPlaylistsContent(tempDir))) {
-                        backedUpContents.add(BackupContent.Playlists)
-                    }
-                }
+        // Preferences
+        if (contents.contains(BackupContent.Settings)) {
+            val mainPreferences = setOf(
+                "${context.packageName}_preferences",
+                PersistentStorage.PREFERENCE_NAME,
+                WidgetConfigStore.PREFERENCES_NAME
+            )
+            zipItems.add(
+                createSettingsContent(
+                    preferences = mainPreferences,
+                    settingsName = MAIN_SETTINGS_NAME
+                )
+            )
+            backedUpContents.add(BackupContent.Settings)
+        }
 
-                // Play info
-                if (contents.contains(BackupContent.PlayInfo)) {
-                    if (zipItems.addNotNull(createPlayInfoContent())) {
-                        backedUpContents.add(BackupContent.PlayInfo)
-                    }
-                }
-
-                // Metadata (only the contents actually written to the backup)
-                val metadata = createMetadata(backedUpContents.sortedBy { it.ordinal })
-                    ?: throw IllegalStateException("Cannot create necessary metadata")
-                zipItems.add(0, metadata)
-
-                // Create backup zip file
-                if (zipItems.isNotEmpty()) {
-                    return@withContext context.contentResolver.openOutputStream(file.uri)
-                        ?.use { createZipFile(zipItems, it) } ?: false
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error creating backup", e)
-            } finally {
-                tempDir.deleteRecursively()
+        // Lyrics
+        if (contents.contains(BackupContent.Lyrics)) {
+            if (zipItems.addNotNull(createLyricsContent())) {
+                backedUpContents.add(BackupContent.Lyrics)
             }
         }
-        return@withContext false
+
+        // Custom Artist Images
+        if (contents.contains(BackupContent.ArtistImages)) {
+            if (zipItems.addAll(createCustomArtistImagesContent())) {
+                backedUpContents.add(BackupContent.ArtistImages)
+            }
+        }
+
+        // Playlists
+        if (contents.contains(BackupContent.Playlists)) {
+            if (zipItems.addAll(createPlaylistsContent(tempDir))) {
+                backedUpContents.add(BackupContent.Playlists)
+            }
+        }
+
+        // Play info
+        if (contents.contains(BackupContent.PlayInfo)) {
+            if (zipItems.addNotNull(createPlayInfoContent())) {
+                backedUpContents.add(BackupContent.PlayInfo)
+            }
+        }
+
+        // Metadata (only the contents actually written to the backup)
+        val metadata = createMetadata(backedUpContents.sortedBy { it.ordinal })
+            ?: throw IllegalStateException("Cannot create necessary metadata")
+        zipItems.add(0, metadata)
+        return zipItems
     }
 
     suspend fun restoreBackup(source: Uri, contents: List<BackupContent>) = withContext(IO) {
