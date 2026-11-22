@@ -212,7 +212,7 @@ Qobuz/Tidal/Bandcamp o la compra directa son mejores fuentes.
 ## Implementado en esta iteración (UI v3 · fase 1)
 
 - **Entrada al ecosistema desde Home**: fila de fuentes `Local · Deezer ·
-  Descargas` (Descargas todavía deshabilitada).
+  Descargas`, todas habilitadas.
 - **Pantalla Deezer** (`ui/screen/deezer/`):
   - catálogo público: éxitos, álbumes destacados, playlists editoriales y
     artistas populares;
@@ -222,18 +222,21 @@ Qobuz/Tidal/Bandcamp o la compra directa son mejores fuentes.
   - botón “Abrir en Deezer” para usar la suscripción en la app oficial.
 - **Navegación** `nav_deezer` en `graph_main.xml`; la barra inferior se oculta
   en esa pantalla y vuelve al volver a Home.
-- **Sin auth todavía**: el catálogo usa la API pública. La sesión ARL,
-  reproducción completa y descargas son la siguiente fase.
+- **Sesión y biblioteca**: login oficial, perfil/plan, artistas, álbumes y
+  pistas favoritas, con alta/baja de favoritos.
+- **Descargas**: pista o álbum completo, FLAC/MP3, etiquetas y portada,
+  MediaStore, historial persistente y reproducción local desde Descargas.
 - **Sin romper nada**: la biblioteca local, UAC2, cola, letras, EQ y ajustes
   siguen igual.
 
 ### Pendiente inmediato de esta fase
 
-- Probar en dispositivo la pantalla Deezer y el preview (ADB sigue
-  desconectado).
 - Cola unificada local + Deezer y streaming sin descarga completa.
+- Mover la cola de descargas a un foreground service/WorkManager.
+- Favoritos de playlists (lectura ya disponible; falta el alta/baja fiable).
+- Verificar listas privadas de la cuenta y letras sincronizadas.
 
-## Deezer nativo experimental (implementado sin probar en dispositivo)
+## Deezer nativo experimental (verificado en dispositivo)
 
 Se añadió la base del proveedor privado, siguiendo el enfoque de Sonora:
 
@@ -252,6 +255,15 @@ Se añadió la base del proveedor privado, siguiendo el enfoque de Sonora:
   para pegar una cookie ARL; botón de descarga por pista, descarga de
   álbum/playlist/top de artista y estado por pista (en cola, descargando,
   etiquetando, descargado, error).
+- **Mi Deezer**: la barra superior abre la biblioteca de la cuenta con
+  pestañas Artistas, Álbumes, Listas y Pistas. Los favoritos se leen con
+  `deezer.pageProfile` y `favorite_song.getList`; el corazón de las fichas de
+  álbum/artista y de la vista previa añade o quita favoritos y refresca la
+  biblioteca.
+- La **historial de descargas** se guarda en preferencias privadas: al
+  reiniciar, Descargas sigue mostrando lo descargado (y una importación única
+  recupera archivos antiguos de `Music/Elyvaen/Deezer`). Tocar una fila
+  completada reproduce el archivo local con la cola normal de Elyvaen.
 - Las descargas se ejecutan en un `CoroutineScope` de aplicación; falta
   pasarlas a un foreground service/WorkManager para que sobrevivan al cierre
   de la app.
@@ -259,21 +271,29 @@ Se añadió la base del proveedor privado, siguiendo el enfoque de Sonora:
   player. El ARL es personal y no se registra en logs.
 
 También se añadió la pantalla **Descargas** (`ui/screen/deezer/DownloadsScreen.kt`):
-estado vacío, almacenamiento libre/total, descargas en curso, completadas y
-reintento. El chip `Descargas` del Home ya abre esa pantalla.
+estado vacío, almacenamiento libre/total, descargas en curso, completadas,
+reintento y reproducción local. El chip `Descargas` del Home ya abre esa
+pantalla.
 
 Se añadió **Estadísticas** (`StatsScreen.kt`, inspirada en ArchiveTune):
 tiempo escuchado, reproducciones, pistas únicas, top canciones, top artistas,
 top álbumes e historial reciente, con acceso desde el icono de tendencia del
 Home.
 
-Verificado el 2026-11-21: la navegación a Deezer, el estado offline, el
-diálogo ARL y la pantalla Descargas vacía funcionan en el Moto G51. El
-catálogo público, las previews y las descargas reales no se pudieron probar
-porque el DAP estaba en modo avión y sin Wi-Fi; el ARL del usuario todavía no
-está configurado. La build release quedó instalada y el mini-player/90 Hz
-verificados. También se corrigió el arranque para que una categoría fuera de
-la barra inferior (p. ej. Géneros) no deje la Home inaccesible.
+El **modo kiosco** ahora usa `startLockTask()` de Android además de ocultar
+las barras. El interruptor del dashboard DAP persiste la preferencia y el
+sistema muestra su confirmación de fijación la primera vez; mantener subir
+volumen sale del kiosco. Sin device owner no se puede evitar esa confirmación
+del sistema.
+
+Verificado el 2026-11-21 en el Moto G51 con la cuenta **NoelCruz (HiFi)**:
+login oficial, catálogo, búsqueda y fichas de álbum/artista/playlist;
+biblioteca de artistas, álbumes y pistas favoritas; alta/baja de favoritos;
+descarga real de una pista y de un álbum completo en FLAC 16/44.1 con etiquetas
+y portada; aparición en MediaStore (`Music/Elyvaen/Deezer/…`), reproducción
+local desde Descargas y persistencia tras reiniciar; fijación real del kiosco
+(`mLockTaskModeState=PINNED`). La build release quedó instalada y el
+mini-player/90 Hz verificados.
 
 ## Decisiones pendientes
 
