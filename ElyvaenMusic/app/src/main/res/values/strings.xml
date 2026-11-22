@@ -1196,6 +1196,14 @@
     <string name="deezer_login_or">or use an ARL cookie</string>
     <string name="deezer_login_hint">Sign in with your Deezer account in the official page. Your password is never stored by Elyvaen.</string>
     <string name="deezer_my_library">My Deezer</string>
+    <string name="link_resolver_title">Open link</string>
+    <string name="link_resolver_loading">Resolving link…</string>
+    <string name="link_resolver_error">Could not resolve the link</string>
+    <string name="link_resolver_in_library">In your library</string>
+    <string name="link_resolver_not_in_library">This song is not in your local library yet.</string>
+    <string name="link_resolver_source">Source: %1$s</string>
+    <string name="link_resolver_unknown_title">Unknown track</string>
+    <string name="link_resolver_no_app">No app can open that link</string>
     <string name="deezer_library_title">Your library</string>
     <string name="deezer_library_subtitle">Saved artists, albums, playlists and tracks</string>
     <string name="deezer_library_empty">No favorites in this section</string>

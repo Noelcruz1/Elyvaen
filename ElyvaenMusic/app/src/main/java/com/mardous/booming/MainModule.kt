@@ -36,6 +36,7 @@ import com.mardous.booming.data.remote.github.GitHubService
 import com.mardous.booming.data.remote.jsonHttpClient
 import com.mardous.booming.data.remote.lastfm.LastFmService
 import com.mardous.booming.data.remote.listenbrainz.ListenBrainzService
+import com.mardous.booming.data.remote.odesli.OdesliClient
 import com.mardous.booming.data.remote.lyrics.LyricsDownloadService
 import com.mardous.booming.data.remote.musicbrainz.MusicBrainzService
 import com.mardous.booming.data.remote.provideOkHttp
@@ -80,6 +81,7 @@ import com.mardous.booming.ui.screen.library.artists.ArtistDetailViewModel
 import com.mardous.booming.ui.screen.library.folders.FolderDetailViewModel
 import com.mardous.booming.ui.screen.library.genres.GenreDetailViewModel
 import com.mardous.booming.ui.screen.library.home.HomeViewModel
+import com.mardous.booming.ui.screen.link.LinkResolverViewModel
 import com.mardous.booming.ui.screen.library.playlists.PlaylistDetailViewModel
 import com.mardous.booming.ui.screen.library.search.SearchViewModel
 import com.mardous.booming.ui.screen.library.years.YearDetailViewModel
@@ -113,6 +115,7 @@ val networkModule = module {
     single { ListenBrainzService(client = get()) }
     single { MusicBrainzService(client = get()) }
     single { LyricsDownloadService(client = get()) }
+    single { OdesliClient(client = get()) }
     single { QueueStateHolder() }
 }
 
@@ -309,6 +312,10 @@ private val viewModule = module {
 
     viewModel {
         HomeViewModel(repository = get(), eventBus = get())
+    }
+
+    viewModel {
+        LinkResolverViewModel(odesli = get(), repository = get())
     }
 
     viewModel {

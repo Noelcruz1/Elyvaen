@@ -61,6 +61,8 @@ import com.mardous.booming.playback.library.SearchQueryProvider
 import com.mardous.booming.ui.IScrollHelper
 import com.mardous.booming.ui.component.base.AbsSlidingMusicPanelActivity
 import com.mardous.booming.ui.screen.library.search.SearchFragment
+import com.mardous.booming.ui.screen.link.LinkResolverFragment
+import com.mardous.booming.ui.screen.link.extractMusicUrl
 import com.mardous.booming.ui.screen.update.UpdateDialog
 import com.mardous.booming.ui.screen.update.UpdateSearchResult
 import com.mardous.booming.ui.screen.update.UpdateViewModel
@@ -241,8 +243,29 @@ class MainActivity : AbsSlidingMusicPanelActivity(), MediaController.Listener {
         handlePlaybackIntent(intent)
     }
 
+    /**
+     * A Deezer/Spotify/YouTube/Tidal/Apple Music URL shared with or opened by
+     * Elyvaen is handed to the link resolver sheet. Non-URL media intents keep
+     * their normal playback/search handling.
+     */
+    private fun handleSharedMusicLink(intent: Intent): Boolean {
+        if (intent.action != Intent.ACTION_SEND && intent.action != Intent.ACTION_VIEW) {
+            return false
+        }
+        val raw = intent.getStringExtra(Intent.EXTRA_TEXT) ?: intent.dataString
+        val link = raw.extractMusicUrl() ?: return false
+        if (supportFragmentManager.findFragmentByTag(LINK_RESOLVER_TAG) == null) {
+            LinkResolverFragment.newInstance(link).show(supportFragmentManager, LINK_RESOLVER_TAG)
+        }
+        setIntent(Intent())
+        return true
+    }
+
     @Suppress("DEPRECATION")
     private fun handlePlaybackIntent(intent: Intent) {
+        if (handleSharedMusicLink(intent)) {
+            return
+        }
         when (intent.action) {
             ACTION_SHOW_CONTENT -> {
                 intent.getStringExtra(EXTRA_CONTENT_TYPE)?.toEnum<ContentType>()?.let { type ->
@@ -522,6 +545,7 @@ class MainActivity : AbsSlidingMusicPanelActivity(), MediaController.Listener {
     }
 
     companion object {
+        private const val LINK_RESOLVER_TAG = "LINK_RESOLVER"
         const val ACTION_SHOW_CONTENT = "com.mardous.booming.action.SHOW_CONTENT"
         const val EXTRA_CONTENT_TYPE = "com.mardous.booming.extra.CONTENT_TYPE"
 
