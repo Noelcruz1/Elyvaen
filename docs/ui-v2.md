@@ -82,6 +82,7 @@ Estado: **fase 1 y 2 implementadas y verificadas en el Moto G51** (2026-11-17).
 - `screens/style-picker.png` — selector de estilo con Elyvaen.
 - `screens/dap-dashboard.png` — panel DAP/UAC2.
 - `screens/kiosk.png` — kiosco real con la app fijada.
+- `screens/hidden-content.png` — panel Contenido oculto con restaurar.
 
 ## Pruebas realizadas
 

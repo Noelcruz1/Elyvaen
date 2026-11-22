@@ -295,6 +295,21 @@ local desde Descargas y persistencia tras reiniciar; fijación real del kiosco
 (`mLockTaskModeState=PINNED`). La build release quedó instalada y el
 mini-player/90 Hz verificados.
 
+## Biblioteca curada (2026-11-22)
+
+- **Ocultar de la biblioteca** para álbumes, artistas y pistas, tanto en el menú
+  individual como en selección múltiple. No borra archivos: guarda el id/nombre
+  en preferencias privadas y `SongRepository` los excluye de todas las consultas
+  de biblioteca, búsqueda, artistas, géneros y años.
+- Panel **Contenido oculto** desde el menú de la biblioteca y desde
+  Ajustes → Biblioteca, con **Restaurar** por elemento y **Restaurar todo**.
+- Verificado en el Moto G51: ocultar el álbum `:)` de The Japanese House y la
+  pista `:)` los quita de Álbumes/Canciones; el archivo sigue en MediaStore y
+  vuelve al restaurarlo. También funciona con selección múltiple, útil para
+  archivar de golpe varios álbumes de Mili.
+- Para escucha suelta: tras archivar los álbumes que no interesan, la pestaña
+  **Canciones**, favoritos y listas propias quedan como biblioteca curada.
+
 ## Decisiones pendientes
 
 1. **Deezer primero**: ¿catálogo + playback nativo en el DAP, o puente NAS
