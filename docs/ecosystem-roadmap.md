@@ -329,13 +329,13 @@ mini-player/90 Hz verificados.
 
 | Extra propuesto | Base | Licencia | ¿Integrable? | Esfuerzo | Veredicto |
 |---|---|---|---|---|---|
-| Resolvedor de enlaces Deezer/Spotify/YouTube | Redomi | GPL-3.0 | Sí, nativo | Medio | **Hacer primero**: share sheet → Odesli/song.link → buscar en biblioteca local o Deezer, abrir o descargar. |
+| Resolvedor de enlaces Deezer/Spotify/YouTube | Redomi | GPL-3.0 | Sí, nativo | Medio | **Implementado**: share sheet → Odesli/song.link → coincidencia local o abrir en Deezer. |
 | Salud de biblioteca y edición por lotes | Metadator | AGPL-3.0 | Solo reimplementar | Medio-alto | **Muy útil** para las 896 pistas: detectar sin portada/título/artista/álbum/letra, duplicados y tags raros; usar TagLib + MusicBrainz + Deezer + LRCLIB. No copiar código AGPL. |
 | Cola/letras/Flow y listas inteligentes | Sonora | GPL-3.0 | Portar conceptos | Medio | Sonora es Rust/GPUI de escritorio; no se embebe. Su lógica Deezer ya está portada. Añadir Flow/mezcla por similitud y panel de cola/letras. |
 | Quick picks, temas, letras, sleep timer | ArchiveTune | GPL-3.0 | Ideas/portes pequeños | Bajo | Su backend es YouTube Music, no Deezer. Solo adaptar UI y funciones; no traer su motor. |
 | Descargas masivas y watchlists | Elixium / streamrip | MIT / GPL-3.0 | Servicio externo | Alto | No son librerías Android: corren en NAS/Termux. Integrar por REST/SSH o carpeta compartida en una fase de puente. |
 | Rich Presence de Discord | Music Presence | Source-available | No reutilizable | Bajo / Alto | Discord Android no acepta RPC de terceros. Webhook desde la app es fácil; presencia real requiere companion en PC. |
-| “Sueltas” / Flow local | Propio | GPL-3.0 | Sí | Bajo-medio | Sección o playlist automática con pistas sueltas, favoritas y no silenciadas; encaja con tu forma de escuchar. |
+| “Sueltas” / Flow local | Propio | GPL-3.0 | Sí | Bajo-medio | **Implementado**: sección en Home y vista completa con singles/pistas de álbumes de 1–2 canciones. |
 
 ### Orden recomendado
 
@@ -344,6 +344,27 @@ mini-player/90 Hz verificados.
 3. **“Sueltas”/Flow local**: aprovecha el archivado y el silenciado que acabamos de añadir.
 4. **Webhook de Discord** y, más adelante, companion de PC.
 5. **Puente NAS** con Elixium/streamrip cuando haya servidor.
+
+## Resolvedor de enlaces y Sueltas (2026-11-22)
+
+- **Redomi / song.link**: MainActivity recibe `ACTION_SEND` (texto) y
+  `ACTION_VIEW` de Deezer, Spotify, YouTube/YouTube Music, Tidal, Apple Music,
+  SoundCloud y Amazon Music. Extrae la primera URL y abre la hoja
+  `LinkResolverFragment`, que consulta `api.song.link` y muestra título,
+  artista, portada, enlaces por plataforma y una lista de coincidencias en la
+  biblioteca local. Tocar una coincidencia la reproduce en la cola normal.
+- La clave de cliente de song.link es la misma que usa Redomi (GPL-3.0) y se
+  documenta como identificador público, no como credencial de usuario. Si
+  song.link la rota, solo hay que actualizar `OdesliClient.API_KEY`.
+- **Sueltas**: `ContentType.LooseSongs` y `Repository.looseSongs()` agrupan las
+  pistas cuyo álbum tiene una o dos canciones; se excluyen silenciados y
+  ocultos. Aparecen como sección “Sueltas” en Home (20 aleatorias) y como vista
+  completa con Reproducir/Aleatorio.
+- Verificado en el Moto G51: la sección Sueltas muestra 490 canciones y abre su
+  lista; el enlace `deezer.com/track/1982222107` resuelve a *Miku* de
+  Anamanaguchi y la encuentra en la biblioteca local. La primera prueba con la
+  API pública sin clave devolvió 401 `PUBLIC_API_ACCESS_DEPRECATED`; con la
+  clave de cliente de Redomi funciona.
 
 ## Decisiones pendientes
 

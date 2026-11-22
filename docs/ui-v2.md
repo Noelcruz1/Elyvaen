@@ -62,6 +62,9 @@ Estado: **fase 1 y 2 implementadas y verificadas en el Moto G51** (2026-11-17).
 
 - `screens/home.png` — Home con selector Local/Deezer/Descargas y mini player.
 - `screens/home-foryou.png` — sección “Para ti” con carrusel de canciones.
+- `screens/home-sueltas.png` — sección “Sueltas” para singles y pistas sueltas.
+- `screens/sueltas.png` — vista completa de Sueltas con reproducir y aleatorio.
+- `screens/link-resolver.png` — enlace de Deezer resuelto con song.link y coincidencias locales.
 - `screens/player.png` — player Elyvaen con favorito, portada y próxima pista.
 - `screens/library-songs.png` — biblioteca de canciones con filas tipo tarjeta.
 - `screens/library-albums.png` — biblioteca de álbumes.
