@@ -424,7 +424,7 @@ depende del PC para cargar archivos.
 | H2 | Fuentes NAS: SMB, WebDAV, SFTP, Subsonic/Navidrome; sync y backup · **SMB/WebDAV + descarga + sync/backup implementados 2026-11-22; SFTP/Subsonic pendientes** | Biblioteca en red |
 | H3 | Servidor DLNA/UPnP + WebDAV + control remoto web · **implementado 2026-11-22** | El DAP sirve a la casa |
 | H4 | Motor de audio: UAC2 exclusivo, frecuencia nativa, EQ paramétrico, convolución, crossfeed, DoP · **DSP, EQ, crossfeed, convolución y estado UAC2 implementados 2026-11-22; DoP pendiente de kernel/USB DSD** | Nivel audiófilo |
-| H5 | AudioVisual: visualizador, letras/karaoke, vídeo local, Cast/DLNA | Experiencia de sala |
+| H5 | AudioVisual: visualizador, letras/karaoke, vídeo local, Cast/DLNA · **visualizador, karaoke, vídeo local y envío DLNA implementados 2026-11-22; Chromecast nativo pendiente** | Experiencia de sala |
 | H6 | Modo DAP: batería, térmica, botones, modo dedicado | Sensación de hardware dedicado |
 | **H7** | **Tailscale + NAS directa**: estado de Tailscale, MagicDNS, SMB/WebDAV/SFTP y sync/backup sobre la tailnet | Acceso al NAS sin abrir puertos |
 
@@ -757,6 +757,53 @@ abre desde **Elyvaen Hub → Motor de audio**.
 - DoP/DSD nativo queda pendiente de una ruta UAC2 que lo soporte.
 - El panel UAC2 reutiliza el FIFO/servicio existente; no crea un segundo
   reproductor ni toca el kernel desde la app.
+
+## Fase H5 — AudioVisual y envío a TV (2026-11-22)
+
+La pantalla **Elyvaen Hub → Sala / AudioVisual** reúne visualizador, karaoke,
+vídeo local y envío DLNA a TVs o altavoces.
+
+### Implementado
+
+- **Visualizador real**: un procesador de paso captura la onda mono del flujo
+  PCM de Media3 (16/24-bit o float) cada ~33 ms y la publica en un
+  `StateFlow`. La UI dibuja 48 barras con degradado. No usa `RECORD_AUDIO` ni
+  el permiso de micrófono; lee el audio que ya está reproduciendo el DAP.
+- **Letras / Karaoke**: botón directo a la pantalla de letras sincronizadas
+  existente, que ya resalta la línea actual, mantiene la pantalla encendida y
+  permite buscar la posición tocando una línea.
+- **Vídeo local**: consulta MediaStore.Video, lista título/duración/tamaño y
+  abre `VideoPlayerActivity` con ExoPlayer y controles. La actividad pide foco
+  de audio de película para pausar la música y mantiene la pantalla encendida.
+- **Enviar a TV (DLNA sender)**:
+  - Descubre `MediaRenderer:1` por SSDP.
+  - Lee la descripción UPnP, localiza el `controlURL` de AVTransport y envía
+    `SetAVTransportURI` + `Play`.
+  - Arranca automáticamente el servidor H3 si hace falta y usa la URL
+    `/dlna/media/<id>` de la canción actual, con metadata DIDL-Lite.
+  - La TV debe estar en la misma Wi-Fi; no se abre ningún puerto en el router.
+
+### Verificación en el Moto G51
+
+- El visualizador mostró onda real y cambiante con `*Asterisk` de Orange Range
+  mientras el estado de MediaSession era `playing`.
+- **Buscar TVs** ejecutó SSDP y devolvió “No se encontraron TVs o dispositivos
+  DLNA” en la prueba; no había una TV DLNA disponible en ese momento. La UI y
+  el manejo de lista vacía quedaron validados.
+- Vídeo local: se copió un MP4 de prueba, apareció en la lista
+  (**1 vídeo, 0:10**) y `VideoPlayerActivity` lo reprodujo con controles.
+- **Letras / Karaoke** abrió la letra sincronizada y resaltó la línea activa.
+- El MP4 temporal y su entrada de MediaStore se borraron al terminar. El
+  servicio H3 no quedó ejecutándose.
+
+### Límites de H5
+
+- No hay Chromecast/Google Cast nativo; requiere Cast SDK/Play Services.
+- El envío DLNA manda la canción actual; aún no hay play/pausa/seek remotos ni
+  selección de cola para el renderer.
+- La TV física debe probarse en casa; el descubrimiento SSDP ya está
+  implementado y se validó el caso sin dispositivos.
+- La lista de vídeo es básica (sin miniaturas, subtítulos ni cast de vídeo).
 
 ## NAS general y OMV (2026-11-22)
 

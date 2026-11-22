@@ -83,6 +83,7 @@ import com.mardous.booming.playback.dsp.DspAudioProcessor
 import com.mardous.booming.playback.dsp.DspManager
 import com.mardous.booming.playback.processor.BalanceAudioProcessor
 import com.mardous.booming.playback.processor.ReplayGainAudioProcessor
+import com.mardous.booming.playback.visualizer.AudioVisualizerProcessor
 import com.mardous.booming.playback.renderer.AlacWorkaroundCodecSelector
 import com.mardous.booming.playback.renderer.BoomingMusicRenderersFactory
 import com.mardous.booming.util.CLEAR_QUEUE_ON_COMPLETION
@@ -166,6 +167,7 @@ class PlaybackService :
     private val replayGainProcessor: ReplayGainAudioProcessor by inject()
     private val dspProcessor: DspAudioProcessor by inject()
     private val dspManager: DspManager by inject()
+    private val visualizerProcessor: AudioVisualizerProcessor by inject()
 
     private lateinit var nm: NotificationManager
     private lateinit var persistentStorage: PersistentStorage
@@ -279,7 +281,8 @@ class PlaybackService :
                         this,
                         balanceProcessor,
                         replayGainProcessor,
-                        dspProcessor
+                        dspProcessor,
+                        visualizerProcessor
                     )
                         .setEnableAudioFloatOutput(equalizerManager.soundSettings.value.audioFloatOutput)
                         .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)

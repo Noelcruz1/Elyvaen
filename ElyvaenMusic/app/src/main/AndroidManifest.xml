@@ -18,6 +18,9 @@
         android:name="android.permission.READ_MEDIA_AUDIO"
         android:minSdkVersion="33"/>
     <uses-permission
+        android:name="android.permission.READ_MEDIA_VIDEO"
+        android:minSdkVersion="33"/>
+    <uses-permission
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32"/>
     <uses-permission
@@ -143,6 +146,12 @@
             android:exported="false"
             android:theme="@style/Theme.Booming"
             android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".ui.screen.video.VideoPlayerActivity"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout"
+            android:exported="false"
+            android:theme="@style/Theme.Booming.Black" />
 
         <activity
             android:name=".ui.screen.AudioPreviewActivity"

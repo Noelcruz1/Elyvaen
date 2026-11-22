@@ -73,6 +73,7 @@ Estado: **fase 1 y 2 implementadas y verificadas en el Moto G51** (2026-11-17).
 - `screens/nas-backup.png` — copia `.bmgbak` subida al NAS.
 - `screens/media-server.png` — H3 con DLNA, WebDAV, control web y QR.
 - `screens/audio-engine.png` — H4 con EQ paramétrico, crossfeed y convolución.
+- `screens/sala.png` — H5 con visualizador, envío a TV y vídeo local.
 - `screens/hub.png` — Elyvaen Hub con importación USB, Wi-Fi y almacenamiento.
 - `screens/hub-wifi.png` — subida por Wi-Fi con QR y enlace temporal.
 - `screens/hub-usb-import.png` — importación SAF completada con progreso y resumen.

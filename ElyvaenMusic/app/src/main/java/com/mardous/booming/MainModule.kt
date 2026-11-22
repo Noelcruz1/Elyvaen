@@ -30,6 +30,7 @@ import com.mardous.booming.data.local.MediaServerController
 import com.mardous.booming.data.local.MediaStoreWriter
 import com.mardous.booming.data.local.NasSettingsStore
 import com.mardous.booming.data.local.StorageOverview
+import com.mardous.booming.data.local.VideoLibrary
 import com.mardous.booming.data.local.WifiUploadController
 import com.mardous.booming.data.local.backup.BackupManager
 import com.mardous.booming.data.model.Genre
@@ -43,6 +44,7 @@ import com.mardous.booming.data.remote.lastfm.LastFmService
 import com.mardous.booming.data.remote.discord.DiscordWebhookService
 import com.mardous.booming.data.remote.listenbrainz.ListenBrainzService
 import com.mardous.booming.data.remote.odesli.OdesliClient
+import com.mardous.booming.data.remote.mediaserver.DlnaRendererClient
 import com.mardous.booming.data.remote.nas.NasClient
 import com.mardous.booming.data.remote.nas.NasConnectionTester
 import com.mardous.booming.data.remote.nas.NasDownloadManager
@@ -80,6 +82,8 @@ import com.mardous.booming.playback.dsp.DspAudioProcessor
 import com.mardous.booming.playback.dsp.DspManager
 import com.mardous.booming.playback.processor.BalanceAudioProcessor
 import com.mardous.booming.playback.processor.ReplayGainAudioProcessor
+import com.mardous.booming.playback.visualizer.AudioVisualizerProcessor
+import com.mardous.booming.playback.visualizer.AudioVisualizerState
 import com.mardous.booming.ui.screen.backup.BackupViewModel
 import com.mardous.booming.ui.screen.deezer.DeezerViewModel
 import com.mardous.booming.ui.screen.deezer.DownloadsViewModel
@@ -95,6 +99,7 @@ import com.mardous.booming.ui.screen.library.home.HomeViewModel
 import com.mardous.booming.ui.screen.health.MetadataHealthViewModel
 import com.mardous.booming.ui.screen.hub.AudioEngineViewModel
 import com.mardous.booming.ui.screen.hub.HubViewModel
+import com.mardous.booming.ui.screen.hub.SalaViewModel
 import com.mardous.booming.ui.screen.hub.NasBrowserViewModel
 import com.mardous.booming.ui.screen.hub.NasSettingsViewModel
 import com.mardous.booming.ui.screen.link.LinkResolverViewModel
@@ -141,6 +146,8 @@ val networkModule = module {
     single { StorageOverview(context = androidContext()) }
     single { WifiUploadController(context = androidContext()) }
     single { MediaServerController(context = androidContext()) }
+    single { VideoLibrary(context = androidContext()) }
+    single { DlnaRendererClient(context = androidContext(), client = get()) }
     single { QueueStateHolder() }
 }
 
@@ -165,6 +172,12 @@ private val mainModule = module {
     }
     single {
         DspManager(context = androidContext(), processor = get())
+    }
+    single {
+        AudioVisualizerState()
+    }
+    single {
+        AudioVisualizerProcessor(state = get())
     }
     single {
         EqualizerManager(
@@ -385,6 +398,17 @@ private val viewModule = module {
         AudioEngineViewModel(
             context = androidContext(),
             manager = get()
+        )
+    }
+
+    viewModel {
+        SalaViewModel(
+            context = androidContext(),
+            rendererClient = get(),
+            mediaServerController = get(),
+            videoLibrary = get(),
+            queueStateHolder = get(),
+            visualizerState = get()
         )
     }
 
