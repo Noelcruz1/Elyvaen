@@ -306,6 +306,9 @@ dependencies {
     implementation(libs.room)
     ksp(libs.room.compiler)
 
+    implementation(libs.androidx.security.crypto)
+    implementation(libs.smbj)
+
     implementation(libs.m3color)
     implementation(libs.coil.transformations)
 

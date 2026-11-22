@@ -239,6 +239,7 @@ abstract class AbsRecyclerViewFragment<A : RecyclerView.Adapter<*>, LM : Recycle
             R.id.action_hidden_content -> HiddenContentFragment()
                 .show(childFragmentManager, "HIDDEN_CONTENT")
             R.id.action_metadata_health -> findNavController().navigate(R.id.nav_metadata_health)
+            R.id.action_nas_settings -> findNavController().navigate(R.id.nav_nas_settings)
             R.id.action_import_playlist -> ImportPlaylistDialog().show(childFragmentManager, "IMPORT_PLAYLIST")
         }
         return false

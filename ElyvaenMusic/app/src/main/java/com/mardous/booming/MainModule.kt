@@ -26,6 +26,7 @@ import com.mardous.booming.core.MediaEventBus
 import com.mardous.booming.core.audio.AudioOutputObserver
 import com.mardous.booming.data.local.EditTarget
 import com.mardous.booming.data.local.MediaStoreWriter
+import com.mardous.booming.data.local.NasSettingsStore
 import com.mardous.booming.data.local.backup.BackupManager
 import com.mardous.booming.data.model.Genre
 import com.mardous.booming.data.remote.deezer.DeezerAccountStore
@@ -38,6 +39,7 @@ import com.mardous.booming.data.remote.lastfm.LastFmService
 import com.mardous.booming.data.remote.discord.DiscordWebhookService
 import com.mardous.booming.data.remote.listenbrainz.ListenBrainzService
 import com.mardous.booming.data.remote.odesli.OdesliClient
+import com.mardous.booming.data.remote.nas.NasConnectionTester
 import com.mardous.booming.data.remote.lyrics.LyricsDownloadService
 import com.mardous.booming.data.remote.musicbrainz.MusicBrainzService
 import com.mardous.booming.data.remote.provideOkHttp
@@ -83,6 +85,7 @@ import com.mardous.booming.ui.screen.library.folders.FolderDetailViewModel
 import com.mardous.booming.ui.screen.library.genres.GenreDetailViewModel
 import com.mardous.booming.ui.screen.library.home.HomeViewModel
 import com.mardous.booming.ui.screen.health.MetadataHealthViewModel
+import com.mardous.booming.ui.screen.hub.NasSettingsViewModel
 import com.mardous.booming.ui.screen.link.LinkResolverViewModel
 import com.mardous.booming.ui.screen.library.playlists.PlaylistDetailViewModel
 import com.mardous.booming.ui.screen.library.search.SearchViewModel
@@ -119,6 +122,8 @@ val networkModule = module {
     single { LyricsDownloadService(client = get()) }
     single { OdesliClient(client = get()) }
     single { DiscordWebhookService(client = get()) }
+    single { NasSettingsStore(context = androidContext()) }
+    single { NasConnectionTester(client = get()) }
     single { QueueStateHolder() }
 }
 
@@ -323,6 +328,14 @@ private val viewModule = module {
 
     viewModel {
         MetadataHealthViewModel(context = androidContext(), repository = get())
+    }
+
+    viewModel {
+        NasSettingsViewModel(
+            context = androidContext(),
+            store = get(),
+            tester = get()
+        )
     }
 
     viewModel {

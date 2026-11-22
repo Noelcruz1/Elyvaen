@@ -69,6 +69,7 @@ fun HomeScreen(
     onPlayAllClick: () -> Unit,
     onDeezerClick: () -> Unit,
     onDownloadsClick: () -> Unit,
+    onHubClick: () -> Unit,
     onHealthClick: () -> Unit,
     onSongItemClick: (List<Song>, Int) -> Unit,
     onItemClick: (Any) -> Unit,
@@ -157,6 +158,12 @@ fun HomeScreen(
                                 onDeezerClick = onDeezerClick,
                                 onDownloadsClick = onDownloadsClick,
                                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
+                            )
+                        }
+                        item {
+                            ElyvaenHubBanner(
+                                onClick = onHubClick,
+                                modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp)
                             )
                         }
                         item {

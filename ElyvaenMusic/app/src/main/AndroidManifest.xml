@@ -28,6 +28,9 @@
         android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
         android:minSdkVersion="34"/>
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
+    <queries>
+        <package android:name="com.tailscale.ipn" />
+    </queries>
         <uses-permission android:name="android.permission.REBOOT"/>
     <uses-permission android:name="android.permission.SHUTDOWN"/>
     <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS"/>

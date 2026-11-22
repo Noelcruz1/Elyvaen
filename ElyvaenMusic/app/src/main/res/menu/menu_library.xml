@@ -88,6 +88,12 @@
         app:showAsAction="never" />
     <item
         android:orderInCategory="10"
+        android:id="@+id/action_nas_settings"
+        android:icon="@drawable/ic_cloud_24dp"
+        android:title="@string/nas_title"
+        app:showAsAction="never" />
+    <item
+        android:orderInCategory="10"
         android:id="@+id/action_scan"
         android:title="@string/scan_media"
         app:showAsAction="never" />

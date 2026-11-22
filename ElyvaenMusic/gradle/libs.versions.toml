@@ -33,6 +33,8 @@ glance = "1.2.0"
 koin = "4.2.2"
 coil = "3.6.3"
 ktor = "3.6.0"
+securityCrypto = "1.1.0"
+smbj = "0.15.0"
 
 markwon = "4.6.2"
 m3color = "2026.1"
@@ -118,6 +120,8 @@ ktor-client-okhttp = { group = "io.ktor", name = "ktor-client-okhttp", version.r
 ktor-client-content-negotiation = { group = "io.ktor", name = "ktor-client-content-negotiation", version.ref = "ktor" }
 ktor-client-encoding = { group = "io.ktor", name = "ktor-client-encoding", version.ref = "ktor" }
 ktor-serialization-json = { group = "io.ktor", name = "ktor-serialization-kotlinx-json", version.ref = "ktor" }
+androidx-security-crypto = { module = "androidx.security:security-crypto", version.ref = "securityCrypto" }
+smbj = { module = "com.hierynomus:smbj", version.ref = "smbj" }
 
 markwon-core = { module = "io.noties.markwon:core", version.ref = "markwon" }
 markwon-html = { module = "io.noties.markwon:html", version.ref = "markwon" }
