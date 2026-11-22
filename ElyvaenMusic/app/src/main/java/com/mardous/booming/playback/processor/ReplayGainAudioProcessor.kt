@@ -93,7 +93,8 @@ class ReplayGainAudioProcessor(
 
     override fun onConfigure(inputAudioFormat: AudioProcessor.AudioFormat): AudioProcessor.AudioFormat {
         if (inputAudioFormat.encoding != C.ENCODING_PCM_16BIT &&
-            inputAudioFormat.encoding != C.ENCODING_PCM_24BIT
+            inputAudioFormat.encoding != C.ENCODING_PCM_24BIT &&
+            inputAudioFormat.encoding != C.ENCODING_PCM_FLOAT
         ) {
             throw AudioProcessor.UnhandledAudioFormatException(inputAudioFormat)
         }
@@ -124,6 +125,14 @@ class ReplayGainAudioProcessor(
                         val scaled = (sample * delta).toInt()
                             .coerceIn(ByteUtils.Int24_MIN_VALUE, ByteUtils.Int24_MAX_VALUE)
                         buffer.putInt24(scaled)
+                    }
+                }
+
+                C.ENCODING_PCM_FLOAT -> {
+                    while (inputBuffer.remaining() >= 4) {
+                        buffer.putFloat(
+                            (inputBuffer.float * delta.toFloat()).coerceIn(-1f, 1f)
+                        )
                     }
                 }
 

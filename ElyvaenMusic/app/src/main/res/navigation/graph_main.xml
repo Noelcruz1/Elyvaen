@@ -51,6 +51,11 @@
         android:label="MediaServerFragment"/>
 
     <fragment
+        android:id="@+id/nav_audio_engine"
+        android:name="com.mardous.booming.ui.screen.hub.AudioEngineFragment"
+        android:label="AudioEngineFragment"/>
+
+    <fragment
         android:id="@+id/nav_songs"
         android:name="com.mardous.booming.ui.screen.library.songs.SongListFragment"
         android:label="SongsFragment"/>

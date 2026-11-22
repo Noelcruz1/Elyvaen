@@ -423,7 +423,7 @@ depende del PC para cargar archivos.
 | H1 | Hub de ingesta: USB OTG + subida por Wi-Fi con QR + gestor de almacenamiento · **implementado 2026-11-22** | Elimina el PC del día a día |
 | H2 | Fuentes NAS: SMB, WebDAV, SFTP, Subsonic/Navidrome; sync y backup · **SMB/WebDAV + descarga + sync/backup implementados 2026-11-22; SFTP/Subsonic pendientes** | Biblioteca en red |
 | H3 | Servidor DLNA/UPnP + WebDAV + control remoto web · **implementado 2026-11-22** | El DAP sirve a la casa |
-| H4 | Motor de audio: UAC2 exclusivo, frecuencia nativa, EQ paramétrico, convolución, crossfeed, DoP | Nivel audiófilo |
+| H4 | Motor de audio: UAC2 exclusivo, frecuencia nativa, EQ paramétrico, convolución, crossfeed, DoP · **DSP, EQ, crossfeed, convolución y estado UAC2 implementados 2026-11-22; DoP pendiente de kernel/USB DSD** | Nivel audiófilo |
 | H5 | AudioVisual: visualizador, letras/karaoke, vídeo local, Cast/DLNA | Experiencia de sala |
 | H6 | Modo DAP: batería, térmica, botones, modo dedicado | Sensación de hardware dedicado |
 | **H7** | **Tailscale + NAS directa**: estado de Tailscale, MagicDNS, SMB/WebDAV/SFTP y sync/backup sobre la tailnet | Acceso al NAS sin abrir puertos |
@@ -707,6 +707,56 @@ notificación y acción de parada.
 - Faltan carátulas en DIDL, búsqueda DLNA y perfiles de transcodificación.
 - El control web no gestiona listas ni búsqueda todavía.
 - No se versiona ningún nombre de host, share o credencial real.
+
+## Fase H4 — motor de audio (2026-11-22)
+
+El DSP vive dentro del hilo de audio de Media3, después de balance y ReplayGain,
+así que no depende de efectos globales de Android ni de una app externa. Se
+abre desde **Elyvaen Hub → Motor de audio**.
+
+### Implementado
+
+- **EQ paramétrico de 5 bandas**: low shelf, tres peaks y high shelf. Cada banda
+  ajusta frecuencia (20 Hz–20 kHz), ganancia (±12 dB) y Q (0,3–6) cuando es un
+  peak. Coeficientes biquad RBJ recalculados en el hilo de audio.
+- **Crossfeed**: retardo corto + paso bajo a 700 Hz, cantidad ajustable de 0 a
+  100 %, pensado para auriculares.
+- **Convolución FIR**: importación de un WAV mono/estéreo mediante SAF, copia a
+  almacenamiento privado, normalización, adaptación lineal a la frecuencia de
+  salida y truncado a **512 taps** para mantener la CPU bajo control.
+- **Soporte PCM 16/24-bit y float** en el procesador DSP, y también en balance
+  y ReplayGain para que la salida float no rompa la cadena.
+- **Panel UAC2**: estado del enlace, frecuencia del host, modo nativo o
+  compatibilidad, streaming y el interruptor **Frecuencia nativa del host**
+  conectado al `Uac2Control` existente.
+- **DoP** queda documentado como no disponible: este kernel/puente UAC2 no
+  expone endpoints DSD nativos y el módulo no simula DSD sobre PCM.
+
+### Verificación en el Moto G51
+
+- La pantalla H4 abrió con el panel UAC2 y el motor DSP.
+- Se cargó un impulso WAV real mediante el selector SAF; la app mostró
+  **“Impulso cargado”**, lo copió a almacenamiento privado y activó
+  convolución y crossfeed.
+- Con DSP + EQ + crossfeed + convolución activos, la reproducción siguió en
+  estado **playing** y la posición avanzó; no hubo crash, ANR ni errores de
+  `AudioTrack`.
+- UAC2 estaba apagado durante la prueba, así que el interruptor nativo no se
+  pudo validar contra un host real; el estado y la ruta de control ya están
+  conectados al servicio existente.
+- Después de la prueba se eliminó el impulso de prueba, se apagaron crossfeed,
+  convolución y el motor DSP, y se borró el WAV de `Download`.
+
+### Límites de H4
+
+- No hay medición calibrada ni corrección automática de sala; el EQ es manual.
+- La topología es fija de 5 bandas; no se pueden añadir/eliminar bandas desde la
+  UI todavía.
+- El FIR se limita a 512 taps y no usa FFT particionada; suficiente para
+  correcciones suaves, no para IR de sala largos.
+- DoP/DSD nativo queda pendiente de una ruta UAC2 que lo soporte.
+- El panel UAC2 reutiliza el FIFO/servicio existente; no crea un segundo
+  reproductor ni toca el kernel desde la app.
 
 ## NAS general y OMV (2026-11-22)
 

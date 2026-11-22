@@ -76,6 +76,8 @@ import com.mardous.booming.data.repository.SpecialRepository
 import com.mardous.booming.playback.QueueStateHolder
 import com.mardous.booming.playback.SleepTimer
 import com.mardous.booming.playback.equalizer.EqualizerManager
+import com.mardous.booming.playback.dsp.DspAudioProcessor
+import com.mardous.booming.playback.dsp.DspManager
 import com.mardous.booming.playback.processor.BalanceAudioProcessor
 import com.mardous.booming.playback.processor.ReplayGainAudioProcessor
 import com.mardous.booming.ui.screen.backup.BackupViewModel
@@ -91,6 +93,7 @@ import com.mardous.booming.ui.screen.library.folders.FolderDetailViewModel
 import com.mardous.booming.ui.screen.library.genres.GenreDetailViewModel
 import com.mardous.booming.ui.screen.library.home.HomeViewModel
 import com.mardous.booming.ui.screen.health.MetadataHealthViewModel
+import com.mardous.booming.ui.screen.hub.AudioEngineViewModel
 import com.mardous.booming.ui.screen.hub.HubViewModel
 import com.mardous.booming.ui.screen.hub.NasBrowserViewModel
 import com.mardous.booming.ui.screen.hub.NasSettingsViewModel
@@ -156,6 +159,12 @@ private val mainModule = module {
     }
     single {
         ReplayGainAudioProcessor()
+    }
+    single {
+        DspAudioProcessor()
+    }
+    single {
+        DspManager(context = androidContext(), processor = get())
     }
     single {
         EqualizerManager(
@@ -369,6 +378,13 @@ private val viewModule = module {
             client = get(),
             downloadManager = get(),
             backupManager = get()
+        )
+    }
+
+    viewModel {
+        AudioEngineViewModel(
+            context = androidContext(),
+            manager = get()
         )
     }
 
