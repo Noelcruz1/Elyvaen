@@ -370,16 +370,33 @@ mini-player/90 Hz verificados.
 
 - `MetadataHealthFragment` analiza las pistas visibles y calcula un porcentaje
   de metadatos completos, excluyendo silenciados y ocultos.
-- Detecta: sin título, sin artista, sin álbum, sin año, sin número de pista y
-  grupos de posibles duplicados (título + artista normalizados).
+- Detecta: sin título, sin artista, sin álbum, sin número de pista, sin
+  carátula y grupos de posibles duplicados (título + artista normalizados).
+- El **año no se usa en el análisis rápido**: en este dispositivo MediaStore
+  deja `YEAR` nulo en FLAC aunque el archivo tenga `DATE` (se comprobó con
+  *505* y *Asterisk*); marcarlo daba cientos de falsos positivos. Se sigue
+  pudiendo editar en el editor.
+- El score principal mide la **identidad** (título, artista y álbum); las
+  incidencias restantes se muestran aparte para no ocultar trabajo pendiente.
 - La pantalla tiene filtros por problema y una lista con la etiqueta de cada
   incidencia. Tocar una pista abre el editor de etiquetas existente; al volver,
   la salud se recalcula.
+- **Detectar carátulas** comprueba la portada embebida con TagLib y, si no
+  existe, la carátula que MediaStore tiene para el álbum (la que usa la app).
+  Los archivos ilegibles se tratan como desconocidos, no como faltantes.
+- **Autocompletar** rellena solo álbum (y año si también falta) de hasta 10
+  pistas con artista conocido. Consulta MusicBrainz con una pausa de 1,1 s y,
+  si no responde o no encuentra el tema, usa Deezer como respaldo. Nunca
+  sobrescribe etiquetas existentes y muestra un resumen. Las pistas sin artista
+  se dejan para edición manual para no aplicar coincidencias dudosas.
+- Verificado en el Moto G51: 893 pistas, **98 % de identidad**, 10 incidencias
+  (8 sin artista, varias sin número de pista), **0 carátulas faltantes** tras
+  el escaneo y ningún álbum vacío que autocompletar. Las carátulas visibles
+  de MediaStore evitan falsos positivos.
 - Acceso desde la tarjeta **Salud de biblioteca** de Home y desde el menú de la
   biblioteca.
 - Inspirado en Metadator, pero **sin copiar código AGPL**: usa MediaStore,
-  TagLib y las pantallas de edición que Elyvaen ya tenía. El autoarreglo por
-  lotes con MusicBrainz/Deezer/LRCLIB queda para una fase posterior.
+  TagLib, MusicBrainz, Deezer y las pantallas de edición que Elyvaen ya tenía.
 
 ## Discord: webhook de “ahora suena” (2026-11-22)
 
