@@ -422,7 +422,7 @@ depende del PC para cargar archivos.
 |---|---|---|
 | H1 | Hub de ingesta: USB OTG + subida por Wi-Fi con QR + gestor de almacenamiento · **implementado 2026-11-22** | Elimina el PC del día a día |
 | H2 | Fuentes NAS: SMB, WebDAV, SFTP, Subsonic/Navidrome; sync y backup · **SMB/WebDAV + descarga + sync/backup implementados 2026-11-22; SFTP/Subsonic pendientes** | Biblioteca en red |
-| H3 | Servidor DLNA/UPnP + WebDAV + control remoto web | El DAP sirve a la casa |
+| H3 | Servidor DLNA/UPnP + WebDAV + control remoto web · **implementado 2026-11-22** | El DAP sirve a la casa |
 | H4 | Motor de audio: UAC2 exclusivo, frecuencia nativa, EQ paramétrico, convolución, crossfeed, DoP | Nivel audiófilo |
 | H5 | AudioVisual: visualizador, letras/karaoke, vídeo local, Cast/DLNA | Experiencia de sala |
 | H6 | Modo DAP: batería, térmica, botones, modo dedicado | Sensación de hardware dedicado |
@@ -649,6 +649,64 @@ la biblioteca remota y traer música al DAP sin PC.
 - Sincronización programada y política de conflictos configurable.
 - Validar contra el OMV real cuando Tailscale esté instalado y el usuario
   introduzca sus credenciales; **ningún host real se versiona**.
+
+## Fase H3 — DLNA/UPnP, WebDAV y control web (2026-11-22)
+
+El DAP puede servir su biblioteca a la casa sin PC. Se abre desde **Elyvaen Hub
+→ Transmitir a la casa** y se ejecuta en un servicio en primer plano con
+notificación y acción de parada.
+
+### DLNA/UPnP para TVs
+
+- Servidor SSDP mínimo en `239.255.255.250:1900`, con `MulticastLock`, respuestas
+  a `M-SEARCH` y anuncios `ssdp:alive`/`byebye`.
+- Descripción UPnP `MediaServer:1`, `ContentDirectory:1` y
+  `ConnectionManager:1` en `http://<ip>:8200/dlna/description.xml`.
+- Browse jerárquico: **Artistas → pistas**, **Álbumes → pistas**,
+  **Canciones** y **Listas**. Devuelve DIDL-Lite con título, artista, álbum,
+  duración, tamaño y `protocolInfo` de audio.
+- Los archivos se sirven con **Range**, `Accept-Ranges`, `Content-Range` y
+  cabeceras DLNA, así que la TV puede buscar dentro del FLAC sin descargarlo
+  entero.
+- Nombre visible: `Elyvaen (<modelo>)`.
+
+### WebDAV y control web
+
+- **WebDAV de solo lectura** en `/dav/<token>/` con la jerarquía virtual
+  `Music/<artista>/<álbum>/<pista>`, `PROPFIND`, `GET`/`HEAD` y Range.
+- **Control web** en `/web/<token>/`: muestra lo que suena, permite
+  play/pausa, anterior/siguiente, barra de posición y elegir canciones de la
+  biblioteca. Usa el `MediaSession` de `PlaybackService`; no crea un segundo
+  reproductor.
+- El token de 12 caracteres se genera al arrancar y cambia en cada sesión.
+  Web y WebDAV lo exigen; DLNA queda abierto solo a la red local porque las TV
+  no negocian token.
+- El servidor escucha en el puerto 8200 (o el siguiente libre), solo se inicia
+  con Wi-Fi y no abre puertos en el router.
+
+### Verificación en el Moto G51
+
+- Descripción UPnP y SCPD servidas correctamente; socket SSDP en `:1900` y
+  hilo `elyvaen-ssdp` activos. La prueba con una TV física queda pendiente.
+- `ContentDirectory Browse` del raíz: 281 artistas, 488 álbumes, 893 canciones
+  y las listas. Browse de `songs` devolvió items con `res` FLAC.
+- `GET /dlna/media/<id>` con `Range: bytes=0-1023`: **HTTP 206**, 1024 bytes,
+  `Content-Range: bytes 0-1023/22491201`, FLAC 16/44.1 válido.
+- WebDAV: `PROPFIND` raíz y `/Music/` con 207; descarga parcial de una pista
+  FLAC con 206. La jerarquía usa nombres saneados y carpetas por artista/álbum.
+- Control web: página y API respondieron; `toggle` cambió el estado del DAP y
+  `play?songId=…` reprodujo otra pista en el reproductor real.
+- **Parada del servidor**: puerto 8200 y SSDP 1900 cerrados, notificación
+  retirada y UI vuelve a “Activar servidor” sin ANR.
+
+### Límites y pendientes
+
+- La TV debe estar en la misma Wi-Fi; no hay autenticación DLNA estándar.
+- No se incluye Chromecast/Google Cast (requiere Play Services y otro modelo
+  de sesión); H5 puede añadir Cast/DLNA como *sender* desde el DAP.
+- Faltan carátulas en DIDL, búsqueda DLNA y perfiles de transcodificación.
+- El control web no gestiona listas ni búsqueda todavía.
+- No se versiona ningún nombre de host, share o credencial real.
 
 ## NAS general y OMV (2026-11-22)
 

@@ -26,6 +26,7 @@ import com.mardous.booming.core.MediaEventBus
 import com.mardous.booming.core.audio.AudioOutputObserver
 import com.mardous.booming.data.local.AudioImportManager
 import com.mardous.booming.data.local.EditTarget
+import com.mardous.booming.data.local.MediaServerController
 import com.mardous.booming.data.local.MediaStoreWriter
 import com.mardous.booming.data.local.NasSettingsStore
 import com.mardous.booming.data.local.StorageOverview
@@ -136,6 +137,7 @@ val networkModule = module {
     single { AudioImportManager(context = androidContext()) }
     single { StorageOverview(context = androidContext()) }
     single { WifiUploadController(context = androidContext()) }
+    single { MediaServerController(context = androidContext()) }
     single { QueueStateHolder() }
 }
 

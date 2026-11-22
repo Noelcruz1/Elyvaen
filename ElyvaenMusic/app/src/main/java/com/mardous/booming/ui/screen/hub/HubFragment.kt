@@ -116,6 +116,7 @@ class HubFragment : Fragment() {
                         onBack = { findNavController().navigateUp() },
                         onOpenNas = { findNavController().navigate(R.id.nav_nas_settings) },
                         onBrowseNas = { findNavController().navigate(R.id.nav_nas_browser) },
+                        onMediaServer = { findNavController().navigate(R.id.nav_media_server) },
                         onImportTree = { uri -> importTree(uri) },
                         onCancelImport = viewModel::cancelImport,
                         onStartWifi = viewModel::startWifi,
@@ -151,6 +152,7 @@ private fun HubScreen(
     onBack: () -> Unit,
     onOpenNas: () -> Unit,
     onBrowseNas: () -> Unit,
+    onMediaServer: () -> Unit,
     onImportTree: (Uri) -> Unit,
     onCancelImport: () -> Unit,
     onStartWifi: () -> Unit,
@@ -265,6 +267,7 @@ private fun HubScreen(
                     )
                 }
                 item {
+                    MediaServerCard(onOpen = onMediaServer)
                     StorageCard(
                         state = state,
                         onClearCache = onClearCache
@@ -691,6 +694,19 @@ private fun NasCard(
                     Text(stringResource(R.string.nas_browser_settings))
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun MediaServerCard(onOpen: () -> Unit) {
+    HubCard(
+        icon = R.drawable.ic_phonelink_ring_24dp,
+        title = stringResource(R.string.hub_media_server_title),
+        subtitle = stringResource(R.string.hub_media_server_subtitle)
+    ) {
+        Button(onClick = onOpen, modifier = Modifier.fillMaxWidth()) {
+            Text(stringResource(R.string.hub_media_server_open))
         }
     }
 }
