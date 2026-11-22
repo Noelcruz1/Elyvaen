@@ -18,6 +18,9 @@
         android:id="@+id/action_hide_from_library"
         android:title="@string/action_hide_from_library"/>
     <item
+        android:id="@+id/action_hide_artist_albums"
+        android:title="@string/action_hide_artist_albums"/>
+    <item
         android:id="@+id/action_delete_from_device"
         android:title="@string/action_delete_from_device"/>
 </menu>

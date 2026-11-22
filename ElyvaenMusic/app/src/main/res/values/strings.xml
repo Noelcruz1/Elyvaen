@@ -972,6 +972,7 @@
     <string name="blacklist_title">Blacklist</string>
     <string name="blacklist_summary">The content of blacklisted folders is hidden from your library.</string>
     <string name="action_hide_from_library">Hide from library</string>
+    <string name="action_hide_artist_albums">Hide all their albums</string>
     <string name="hidden_content_title">Hidden content</string>
     <string name="hidden_content_summary">Archived without deleting files. Restore anything you want to see again.</string>
     <string name="hidden_content_empty">Nothing is hidden</string>

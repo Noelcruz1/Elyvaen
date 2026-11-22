@@ -273,6 +273,13 @@ fun Artist.onArtistMenu(fragment: Fragment, menuItem: MenuItem): Boolean {
             true
         }
 
+        R.id.action_hide_artist_albums -> {
+            HiddenLibraryStore.hideAlbums(albums)
+            fragment.reloadAfterHiddenChange()
+            fragment.showToast(R.string.hidden_from_library)
+            true
+        }
+
         else -> sortedSongs.onSongsMenu(fragment, menuItem)
     }
 }

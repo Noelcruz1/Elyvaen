@@ -766,6 +766,7 @@
     <string name="blacklist_title">Lista negra</string>
     <string name="blacklist_summary">El contenido de las carpetas en la lista negra se oculta de la fonoteca.</string>
     <string name="action_hide_from_library">Ocultar de la biblioteca</string>
+    <string name="action_hide_artist_albums">Ocultar todos sus álbumes</string>
     <string name="hidden_content_title">Contenido oculto</string>
     <string name="hidden_content_summary">Archivado sin borrar archivos. Restaura lo que quieras volver a ver.</string>
     <string name="hidden_content_empty">No hay contenido oculto</string>
