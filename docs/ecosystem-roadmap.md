@@ -514,18 +514,34 @@ consuma el NAS a través de la VPN del sistema.
   contra un OMV real. H7 añadirá el estado de Tailscale, MagicDNS y sync sobre
   la tailnet.
 
-## Root: estado y decisión
+## Root: estado, comunidad y decisión
 
 - El bootloader del Moto G51 ya está **desbloqueado**
   (`ro.boot.flash.locked=0`, `ro.boot.verifiedbootstate=orange`).
 - No hay root instalado: no existe `su`; SELinux sigue enforcing.
-- No se rooteó porque las funciones actuales (UAC2, MediaStore, NAS, Tailscale,
-  kiosco) usan APIs públicas y porque root implica parchear el boot, romper OTA,
-  Play Integrity/Widevine y asumir riesgo de brick. Para un DAP dedicado es
-  asumible si se aprueba; permitiría tocar kernel/Aqstic y modo USB gadget,
-  pero no es requisito para el Hub.
-- Cualquier root futuro debe hacerse con backup, boot stock guardado y
-  aprobación explícita; nada de SELinux permisivo ni tocar módem/EFS/persist.
+- Dispositivo: `cypfq`, XT2171, Moto G51 5G, canal `attmx`, Android 12,
+  build `S2RYA32.58-13-12-5-1-3`, slot `_a`, particiones dinámicas.
+- **Sí hay comunidad y guías para cypfq**:
+  - GetDroidTips: root con Magisk parcheando `boot.img`, sin TWRP.
+  - XDA: TWRP para cypfq (2024) y crDroid oficial para cypfq (2024);
+    también ProjectMatrixx y usuarios que flashearon ROMs.
+  - Firmware XT2171 y variantes ATTMX/RETLA/OPENMX en espejos; para root hay
+    que usar el **build/canal exacto**, no un boot.img genérico.
+- **Riesgo**: no existe un porcentaje oficial de brick. Con bootloader
+  desbloqueado, firmware exacto y flasheando solo `boot`/`boot_a`:
+  - brick duro (necesita EDL/blankflash): bajo, pero no cero;
+  - bootloop/brick blando: recuperable con el boot stock o LMSA/fastboot;
+  - el riesgo sube con firmware de otra región/build, relock del bootloader,
+    OTA estando rooteado, o flashear bootloader/módem/preloader.
+- Beneficios de root para el Hub: montar el NAS a nivel de sistema, modo USB
+  gadget/DAC, ajustes de kernel/térmica/batería y parámetros más profundos de
+  Qualcomm/Aqstic. **Tailscale, SMB y WebDAV no necesitan root.**
+- Costes: OTA y parches se complican, Play Integrity/Widevine pueden fallar
+  (el bootloader ya está desbloqueado), más superficie de seguridad.
+- **Decisión actual: no rootear todavía.** Si se aprueba, plan seguro:
+  backup, firmware exacto `S2RYA32.58-13-12-5-1-3` ATTMX, `boot.img` stock
+  guardado, parchear con Magisk, `fastboot flash boot_a`, verificar `su`,
+  no bloquear el bootloader y no tocar módem/EFS/persist ni SELinux.
 
 ## Decisiones pendientes
 
