@@ -86,6 +86,9 @@ class HomeFragment : AbsMainActivityFragment(), IScrollHelper {
                         onDownloadsClick = {
                             findNavController().navigate(R.id.nav_downloads)
                         },
+                        onHealthClick = {
+                            findNavController().navigate(R.id.nav_metadata_health)
+                        },
                         onSongItemClick = { songs, index ->
                             playerViewModel.openQueue(songs, index, shuffleMode = OpenShuffleMode.Off)
                         },

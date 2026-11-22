@@ -69,6 +69,7 @@ fun HomeScreen(
     onPlayAllClick: () -> Unit,
     onDeezerClick: () -> Unit,
     onDownloadsClick: () -> Unit,
+    onHealthClick: () -> Unit,
     onSongItemClick: (List<Song>, Int) -> Unit,
     onItemClick: (Any) -> Unit,
     onPlayAlbumClick: (Album) -> Unit,
@@ -168,6 +169,7 @@ fun HomeScreen(
                         item {
                             ElyvaenHomeTopActions(
                                 onActionClick = onActionClick,
+                                onHealthClick = onHealthClick,
                                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp)
                             )
                         }

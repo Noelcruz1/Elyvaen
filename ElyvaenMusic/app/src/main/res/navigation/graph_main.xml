@@ -26,6 +26,11 @@
         android:label="StatsFragment"/>
 
     <fragment
+        android:id="@+id/nav_metadata_health"
+        android:name="com.mardous.booming.ui.screen.health.MetadataHealthFragment"
+        android:label="MetadataHealthFragment"/>
+
+    <fragment
         android:id="@+id/nav_songs"
         android:name="com.mardous.booming.ui.screen.library.songs.SongListFragment"
         android:label="SongsFragment"/>

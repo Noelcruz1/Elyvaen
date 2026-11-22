@@ -82,6 +82,12 @@
         app:showAsAction="never" />
     <item
         android:orderInCategory="10"
+        android:id="@+id/action_metadata_health"
+        android:icon="@drawable/ic_edit_note_24dp"
+        android:title="@string/metadata_health_title"
+        app:showAsAction="never" />
+    <item
+        android:orderInCategory="10"
         android:id="@+id/action_scan"
         android:title="@string/scan_media"
         app:showAsAction="never" />

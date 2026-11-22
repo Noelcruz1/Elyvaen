@@ -346,33 +346,45 @@ fun ElyvaenHomeIntro(
 @Composable
 fun ElyvaenHomeTopActions(
     onActionClick: (ContentType) -> Unit,
+    onHealthClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    Column(
+        verticalArrangement = Arrangement.spacedBy(10.dp),
         modifier = modifier.fillMaxWidth()
     ) {
-        ElyvaenQuickAction(
-            text = stringResource(R.string.top_tracks_label),
-            icon = R.drawable.ic_trending_up_24dp,
-            tint = MaterialTheme.colorScheme.primary,
-            onClick = { onActionClick(ContentType.TopTracks) },
-            modifier = Modifier.weight(1f)
-        )
-        ElyvaenQuickAction(
-            text = stringResource(R.string.last_added_label),
-            icon = R.drawable.ic_library_add_24dp,
-            tint = MaterialTheme.colorScheme.secondary,
-            onClick = { onActionClick(ContentType.RecentSongs) },
-            modifier = Modifier.weight(1f)
-        )
-        ElyvaenQuickAction(
-            text = stringResource(R.string.history_label),
-            icon = R.drawable.ic_history_24dp,
-            tint = MaterialTheme.colorScheme.tertiary,
-            onClick = { onActionClick(ContentType.History) },
-            modifier = Modifier.weight(1f)
-        )
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            ElyvaenQuickAction(
+                text = stringResource(R.string.top_tracks_label),
+                icon = R.drawable.ic_trending_up_24dp,
+                tint = MaterialTheme.colorScheme.primary,
+                onClick = { onActionClick(ContentType.TopTracks) },
+                modifier = Modifier.weight(1f)
+            )
+            ElyvaenQuickAction(
+                text = stringResource(R.string.last_added_label),
+                icon = R.drawable.ic_library_add_24dp,
+                tint = MaterialTheme.colorScheme.secondary,
+                onClick = { onActionClick(ContentType.RecentSongs) },
+                modifier = Modifier.weight(1f)
+            )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            ElyvaenQuickAction(
+                text = stringResource(R.string.history_label),
+                icon = R.drawable.ic_history_24dp,
+                tint = MaterialTheme.colorScheme.tertiary,
+                onClick = { onActionClick(ContentType.History) },
+                modifier = Modifier.weight(1f)
+            )
+            ElyvaenQuickAction(
+                text = stringResource(R.string.metadata_health_title),
+                icon = R.drawable.ic_edit_note_24dp,
+                tint = MaterialTheme.colorScheme.primary,
+                onClick = onHealthClick,
+                modifier = Modifier.weight(1f)
+            )
+        }
     }
 }
 
