@@ -381,6 +381,20 @@ mini-player/90 Hz verificados.
   TagLib y las pantallas de edición que Elyvaen ya tenía. El autoarreglo por
   lotes con MusicBrainz/Deezer/LRCLIB queda para una fase posterior.
 
+## Discord: webhook de “ahora suena” (2026-11-22)
+
+- Ajustes → Red → **Discord** permite pegar la URL de un webhook de canal y
+  activar **Enviar lo que suena**.
+- Al cambiar de canción, `DiscordWebhookService` publica un embed con título,
+  artista, álbum y año. La URL se guarda solo en las preferencias privadas del
+  dispositivo y no se escribe en logs. El envío se limita al mismo tema durante
+  60 s para no duplicar mensajes al buscar dentro de la pista.
+- **No es Rich Presence**: Discord Android no acepta RPC de terceros. Un
+  companion en PC podría leer la sesión multimedia del DAP en el futuro; por
+  ahora el webhook es la opción portable.
+- La integración queda lista para configurar, pero no se pudo publicar en un
+  canal real sin una URL de webhook del usuario.
+
 ## Decisiones pendientes
 
 1. **Deezer primero**: ¿catálogo + playback nativo en el DAP, o puente NAS
