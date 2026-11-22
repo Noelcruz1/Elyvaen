@@ -303,10 +303,18 @@ mini-player/90 Hz verificados.
   de biblioteca, búsqueda, artistas, géneros y años.
 - Panel **Contenido oculto** desde el menú de la biblioteca y desde
   Ajustes → Biblioteca, con **Restaurar** por elemento y **Restaurar todo**.
+- **Ocultar todos sus álbumes** en el menú de un artista. Es la vía rápida para
+  retirar de golpe una discografía entera; después se restauran desde el panel
+  solo los discos que sí se quieran conservar.
 - Verificado en el Moto G51: ocultar el álbum `:)` de The Japanese House y la
   pista `:)` los quita de Álbumes/Canciones; el archivo sigue en MediaStore y
-  vuelve al restaurarlo. También funciona con selección múltiple, útil para
-  archivar de golpe varios álbumes de Mili.
+  vuelve al restaurarlo. También se ocultaron y restauraron los 46 álbumes de
+  Mili con **Restaurar todo**.
+- En esta biblioteca Mili aparece dividida en tres artistas: **Mili** (46
+  álbumes, 164 canciones), **Binary Haze Interactive & Mili** (50 canciones) y
+  **Mili & KIHOW** (2 canciones). Para limpiar toda la música de Mili hay que
+  usar la acción de ocultar álbumes en esos tres artistas y luego restaurar lo
+  que se quiera.
 - Para escucha suelta: tras archivar los álbumes que no interesan, la pestaña
   **Canciones**, favoritos y listas propias quedan como biblioteca curada.
 
