@@ -306,6 +306,13 @@ mini-player/90 Hz verificados.
 - **Ocultar todos sus álbumes** en el menú de un artista. Es la vía rápida para
   retirar de golpe una discografía entera; después se restauran desde el panel
   solo los discos que sí se quieran conservar.
+- **Silenciar álbum** (y **Silenciar todos sus álbumes** en un artista) es el
+  modo suave: el disco sigue visible en Álbumes con la etiqueta «Silenciado»,
+  pero sus pistas desaparecen de Canciones, búsqueda de pistas y aleatorios.
+  El detalle del álbum sigue abriéndose y se puede reproducir explícitamente.
+- **Ocultar de la biblioteca** sigue siendo el modo fuerte: desaparece de todas
+  las listas, incluida Álbumes. Ambos modos se gestionan desde el panel
+  **Contenido oculto**, que separa «Álbumes silenciados» y contenido oculto.
 - Verificado en el Moto G51: ocultar el álbum `:)` de The Japanese House y la
   pista `:)` los quita de Álbumes/Canciones; el archivo sigue en MediaStore y
   vuelve al restaurarlo. También se ocultaron y restauraron los 46 álbumes de

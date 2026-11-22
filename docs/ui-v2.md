@@ -83,6 +83,8 @@ Estado: **fase 1 y 2 implementadas y verificadas en el Moto G51** (2026-11-17).
 - `screens/dap-dashboard.png` — panel DAP/UAC2.
 - `screens/kiosk.png` — kiosco real con la app fijada.
 - `screens/hidden-content.png` — panel Contenido oculto con restaurar.
+- `screens/muted-albums.png` — álbumes silenciados, visibles con la marca.
+- `screens/muted-panel.png` — sección Álbumes silenciados del panel.
 
 ## Pruebas realizadas
 
