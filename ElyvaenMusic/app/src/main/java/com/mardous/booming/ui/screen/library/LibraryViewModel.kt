@@ -144,6 +144,10 @@ class LibraryViewModel(
         emit(repository.allSongs())
     }
 
+    fun looseSongs() = liveData(IO) {
+        emit(repository.looseSongs())
+    }
+
     fun forceReload(reloadType: ReloadType) = viewModelScope.launch(IO) {
         when (reloadType) {
             ReloadType.Songs -> fetchSongs()

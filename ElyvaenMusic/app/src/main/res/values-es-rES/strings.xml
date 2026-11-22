@@ -1074,6 +1074,11 @@
     <string name="home_empty_title">No hay nada que recomendar</string>
     <string name="home_empty_subtitle">Escuche algo de música primero</string>
     <string name="home_for_you_title">Para usted</string>
+    <string name="home_loose_title">Sueltas</string>
+    <string name="loose_songs_title">Sueltas</string>
+    <string name="home_loose_subtitle">Singles y pistas que no forman parte de un álbum completo</string>
+    <string name="home_loose_subtitle_2">Tu música suelta, sin discos enteros</string>
+    <string name="home_loose_subtitle_3">Canciones de lanzamientos de una o dos pistas</string>
     <string name="home_artists_title">Artistas recomendados</string>
     <string name="home_albums_subtitle_3">Lo que está en tendencia en su fonoteca</string>
 

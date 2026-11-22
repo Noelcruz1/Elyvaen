@@ -95,7 +95,7 @@ class DetailListFragment : AbsMainActivityFragment(R.layout.fragment_detail_list
     private fun setupButtons() {
         if (contentType == ContentType.Favorites || contentType == ContentType.History ||
             contentType == ContentType.TopTracks || contentType == ContentType.RecentSongs ||
-            contentType == ContentType.NotRecentlyPlayed
+            contentType == ContentType.LooseSongs || contentType == ContentType.NotRecentlyPlayed
         ) {
             binding.shuffleAction.setOnClickListener {
                 playerViewModel.openAndShuffleQueue(songList)
@@ -123,6 +123,7 @@ class DetailListFragment : AbsMainActivityFragment(R.layout.fragment_detail_list
 
             ContentType.TopTracks,
             ContentType.Favorites,
+            ContentType.LooseSongs,
             ContentType.NotRecentlyPlayed -> songs.playlistInfo(requireContext())
 
             else -> null
@@ -144,6 +145,7 @@ class DetailListFragment : AbsMainActivityFragment(R.layout.fragment_detail_list
             ContentType.History -> loadHistory()
             ContentType.RecentSongs -> lastAddedSongs()
             ContentType.Favorites -> loadFavoriteSongs()
+            ContentType.LooseSongs -> loadLooseSongs()
             ContentType.NotRecentlyPlayed -> loadNotRecentlyPlayed()
         }
     }
@@ -216,6 +218,19 @@ class DetailListFragment : AbsMainActivityFragment(R.layout.fragment_detail_list
                 songAdapter.dataSet = songs
                 songs(songs)
             }
+        }
+    }
+
+    private fun loadLooseSongs() {
+        val songAdapter = songAdapter()
+        binding.recyclerView.apply {
+            adapter = songAdapter
+            layoutManager = linearLayoutManager()
+            createFastScroller(disablePopup = true)
+        }
+        libraryViewModel.looseSongs().observe(viewLifecycleOwner) { songs ->
+            songAdapter.dataSet = songs
+            songs(songs, R.string.playlist_empty_text)
         }
     }
 

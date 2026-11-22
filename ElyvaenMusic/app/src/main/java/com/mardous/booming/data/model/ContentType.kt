@@ -29,6 +29,7 @@ enum class ContentType(@StringRes internal val titleRes: Int) {
     History(R.string.history_label),
     RecentSongs(R.string.last_added_label),
     Favorites(R.string.favorites_label),
+    LooseSongs(R.string.loose_songs_title),
     NotRecentlyPlayed(R.string.not_recently_played);
 
     val isObservableContent: Boolean

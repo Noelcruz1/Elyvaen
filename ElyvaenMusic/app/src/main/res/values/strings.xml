@@ -405,6 +405,11 @@
     <string name="home_empty_subtitle">Listen to some music first</string>
     <string name="home_shuffle_title">Shuffle your music</string>
     <string name="home_for_you_title">For you</string>
+    <string name="home_loose_title">Loose tracks</string>
+    <string name="loose_songs_title">Loose tracks</string>
+    <string name="home_loose_subtitle">Singles and tracks that are not part of a full album</string>
+    <string name="home_loose_subtitle_2">Your loose music, without whole albums</string>
+    <string name="home_loose_subtitle_3">One or two-track releases from your library</string>
     <string name="home_for_you_subtitle">Your all-time favorites in one place</string>
     <string name="home_for_you_subtitle_2">Hand-picked gems just for you</string>
     <string name="home_for_you_subtitle_3">Your daily dose of musical inspiration</string>

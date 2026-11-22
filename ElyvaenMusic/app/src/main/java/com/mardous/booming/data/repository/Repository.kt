@@ -24,6 +24,7 @@ import androidx.lifecycle.LiveData
 import androidx.media3.common.MediaItem
 import com.mardous.booming.R
 import com.mardous.booming.core.model.filesystem.FileSystemQuery
+import com.mardous.booming.core.sort.SongSortMode
 import com.mardous.booming.data.SearchFilter
 import com.mardous.booming.data.local.room.PlayCountEntity
 import com.mardous.booming.data.local.room.PlaylistEntity
@@ -54,11 +55,12 @@ import kotlinx.coroutines.flow.Flow
 import java.io.File
 
 const val MAX_ITEMS_PER_CHUNK = 900
+private const val LOOSE_ALBUM_TRACK_LIMIT = 2
 
 interface Repository {
 
     suspend fun allSongs(): List<Song>
-    suspend fun allAlbums(): List<Album>
+    suspend fun looseSongs(): List<Song>    suspend fun allAlbums(): List<Album>
     suspend fun allArtists(): List<Artist>
     suspend fun allAlbumArtists(): List<Artist>
     suspend fun allGenres(): List<Genre>
@@ -167,6 +169,15 @@ class RealRepository(
 ) : Repository {
 
     override suspend fun allSongs(): List<Song> = songRepository.songs()
+
+    override suspend fun looseSongs(): List<Song> {
+        val songs = songRepository.songs()
+        val albumSongCounts = songs.groupingBy { it.albumId }.eachCount()
+        return with(SongSortMode.AllSongs) {
+            songs.filter { (albumSongCounts[it.albumId] ?: 0) <= LOOSE_ALBUM_TRACK_LIMIT }
+                .sorted()
+        }
+    }
 
     override suspend fun allAlbums(): List<Album> = albumRepository.albums()
 
@@ -366,6 +377,22 @@ class RealRepository(
                     )
                 )
             }
+        }
+
+        val loose = looseSongs().shuffled().take(Suggestion.FOR_YOU_MAX_ITEMS)
+        if (loose.size >= Suggestion.FOR_YOU_MIN_ITEMS) {
+            suggestions.add(
+                createSuggestion(
+                    type = ContentType.LooseSongs,
+                    items = loose,
+                    titleRes = R.string.home_loose_title,
+                    subtitles = listOf(
+                        R.string.home_loose_subtitle,
+                        R.string.home_loose_subtitle_2,
+                        R.string.home_loose_subtitle_3
+                    )
+                )
+            )
         }
 
         chooseSuggestionContent(
