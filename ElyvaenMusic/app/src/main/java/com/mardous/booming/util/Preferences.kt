@@ -436,6 +436,14 @@ object Preferences : KoinComponent {
         get() = preferences.getLong(LAST_UPDATE_ID, -1)
         set(value) = preferences.edit { putLong(LAST_UPDATE_ID, value) }
 
+    var discordWebhookEnabled: Boolean
+        get() = preferences.getBoolean(DISCORD_WEBHOOK_ENABLED, false)
+        set(value) = preferences.edit { putBoolean(DISCORD_WEBHOOK_ENABLED, value) }
+
+    var discordWebhookUrl: String
+        get() = preferences.getString(DISCORD_WEBHOOK_URL, "").orEmpty()
+        set(value) = preferences.edit { putString(DISCORD_WEBHOOK_URL, value.trim()) }
+
     var hierarchyFolderView: Boolean
         get() = preferences.getBoolean(HIERARCHY_FOLDER_VIEW, false)
         set(value) = preferences.edit { putBoolean(HIERARCHY_FOLDER_VIEW, value) }
@@ -619,6 +627,8 @@ const val LANGUAGE_NAME = "language_name"
 const val AUTO_LANGUAGE = "auto"
 const val LAST_UPDATE_SEARCH = "last_update_search"
 const val LAST_UPDATE_ID = "last_update_id"
+const val DISCORD_WEBHOOK_ENABLED = "discord_webhook_enabled"
+const val DISCORD_WEBHOOK_URL = "discord_webhook_url"
 const val EXPERIMENTAL_UPDATES = "experimental_updates"
 const val START_DIRECTORY = "start_directory"
 const val INITIALIZED_BLACKLIST = "initialized_blacklist"

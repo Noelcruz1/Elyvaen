@@ -74,6 +74,7 @@ import com.mardous.booming.data.model.Song
 import com.mardous.booming.data.model.network.NetworkFeature
 import com.mardous.booming.data.model.network.ScrobblingService
 import com.mardous.booming.data.repository.Repository
+import com.mardous.booming.data.remote.discord.DiscordWebhookService
 import com.mardous.booming.extensions.showToast
 import com.mardous.booming.playback.equalizer.EqualizerManager
 import com.mardous.booming.playback.library.LibraryProvider
@@ -130,6 +131,7 @@ class PlaybackService :
     private val equalizerManager: EqualizerManager by inject()
     private val audioOutputObserver: AudioOutputObserver by inject()
     private val repository: Repository by inject()
+    private val discordWebhook: DiscordWebhookService by inject()
 
     private val queueStateHolder: QueueStateHolder by inject()
     private val isInTimelineUpdate = AtomicBoolean(false)
@@ -734,6 +736,10 @@ class PlaybackService :
 
         serviceScope.launch(IO) {
             val newSong = repository.songByMediaItem(mediaItem, ignoreBlacklist = true)
+
+            if (newSong != Song.emptySong && !newSong.resolvedFromFile) {
+                launch { discordWebhook.sendNowPlaying(newSong) }
+            }
 
             val previousSong = songPlayCountHelper.song
             val shouldBumpPlayCount = songPlayCountHelper.shouldBumpPlayCount()

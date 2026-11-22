@@ -35,6 +35,7 @@ import com.mardous.booming.data.remote.deezer.DeezerService
 import com.mardous.booming.data.remote.github.GitHubService
 import com.mardous.booming.data.remote.jsonHttpClient
 import com.mardous.booming.data.remote.lastfm.LastFmService
+import com.mardous.booming.data.remote.discord.DiscordWebhookService
 import com.mardous.booming.data.remote.listenbrainz.ListenBrainzService
 import com.mardous.booming.data.remote.odesli.OdesliClient
 import com.mardous.booming.data.remote.lyrics.LyricsDownloadService
@@ -117,6 +118,7 @@ val networkModule = module {
     single { MusicBrainzService(client = get()) }
     single { LyricsDownloadService(client = get()) }
     single { OdesliClient(client = get()) }
+    single { DiscordWebhookService(client = get()) }
     single { QueueStateHolder() }
 }
 

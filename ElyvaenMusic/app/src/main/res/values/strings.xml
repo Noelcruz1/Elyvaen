@@ -1009,6 +1009,11 @@
     <string name="metadata_health_duplicate_badge">Duplicate</string>
     <string name="metadata_health_edit">Edit tags</string>
     <string name="metadata_health_refresh">Refresh</string>
+    <string name="discord_title">Discord</string>
+    <string name="discord_webhook_url_title">Webhook URL</string>
+    <string name="discord_webhook_url_summary">Paste your channel webhook URL. It is stored only on this device and never written to logs.</string>
+    <string name="discord_webhook_enabled_title">Send now playing</string>
+    <string name="discord_webhook_enabled_summary">Posts a message when the song changes. This is a webhook, not Rich Presence.</string>
     <string name="artist_min_songs_title">Artist minimum song count</string>
     <string name="artist_min_songs_summary">How many songs (at least) must have an artist to be shown in your library.</string>
     <string name="album_min_songs_title">Album minimum song count</string>

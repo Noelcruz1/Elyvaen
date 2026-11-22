@@ -798,6 +798,11 @@
     <string name="metadata_health_duplicate_badge">Duplicado</string>
     <string name="metadata_health_edit">Editar etiquetas</string>
     <string name="metadata_health_refresh">Actualizar</string>
+    <string name="discord_title">Discord</string>
+    <string name="discord_webhook_url_title">URL del webhook</string>
+    <string name="discord_webhook_url_summary">Pega la URL del webhook de tu canal. Solo se guarda en este dispositivo y nunca se escribe en los registros.</string>
+    <string name="discord_webhook_enabled_title">Enviar lo que suena</string>
+    <string name="discord_webhook_enabled_summary">Publica un mensaje cuando cambia la canción. Es un webhook, no Rich Presence.</string>
     <string name="artist_min_songs_title">Recuento mínimo de canciones del artista</string>
     <string name="artist_min_songs_summary">Cuántas canciones (como mínimo) debe tener un artista para que aparezca en la fonoteca.</string>
     <string name="album_min_songs_title">Número mínimo de canciones del álbum</string>

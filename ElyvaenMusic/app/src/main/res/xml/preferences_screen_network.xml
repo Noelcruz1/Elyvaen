@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.preference.PreferenceScreen xmlns:app="http://schemas.android.com/apk/res-auto">
+<androidx.preference.PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto">
 
     <SwitchPreferenceCompat
         app:icon="@drawable/ic_language_24dp"
@@ -170,6 +170,31 @@
             app:summary="@string/delete_downloaded_lyrics_summary"
             app:layout="@layout/list_item_view"
             app:key="clear_lyrics"/>
+
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        app:title="@string/discord_title"
+        app:layout="@layout/preference_category_title"
+        app:dependency="network_features">
+
+        <EditTextPreference
+            app:icon="@drawable/ic_share_24dp"
+            app:title="@string/discord_webhook_url_title"
+            app:summary="@string/discord_webhook_url_summary"
+            app:layout="@layout/list_item_view"
+            android:inputType="textUri"
+            app:key="discord_webhook_url"/>
+
+        <SwitchPreferenceCompat
+            app:iconSpaceReserved="true"
+            app:title="@string/discord_webhook_enabled_title"
+            app:summary="@string/discord_webhook_enabled_summary"
+            app:defaultValue="false"
+            app:layout="@layout/list_item_view"
+            app:widgetLayout="@layout/preference_switch"
+            app:dependency="discord_webhook_url"
+            app:key="discord_webhook_enabled"/>
 
     </PreferenceCategory>
 
