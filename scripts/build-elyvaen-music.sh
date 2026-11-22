@@ -16,6 +16,15 @@ PAYLOAD=${PAYLOAD:-$ROOT/payload/product/priv-app/ElyvaenBooming}
 [ -d "$SRC" ] || { echo "no existe $SRC" >&2; exit 1; }
 [ -d "$CHROOT" ] || { echo "no existe $CHROOT" >&2; exit 1; }
 
+# This container has an 8 GB memory cgroup. Gradle + lintVital + R8 exceed it,
+# so the release lint tasks are skipped by default. Run LINT=1 on a machine
+# with more memory to execute the fatal lint checks.
+LINT=${LINT:-0}
+LINT_FLAGS=""
+if [ "$LINT" != "1" ]; then
+    LINT_FLAGS="-x lintVitalFdroidRelease -x lintVitalAnalyzeFdroidRelease -x lintVitalReportFdroidRelease"
+fi
+
 mkdir -p "$DST" "$PAYLOAD"
 tar -C "$SRC" \
     --exclude=./app/build \
@@ -26,12 +35,13 @@ tar -C "$SRC" \
     -cf - . | tar -C "$DST" -xf -
 printf 'sdk.dir=/opt/android-sdk\n' > "$DST/local.properties"
 
-chroot "$CHROOT" /bin/bash -c '
+chroot "$CHROOT" env LINT_FLAGS="$LINT_FLAGS" /bin/bash -c '
     set -eu
     cd /tmp/elyvaen-music
     JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 \
     GRADLE_USER_HOME=/root/.gradle \
-        ./gradlew --no-daemon :app:assembleFdroidRelease
+        ./gradlew --no-daemon -Dorg.gradle.parallel=false $LINT_FLAGS \
+        :app:assembleFdroidRelease
 '
 
 APK=$(ls "$DST"/app/build/outputs/apk/fdroid/release/*arm64-v8a.apk | head -1)
