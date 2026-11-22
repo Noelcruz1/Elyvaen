@@ -72,8 +72,8 @@ sealed class Version(
 
 val currentVersion: Version = Version.Stable(
     versionMajor = 1,
-    versionMinor = 4,
-    versionPatch = 2
+    versionMinor = 5,
+    versionPatch = 0
 )
 val currentVersionCode = currentVersion.code
 
@@ -86,7 +86,7 @@ android {
         targetSdk = 36
 
         applicationId = "com.elyvaen.booming"
-        versionCode = 1420300
+        versionCode = 1500300
         versionName = currentVersion.name
         check(versionCode == currentVersionCode)
     }
@@ -308,6 +308,8 @@ dependencies {
 
     implementation(libs.androidx.security.crypto)
     implementation(libs.smbj)
+    implementation(libs.zxing.core)
+    implementation(libs.nanohttpd)
 
     implementation(libs.m3color)
     implementation(libs.coil.transformations)

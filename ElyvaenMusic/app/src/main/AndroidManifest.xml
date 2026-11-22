@@ -27,6 +27,9 @@
     <uses-permission
         android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
         android:minSdkVersion="34"/>
+    <uses-permission
+        android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"
+        android:minSdkVersion="34"/>
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
     <queries>
         <package android:name="com.tailscale.ipn" />
@@ -356,6 +359,10 @@
             android:name=".ui.screen.dap.Uac2PlaybackService"
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
+        <service
+            android:name=".service.WifiUploadService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
         <receiver
             android:name=".ui.screen.dap.Uac2BootReceiver"
             android:enabled="true"

@@ -420,7 +420,7 @@ depende del PC para cargar archivos.
 
 | Fase | Entregable | Valor |
 |---|---|---|
-| H1 | Hub de ingesta: USB OTG + subida por Wi-Fi con QR + gestor de almacenamiento | Elimina el PC del día a día |
+| H1 | Hub de ingesta: USB OTG + subida por Wi-Fi con QR + gestor de almacenamiento · **implementado 2026-11-22** | Elimina el PC del día a día |
 | H2 | Fuentes NAS: SMB, WebDAV, SFTP, Subsonic/Navidrome; sync y backup | Biblioteca en red |
 | H3 | Servidor DLNA/UPnP + WebDAV + control remoto web | El DAP sirve a la casa |
 | H4 | Motor de audio: UAC2 exclusivo, frecuencia nativa, EQ paramétrico, convolución, crossfeed, DoP | Nivel audiófilo |
@@ -494,6 +494,69 @@ consuma el NAS a través de la VPN del sistema.
 - Se puede explorar el NAS, descargar una carpeta y reproducir sin PC.
 - El backup de biblioteca/playlists se puede enviar al NAS.
 - Nada de credenciales en logs; sin root; sin abrir puertos en el router.
+
+## Fase H1 — Hub de ingesta (2026-11-22)
+
+La tarjeta **Elyvaen Hub** de Home abre una pantalla propia con tres vías para
+meter música sin PC y un resumen del almacenamiento. La tarjeta NAS sigue
+llevando al formulario SMB/WebDAV.
+
+### Importación por USB, SD o carpeta
+
+- Usa el selector SAF del sistema (`OpenDocumentTree`), así que sirve para un
+  USB OTG, una tarjeta SD o cualquier carpeta interna sin pedir permisos
+  amplios de almacenamiento.
+- Recorre la carpeta de forma recursiva, conserva los subdirectorios y copia
+  solo audio compatible: FLAC, MP3, M4A, AAC, OGG, OPUS, WAV, AIFF, WMA, APE,
+  DSF, DFF y MKA.
+- El destino es `Music/Elyvaen/Import/<carpeta>`. En Android 10+ se publica
+  directamente en MediaStore con `IS_PENDING`; no hace falta PC ni un escaneo
+  manual. En versiones anteriores se escribe en el almacenamiento público y se
+  avisa a `MediaScannerConnection`.
+- Los nombres duplicados no se sobrescriben: se añade un sufijo. El USB de
+  origen **solo se lee**, nunca se mueve ni se borra nada.
+- La pantalla detecta volúmenes extraíbles con `StorageManager` y avisa cuando
+  hay un USB montado; el selector permite elegir la carpeta concreta.
+- Hay progreso por archivo, cancelación y resumen de importados/errores.
+
+### Subida por Wi-Fi con QR
+
+- `WifiUploadService` es un servicio en primer plano de tipo `dataSync` con
+  wake lock parcial: el servidor sigue disponible con la pantalla apagada.
+- El servidor embebido (NanoHTTPD) escucha en el puerto 8099 (o el siguiente
+  libre) y solo se anuncia con la IP Wi-Fi del DAP.
+- La URL lleva un token aleatorio de 12 caracteres. El QR se genera con ZXing;
+  también se puede copiar el enlace. Sin el token, la ruta devuelve 404.
+- La página web permite arrastrar o elegir varios archivos, los sube de uno en
+  uno con progreso y los publica en `Music/Elyvaen/Import/Wi-Fi`.
+- Se aceptan los mismos formatos que la importación local y un máximo de 4 GB
+  por archivo. El nombre se sanea y el archivo temporal se borra al terminar.
+- La notificación muestra el enlace y tiene una acción **Detener**; la pantalla
+  del Hub muestra las últimas subidas y los bytes recibidos.
+- No se guardan credenciales de Tailscale ni del NAS para esta función: el
+  token es efímero y solo vale en la red local.
+
+### Gestor de almacenamiento
+
+- Lista los volúmenes montados (interno, SD o USB), con espacio libre y total.
+- Suma la biblioteca de MediaStore y separa **Descargas Deezer** e
+  **Importaciones**.
+- Calcula la caché de la app y permite vaciarla. La limpieza solo toca
+  `cacheDir`, `externalCacheDir` y `codeCacheDir`: no borra música descargada,
+  importada ni archivos del usuario.
+- Acceso directo a los ajustes de almacenamiento del sistema.
+
+### Verificación en el Moto G51
+
+- Hub abierto desde Home; la tarjeta NAS sigue funcionando.
+- Importación SAF de dos WAV a `Music/Elyvaen/Import/HubImportTest/`:
+  **2 importados, 0 errores**, visibles en MediaStore y en la biblioteca.
+- Subida Wi-Fi real por `adb forward` y HTTP: primer archivo recibido y
+  contabilizado; la biblioteca pasó de 897 a 898 sin salir del Hub. Un segundo
+  envío con el mismo nombre se guardó como `hub-live (1).wav`, sin sobrescribir.
+- QR y enlace visibles; servicio en primer plano, notificación y parada
+  verificadas. La caché se limpió (11,01 MB) sin tocar las importaciones.
+- El kiosco sigue en `PINNED` y el root de Magisk sigue activo.
 
 ## NAS general y OMV (2026-11-22)
 

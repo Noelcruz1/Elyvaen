@@ -29,6 +29,11 @@
 -dontwarn javax.annotation.**
 -dontwarn org.commonmark.ext.gfm.strikethrough.**
 
+# Optional paths in SMBJ (Kerberos/GSS) and its event bus
+-dontwarn javax.el.**
+-dontwarn org.ietf.jgss.**
+-dontwarn net.engio.mbassy.**
+
 -keep,allowobfuscation,allowshrinking class kotlin.coroutines.Continuation
 
 # With R8 full mode generic signatures are stripped for classes that are not

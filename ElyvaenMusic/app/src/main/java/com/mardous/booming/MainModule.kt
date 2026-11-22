@@ -24,9 +24,12 @@ import com.mardous.booming.coil.CustomPlaylistImageManager
 import com.mardous.booming.core.BoomingDatabase
 import com.mardous.booming.core.MediaEventBus
 import com.mardous.booming.core.audio.AudioOutputObserver
+import com.mardous.booming.data.local.AudioImportManager
 import com.mardous.booming.data.local.EditTarget
 import com.mardous.booming.data.local.MediaStoreWriter
 import com.mardous.booming.data.local.NasSettingsStore
+import com.mardous.booming.data.local.StorageOverview
+import com.mardous.booming.data.local.WifiUploadController
 import com.mardous.booming.data.local.backup.BackupManager
 import com.mardous.booming.data.model.Genre
 import com.mardous.booming.data.remote.deezer.DeezerAccountStore
@@ -85,6 +88,7 @@ import com.mardous.booming.ui.screen.library.folders.FolderDetailViewModel
 import com.mardous.booming.ui.screen.library.genres.GenreDetailViewModel
 import com.mardous.booming.ui.screen.library.home.HomeViewModel
 import com.mardous.booming.ui.screen.health.MetadataHealthViewModel
+import com.mardous.booming.ui.screen.hub.HubViewModel
 import com.mardous.booming.ui.screen.hub.NasSettingsViewModel
 import com.mardous.booming.ui.screen.link.LinkResolverViewModel
 import com.mardous.booming.ui.screen.library.playlists.PlaylistDetailViewModel
@@ -124,6 +128,9 @@ val networkModule = module {
     single { DiscordWebhookService(client = get()) }
     single { NasSettingsStore(context = androidContext()) }
     single { NasConnectionTester(client = get()) }
+    single { AudioImportManager(context = androidContext()) }
+    single { StorageOverview(context = androidContext()) }
+    single { WifiUploadController(context = androidContext()) }
     single { QueueStateHolder() }
 }
 
@@ -328,6 +335,16 @@ private val viewModule = module {
 
     viewModel {
         MetadataHealthViewModel(context = androidContext(), repository = get())
+    }
+
+    viewModel {
+        HubViewModel(
+            context = androidContext(),
+            storageOverview = get(),
+            importer = get(),
+            nasStore = get(),
+            wifiController = get()
+        )
     }
 
     viewModel {

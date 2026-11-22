@@ -35,6 +35,8 @@ coil = "3.6.3"
 ktor = "3.6.0"
 securityCrypto = "1.1.0"
 smbj = "0.15.0"
+zxing = "3.5.3"
+nanohttpd = "2.3.1"
 
 markwon = "4.6.2"
 m3color = "2026.1"
@@ -122,6 +124,8 @@ ktor-client-encoding = { group = "io.ktor", name = "ktor-client-encoding", versi
 ktor-serialization-json = { group = "io.ktor", name = "ktor-serialization-kotlinx-json", version.ref = "ktor" }
 androidx-security-crypto = { module = "androidx.security:security-crypto", version.ref = "securityCrypto" }
 smbj = { module = "com.hierynomus:smbj", version.ref = "smbj" }
+zxing-core = { module = "com.google.zxing:core", version.ref = "zxing" }
+nanohttpd = { module = "org.nanohttpd:nanohttpd", version.ref = "nanohttpd" }
 
 markwon-core = { module = "io.noties.markwon:core", version.ref = "markwon" }
 markwon-html = { module = "io.noties.markwon:html", version.ref = "markwon" }

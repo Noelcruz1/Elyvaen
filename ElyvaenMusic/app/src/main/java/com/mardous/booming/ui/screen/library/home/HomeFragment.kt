@@ -87,7 +87,7 @@ class HomeFragment : AbsMainActivityFragment(), IScrollHelper {
                             findNavController().navigate(R.id.nav_downloads)
                         },
                         onHubClick = {
-                            findNavController().navigate(R.id.nav_nas_settings)
+                            findNavController().navigate(R.id.nav_hub)
                         },
                         onHealthClick = {
                             findNavController().navigate(R.id.nav_metadata_health)
