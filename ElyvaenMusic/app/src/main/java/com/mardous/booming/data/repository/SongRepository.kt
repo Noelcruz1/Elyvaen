@@ -34,6 +34,7 @@ import androidx.media3.common.MediaItem
 import com.mardous.booming.core.sort.SongSortMode
 import com.mardous.booming.data.local.HiddenLibraryStore
 import com.mardous.booming.data.local.MediaQueryDispatcher
+import com.mardous.booming.data.local.MutedAlbumStore
 import com.mardous.booming.data.local.room.InclExclDao
 import com.mardous.booming.data.local.room.InclExclEntity
 import com.mardous.booming.data.model.Album
@@ -181,7 +182,8 @@ class RealSongRepository(
                             selectionValues = selectionArgs,
                             whitelistedPaths = whitelistedPaths,
                             blacklistedPaths = blacklistedPaths,
-                            ignoreLibrarySettings = ignoreLibrarySettings
+                            ignoreLibrarySettings = ignoreLibrarySettings,
+                            includeMutedAlbums = true
                         )
                     )
                 )
@@ -277,7 +279,8 @@ class RealSongRepository(
         queryDispatcher: MediaQueryDispatcher,
         ignoreLibrarySettings: Boolean = false,
         whitelistedPaths: List<String>? = null,
-        blacklistedPaths: List<String>? = null
+        blacklistedPaths: List<String>? = null,
+        includeMutedAlbums: Boolean = false
     ): Cursor? {
         if (!ignoreLibrarySettings) {
             // Minimum duration
@@ -335,6 +338,19 @@ class RealSongRepository(
                     )
                 }
             }
+
+            // Muted albums stay visible in Albums/artist pages but their songs are
+            // kept out of the global song lists and shuffle.
+            if (!includeMutedAlbums) {
+                val muted = MutedAlbumStore.ids
+                if (muted.isNotEmpty()) {
+                    val values = muted.map { it.toString() }
+                    queryDispatcher.addSelectionWithArguments(
+                        "${AudioColumns.ALBUM_ID} NOT IN (${values.joinToString(",") { "?" }})",
+                        *values.toTypedArray()
+                    )
+                }
+            }
         }
 
         return try {
@@ -351,7 +367,8 @@ class RealSongRepository(
         sortOrder: String? = null,
         ignoreLibrarySettings: Boolean = false,
         whitelistedPaths: List<String>? = null,
-        blacklistedPaths: List<String>? = null
+        blacklistedPaths: List<String>? = null,
+        includeMutedAlbums: Boolean = false
     ): Cursor? {
         val queryDispatcher = MediaQueryDispatcher()
             .setProjection(getBaseProjection())
@@ -359,7 +376,13 @@ class RealSongRepository(
             .setSelectionArguments(selectionValues)
             .addSelection(selection)
             .setSortOrder(sortOrder ?: MediaStore.Audio.Media.DEFAULT_SORT_ORDER)
-        return makeSongCursor(queryDispatcher, ignoreLibrarySettings, whitelistedPaths, blacklistedPaths)
+        return makeSongCursor(
+            queryDispatcher,
+            ignoreLibrarySettings,
+            whitelistedPaths,
+            blacklistedPaths,
+            includeMutedAlbums
+        )
     }
 
     private fun generateLibraryFilterPattern(

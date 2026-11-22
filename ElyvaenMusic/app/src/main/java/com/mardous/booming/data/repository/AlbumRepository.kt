@@ -39,7 +39,8 @@ class RealAlbumRepository(private val songRepository: RealSongRepository) : Albu
         val cursor = songRepository.makeSongCursor(
             AudioColumns.ALBUM_ID + "=?",
             arrayOf(albumId.toString()),
-            DEFAULT_SORT_ORDER
+            DEFAULT_SORT_ORDER,
+            includeMutedAlbums = true
         )
         val songs = with(SongSortMode.AlbumSongs) {
             songRepository.songs(cursor).sorted()
@@ -52,7 +53,8 @@ class RealAlbumRepository(private val songRepository: RealSongRepository) : Albu
             songRepository.makeSongCursor(
                 selection = "(${AudioColumns.ALBUM} LIKE ? OR ${AudioColumns.ALBUM_ARTIST} LIKE ?)",
                 selectionValues = arrayOf("%$query%", "%$query"),
-                sortOrder = DEFAULT_SORT_ORDER
+                sortOrder = DEFAULT_SORT_ORDER,
+                includeMutedAlbums = true
             )
         )
         return splitIntoAlbums(
@@ -64,7 +66,12 @@ class RealAlbumRepository(private val songRepository: RealSongRepository) : Albu
 
     override fun albums(): List<Album> {
         val songs = songRepository.songs(
-            songRepository.makeSongCursor(null, null, DEFAULT_SORT_ORDER)
+            songRepository.makeSongCursor(
+                null,
+                null,
+                DEFAULT_SORT_ORDER,
+                includeMutedAlbums = true
+            )
         )
         val minSongCount = Preferences.minimumSongCountForAlbum
         return splitIntoAlbums(songs).filter {
@@ -77,13 +84,15 @@ class RealAlbumRepository(private val songRepository: RealSongRepository) : Albu
             songRepository.makeSongCursor(
                 "${AudioColumns.ALBUM_ARTIST} = ? AND ${AudioColumns.ALBUM_ID} != ?",
                 arrayOf(album.albumArtistName, album.id.toString()),
-                DEFAULT_SORT_ORDER
+                DEFAULT_SORT_ORDER,
+                includeMutedAlbums = true
             )
         } else {
             songRepository.makeSongCursor(
                 "${AudioColumns.ARTIST_ID} = ? AND ${AudioColumns.ALBUM_ID} != ?",
                 arrayOf(album.artistId.toString(), album.id.toString()),
-                DEFAULT_SORT_ORDER
+                DEFAULT_SORT_ORDER,
+                includeMutedAlbums = true
             )
         }
         val minSongCount = Preferences.minimumSongCountForAlbum

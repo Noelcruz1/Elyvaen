@@ -25,6 +25,7 @@ import com.mardous.booming.R
 import com.mardous.booming.core.model.shuffle.OpenShuffleMode
 import com.mardous.booming.data.local.EditTarget
 import com.mardous.booming.data.local.HiddenLibraryStore
+import com.mardous.booming.data.local.MutedAlbumStore
 import com.mardous.booming.data.local.room.PlaylistWithSongs
 import com.mardous.booming.data.mapper.toSongs
 import com.mardous.booming.data.model.Album
@@ -237,6 +238,18 @@ fun Album.onAlbumMenu(fragment: Fragment, menuItem: MenuItem): Boolean {
             true
         }
 
+        R.id.action_mute_album -> {
+            if (MutedAlbumStore.isMuted(id)) {
+                MutedAlbumStore.unmute(id)
+                fragment.showToast(R.string.album_unmuted)
+            } else {
+                MutedAlbumStore.mute(listOf(this))
+                fragment.showToast(R.string.album_muted)
+            }
+            fragment.reloadAfterHiddenChange()
+            true
+        }
+
         else -> sortedSongs.onSongsMenu(fragment, menuItem)
     }
 }
@@ -277,6 +290,13 @@ fun Artist.onArtistMenu(fragment: Fragment, menuItem: MenuItem): Boolean {
             HiddenLibraryStore.hideAlbums(albums)
             fragment.reloadAfterHiddenChange()
             fragment.showToast(R.string.hidden_from_library)
+            true
+        }
+
+        R.id.action_mute_artist_albums -> {
+            MutedAlbumStore.mute(albums)
+            fragment.reloadAfterHiddenChange()
+            fragment.showToast(R.string.albums_muted)
             true
         }
 

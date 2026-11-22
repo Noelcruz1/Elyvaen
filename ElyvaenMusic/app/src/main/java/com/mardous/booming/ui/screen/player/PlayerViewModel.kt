@@ -28,6 +28,7 @@ import com.mardous.booming.core.model.shuffle.ShuffleOperationState
 import com.mardous.booming.core.model.shuffle.SpecialShuffleMode
 import com.mardous.booming.core.sort.SongSortMode
 import com.mardous.booming.data.SongProvider
+import com.mardous.booming.data.local.MutedAlbumStore
 import com.mardous.booming.data.local.room.PlaylistEntity
 import com.mardous.booming.data.mapper.toSongs
 import com.mardous.booming.data.model.Song
@@ -304,7 +305,8 @@ class PlayerViewModel(
 
     fun openAndShuffleQueue(queue: List<Song>) = viewModelScope.launch {
         mediaController?.let { controller ->
-            val mediaItems = withContext(IO) { queue.toMediaItems() }
+            val playable = queue.filterNot { MutedAlbumStore.isMuted(it.albumId) }
+            val mediaItems = withContext(IO) { playable.toMediaItems() }
             if (mediaItems.isNotEmpty()) {
                 controller.shuffleModeEnabled = true
                 controller.setMediaItems(mediaItems, true)

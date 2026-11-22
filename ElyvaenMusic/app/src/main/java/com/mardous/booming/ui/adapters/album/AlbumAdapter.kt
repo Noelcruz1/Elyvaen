@@ -29,6 +29,7 @@ import com.mardous.booming.coil.DEFAULT_ALBUM_IMAGE
 import com.mardous.booming.core.model.sort.SortKey
 import com.mardous.booming.core.sort.AlbumSortMode
 import com.mardous.booming.core.sort.SongSortMode
+import com.mardous.booming.data.local.MutedAlbumStore
 import com.mardous.booming.data.model.Album
 import com.mardous.booming.extensions.isActivated
 import com.mardous.booming.extensions.loadPaletteImage
@@ -76,7 +77,13 @@ open class AlbumAdapter(
         holder.isActivated = isChecked
         holder.menu?.isGone = isChecked
         holder.title?.text = getAlbumTitle(album)
-        holder.text?.text = getAlbumText(holder, album)
+        val albumText = getAlbumText(holder, album)
+        holder.text?.text = if (MutedAlbumStore.isMuted(album.id)) {
+            val label = holder.itemView.context.getString(R.string.muted_album_label)
+            if (albumText.isNullOrBlank()) label else "$label · $albumText"
+        } else {
+            albumText
+        }
         // Check if imageContainer exists, so we can have a smooth transition without
         // CardView clipping, if it doesn't exist in current layout set transition name to image instead.
         if (holder.imageContainer != null) {

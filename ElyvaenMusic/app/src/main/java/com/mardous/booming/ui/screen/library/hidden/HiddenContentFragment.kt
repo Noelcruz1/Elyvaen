@@ -53,6 +53,7 @@ import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 import com.mardous.booming.R
 import com.mardous.booming.data.local.HiddenLibraryItem
 import com.mardous.booming.data.local.HiddenLibraryStore
+import com.mardous.booming.data.local.MutedAlbumStore
 import com.mardous.booming.ui.component.compose.BottomSheetDialogSurface
 import com.mardous.booming.ui.component.compose.EmptyView
 import com.mardous.booming.ui.screen.library.LibraryViewModel
@@ -105,6 +106,8 @@ private data class HiddenSection(
 @Composable
 private fun HiddenContentSheet(onChanged: () -> Unit) {
     val items by HiddenLibraryStore.items.collectAsStateWithLifecycle()
+    val mutedItems by MutedAlbumStore.items.collectAsStateWithLifecycle()
+    val hasContent = items.isNotEmpty() || mutedItems.isNotEmpty()
     val sections = listOf(
         HiddenSection(HiddenLibraryStore.TYPE_ALBUM, R.string.albums_label),
         HiddenSection(HiddenLibraryStore.TYPE_ARTIST, R.string.artists_label),
@@ -114,7 +117,7 @@ private fun HiddenContentSheet(onChanged: () -> Unit) {
     BottomSheetDialogSurface(
         title = { Text(text = stringResource(R.string.hidden_content_title)) }
     ) {
-        if (items.isEmpty()) {
+        if (!hasContent) {
             EmptyView(
                 icon = painterResource(R.drawable.ic_blacklist_24dp),
                 title = stringResource(R.string.hidden_content_empty),
@@ -141,11 +144,41 @@ private fun HiddenContentSheet(onChanged: () -> Unit) {
                         TextButton(
                             onClick = {
                                 HiddenLibraryStore.restoreAll()
+                                MutedAlbumStore.unmuteAll()
                                 onChanged()
                             }
                         ) {
                             Text(text = stringResource(R.string.hidden_content_restore_all))
                         }
+                    }
+                }
+                if (mutedItems.isNotEmpty()) {
+                    item(key = "header-muted") {
+                        Text(
+                            text = stringResource(R.string.muted_albums_title),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(top = 8.dp, bottom = 2.dp)
+                        )
+                    }
+                    item(key = "summary-muted") {
+                        Text(
+                            text = stringResource(R.string.muted_albums_summary),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    items(
+                        items = mutedItems,
+                        key = { "muted:${it.id}" }
+                    ) { item ->
+                        HiddenItemRow(
+                            item = item,
+                            onRestore = {
+                                MutedAlbumStore.unmute(item)
+                                onChanged()
+                            }
+                        )
                     }
                 }
                 sections.forEach { section ->

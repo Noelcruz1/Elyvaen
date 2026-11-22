@@ -973,6 +973,14 @@
     <string name="blacklist_summary">The content of blacklisted folders is hidden from your library.</string>
     <string name="action_hide_from_library">Hide from library</string>
     <string name="action_hide_artist_albums">Hide all their albums</string>
+    <string name="action_mute_album">Mute album</string>
+    <string name="action_mute_artist_albums">Mute all their albums</string>
+    <string name="album_muted">Album muted: it will not appear in Songs or shuffle</string>
+    <string name="album_unmuted">Album reactivated</string>
+    <string name="albums_muted">Albums muted</string>
+    <string name="muted_album_label">Muted</string>
+    <string name="muted_albums_title">Muted albums</string>
+    <string name="muted_albums_summary">They stay in Albums, but not in Songs or shuffle.</string>
     <string name="hidden_content_title">Hidden content</string>
     <string name="hidden_content_summary">Archived without deleting files. Restore anything you want to see again.</string>
     <string name="hidden_content_empty">Nothing is hidden</string>

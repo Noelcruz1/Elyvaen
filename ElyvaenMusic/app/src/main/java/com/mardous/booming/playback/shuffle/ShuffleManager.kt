@@ -7,6 +7,7 @@ import com.mardous.booming.core.sort.SongSortMode
 import com.mardous.booming.data.SongProvider
 import com.mardous.booming.data.repository.Repository
 import com.mardous.booming.data.model.ExpandedSong
+import com.mardous.booming.data.local.MutedAlbumStore
 import com.mardous.booming.data.model.Song
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -19,9 +20,10 @@ class ShuffleManager : KoinComponent {
     private val repository: Repository by inject()
 
     suspend fun applySmartShuffle(songs: List<Song>, mode: SpecialShuffleMode): List<Song> {
-        if (songs.isEmpty()) return emptyList()
+        val available = songs.filterNot { MutedAlbumStore.isMuted(it.albumId) }
+        if (available.isEmpty()) return emptyList()
 
-        val expandedSongs = songs.expandSongsBatch()
+        val expandedSongs = available.expandSongsBatch()
         val now = System.currentTimeMillis()
 
         return try {
@@ -78,7 +80,7 @@ class ShuffleManager : KoinComponent {
             shuffledExpanded.map { it }
         } catch (e: Exception) {
             Log.e("ShuffleManager", "applySmartShuffle() failed in mode: $mode", e)
-            songs.shuffled()
+            available.shuffled()
         }
     }
 
@@ -168,7 +170,7 @@ class ShuffleManager : KoinComponent {
                 }
             }
         }
-    }
+    }.filterNot { MutedAlbumStore.isMuted(it.albumId) }
 
     companion object {
         private const val MILLIS_IN_DAY = 86400000.0

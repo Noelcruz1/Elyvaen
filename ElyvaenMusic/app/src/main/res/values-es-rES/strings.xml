@@ -767,6 +767,14 @@
     <string name="blacklist_summary">El contenido de las carpetas en la lista negra se oculta de la fonoteca.</string>
     <string name="action_hide_from_library">Ocultar de la biblioteca</string>
     <string name="action_hide_artist_albums">Ocultar todos sus álbumes</string>
+    <string name="action_mute_album">Silenciar álbum</string>
+    <string name="action_mute_artist_albums">Silenciar todos sus álbumes</string>
+    <string name="album_muted">Álbum silenciado: no aparecerá en Canciones ni en aleatorios</string>
+    <string name="album_unmuted">Álbum reactivado</string>
+    <string name="albums_muted">Álbumes silenciados</string>
+    <string name="muted_album_label">Silenciado</string>
+    <string name="muted_albums_title">Álbumes silenciados</string>
+    <string name="muted_albums_summary">Siguen en Álbumes, pero no en Canciones ni en aleatorios.</string>
     <string name="hidden_content_title">Contenido oculto</string>
     <string name="hidden_content_summary">Archivado sin borrar archivos. Restaura lo que quieras volver a ver.</string>
     <string name="hidden_content_empty">No hay contenido oculto</string>

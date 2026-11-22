@@ -49,7 +49,12 @@ class RealArtistRepository(
 
     override fun artists(): List<Artist> {
         val songs = songRepository.songs(
-            songRepository.makeSongCursor(null, null, DEFAULT_SORT_ORDER)
+            songRepository.makeSongCursor(
+                null,
+                null,
+                DEFAULT_SORT_ORDER,
+                includeMutedAlbums = true
+            )
         )
         val minimumSongCount = Preferences.minimumSongCountForArtist
         val artists = splitIntoArtists(albumRepository.splitIntoAlbums(songs)).filter {
@@ -62,7 +67,12 @@ class RealArtistRepository(
         if (artistId == Artist.VARIOUS_ARTISTS_ID) {
             // Get Various Artists
             val songs = songRepository.songs(
-                songRepository.makeSongCursor(null, null, DEFAULT_SORT_ORDER)
+                songRepository.makeSongCursor(
+                null,
+                null,
+                DEFAULT_SORT_ORDER,
+                includeMutedAlbums = true
+            )
             )
             val albums = with(AlbumSortMode.ArtistAlbums) {
                 albumRepository.splitIntoAlbums(songs)
@@ -76,7 +86,8 @@ class RealArtistRepository(
             songRepository.makeSongCursor(
                 AudioColumns.ARTIST_ID + "=?",
                 arrayOf(artistId.toString()),
-                DEFAULT_SORT_ORDER
+                DEFAULT_SORT_ORDER,
+                includeMutedAlbums = true
             )
         )
         return Artist(
@@ -91,7 +102,12 @@ class RealArtistRepository(
 
     override fun artists(query: String): List<Artist> {
         val songs = songRepository.songs(
-            songRepository.makeSongCursor(AudioColumns.ARTIST + " LIKE ?", arrayOf("%$query%"), DEFAULT_SORT_ORDER)
+            songRepository.makeSongCursor(
+                AudioColumns.ARTIST + " LIKE ?",
+                arrayOf("%$query%"),
+                DEFAULT_SORT_ORDER,
+                includeMutedAlbums = true
+            )
         )
         val artists = splitIntoArtists(albumRepository.splitIntoAlbums(songs))
         return sortArtists(artists)
@@ -99,7 +115,12 @@ class RealArtistRepository(
 
     override fun albumArtists(): List<Artist> {
         val songs = songRepository.songs(
-            songRepository.makeSongCursor(null, null, "lower(${AudioColumns.ALBUM_ARTIST})")
+            songRepository.makeSongCursor(
+                null,
+                null,
+                "lower(${AudioColumns.ALBUM_ARTIST})",
+                includeMutedAlbums = true
+            )
         )
         val minimumSongCount = Preferences.minimumSongCountForArtist
         val albumArtists = splitIntoAlbumArtists(albumRepository.splitIntoAlbums(songs)).filter {
@@ -112,7 +133,12 @@ class RealArtistRepository(
         if (Artist.VARIOUS_ARTISTS_DISPLAY_NAME.equals(artistName, ignoreCase = true)) {
             // Get Various Artists
             val songs = songRepository.songs(
-                songRepository.makeSongCursor(null, null, DEFAULT_SORT_ORDER)
+                songRepository.makeSongCursor(
+                null,
+                null,
+                DEFAULT_SORT_ORDER,
+                includeMutedAlbums = true
+            )
             )
             val albums = with(AlbumSortMode.ArtistAlbums) {
                 albumRepository.splitIntoAlbums(songs)
@@ -126,7 +152,8 @@ class RealArtistRepository(
             songRepository.makeSongCursor(
                 "lower(${AudioColumns.ALBUM_ARTIST})=?",
                 arrayOf(artistName.lowercase()),
-                DEFAULT_SORT_ORDER
+                DEFAULT_SORT_ORDER,
+                includeMutedAlbums = true
             )
         )
         return Artist(
@@ -144,7 +171,8 @@ class RealArtistRepository(
             songRepository.makeSongCursor(
                 "${AudioColumns.ALBUM_ARTIST} LIKE ?",
                 arrayOf("%$query%"),
-                DEFAULT_SORT_ORDER
+                DEFAULT_SORT_ORDER,
+                includeMutedAlbums = true
             )
         )
         val artists = splitIntoAlbumArtists(albumRepository.splitIntoAlbums(songs))
@@ -168,7 +196,8 @@ class RealArtistRepository(
                 .setSelection(selectionBuilder.toString())
                 .setSelectionArguments(genreNames.toTypedArray())
                 .addSelection("(${AudioColumns.ALBUM_ARTIST} NOT NULL AND ${AudioColumns.ALBUM_ARTIST} != ?)")
-                .addArguments(artist.name)
+                .addArguments(artist.name),
+            includeMutedAlbums = true
         ).let {
             songRepository.songs(it)
         }
