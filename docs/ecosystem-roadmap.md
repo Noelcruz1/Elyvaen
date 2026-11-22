@@ -544,20 +544,26 @@ consuma el NAS a través de la VPN del sistema.
   `magisk_patched-30700_K8Q6T.img`; en el PC hay backups (`cypfq_backup/`) y
   una imagen `build-uac2-test/boot_uac2_magisk.img`. El script
   `scripts/install-magisk-modules.sh` usa `su`, así que el root estuvo activo.
-- **Estado actual:** el kernel en marcha es el UAC2 custom
-  `5.4.259-perf+-elyvaen-uac2-vol-... #9` (16-nov), que coincide con
-  `boot_uac2_fu9.img`; no hay `su`, así que ese boot se compiló/reflasheó sin
-  Magisk. La app Magisk quedó instalada, pero el root está inactivo.
-- **Re-root seguro:** parchear `boot_uac2_fu9.img` (el boot actual) con Magisk
-  v30.7 y flashear solo `boot_a`. No usar `boot_uac2_magisk.img` de noviembre
-  si se quieren conservar los últimos ajustes de volumen UAC2. Guardar
-  `boot_uac2_fu9.img` sin parchear como rollback.
-- **Riesgo:** ya se rooteó antes en este mismo equipo y hay backups; el riesgo
-  de brick duro es bajo si se flashea solo `boot_a` con la imagen correcta y no
-  se bloquea el bootloader. Sigue sin haber un porcentaje oficial.
-- **Decisión actual: root inactivo.** Si se aprueba, plan: backup, parchear
-  fu9, `fastboot flash boot_a`, verificar `su`, no tocar módem/EFS/persist ni
-  SELinux y no bloquear el bootloader.
+- **Root activo desde 2026-11-22.** Se parcheó `boot_uac2_fu9.img` con Magisk
+  v30.7 y se flasheó solo `boot_a`. El kernel sigue siendo el UAC2 custom
+  `#9`; `su -c id` devuelve `uid=0(root)` con contexto `magisk`.
+- Imagen parcheada guardada en
+  `/workspace/Android/cypfq_backup/boot_uac2_fu9_magisk.img`
+  (SHA-256 `ece7a7644022a780f6ee45f47a0cb1c934756a88edea8bf1d00d7dca15cecf82`).
+  `boot_uac2_fu9.img` sin parchear y `current_boot_a.img` stock quedan como
+  rollback.
+- Verificado tras reiniciar: Magisk 30.7 activo, kiosco `PINNED`, reproducción
+  FLAC 16/44.1 intacta y hilo de audio 192 kHz disponible. Los módulos previos
+  (`cypfq_kiosk`, `cypfq_os_core`, `cypfq_dap_system`, `cypfq_adb`, etc.)
+  volvieron a cargar; `cypfq_audio_hires` sigue desactivado.
+- **Rollback:** `fastboot flash boot_a /workspace/Android/cypfq_backup/boot_uac2_fu9.img`
+  (o `current_boot_a.img` para stock) y reiniciar. No bloquear el bootloader.
+- **Riesgo:** root ya probado en este equipo y con backups; brick duro bajo si
+  solo se flashea `boot_a` con la imagen correcta. Sigue sin haber un
+  porcentaje oficial. No instalar OTA estando rooteado: restaurar el boot stock
+  primero.
+- La app Magisk ofrece actualización 31.1; se mantiene 30.7 porque es la
+  versión con la que se generó y validó esta imagen.
 
 ## Decisiones pendientes
 
