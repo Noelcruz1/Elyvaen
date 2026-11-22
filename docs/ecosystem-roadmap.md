@@ -538,10 +538,26 @@ consuma el NAS a través de la VPN del sistema.
   Qualcomm/Aqstic. **Tailscale, SMB y WebDAV no necesitan root.**
 - Costes: OTA y parches se complican, Play Integrity/Widevine pueden fallar
   (el bootloader ya está desbloqueado), más superficie de seguridad.
-- **Decisión actual: no rootear todavía.** Si se aprueba, plan seguro:
-  backup, firmware exacto `S2RYA32.58-13-12-5-1-3` ATTMX, `boot.img` stock
-  guardado, parchear con Magisk, `fastboot flash boot_a`, verificar `su`,
-  no bloquear el bootloader y no tocar módem/EFS/persist ni SELinux.
+- **Historial real: Magisk ya se usó en este dispositivo.** La app
+  `com.topjohnwu.magisk` v30.7 está instalada desde 2026-05-16. En
+  `/sdcard/Download` siguen `Magisk-v30.7.apk`, `boot.img` y
+  `magisk_patched-30700_K8Q6T.img`; en el PC hay backups (`cypfq_backup/`) y
+  una imagen `build-uac2-test/boot_uac2_magisk.img`. El script
+  `scripts/install-magisk-modules.sh` usa `su`, así que el root estuvo activo.
+- **Estado actual:** el kernel en marcha es el UAC2 custom
+  `5.4.259-perf+-elyvaen-uac2-vol-... #9` (16-nov), que coincide con
+  `boot_uac2_fu9.img`; no hay `su`, así que ese boot se compiló/reflasheó sin
+  Magisk. La app Magisk quedó instalada, pero el root está inactivo.
+- **Re-root seguro:** parchear `boot_uac2_fu9.img` (el boot actual) con Magisk
+  v30.7 y flashear solo `boot_a`. No usar `boot_uac2_magisk.img` de noviembre
+  si se quieren conservar los últimos ajustes de volumen UAC2. Guardar
+  `boot_uac2_fu9.img` sin parchear como rollback.
+- **Riesgo:** ya se rooteó antes en este mismo equipo y hay backups; el riesgo
+  de brick duro es bajo si se flashea solo `boot_a` con la imagen correcta y no
+  se bloquea el bootloader. Sigue sin haber un porcentaje oficial.
+- **Decisión actual: root inactivo.** Si se aprueba, plan: backup, parchear
+  fu9, `fastboot flash boot_a`, verificar `su`, no tocar módem/EFS/persist ni
+  SELinux y no bloquear el bootloader.
 
 ## Decisiones pendientes
 
