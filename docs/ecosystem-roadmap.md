@@ -366,6 +366,21 @@ mini-player/90 Hz verificados.
   API pública sin clave devolvió 401 `PUBLIC_API_ACCESS_DEPRECATED`; con la
   clave de cliente de Redomi funciona.
 
+## Salud de biblioteca (2026-11-22)
+
+- `MetadataHealthFragment` analiza las pistas visibles y calcula un porcentaje
+  de metadatos completos, excluyendo silenciados y ocultos.
+- Detecta: sin título, sin artista, sin álbum, sin año, sin número de pista y
+  grupos de posibles duplicados (título + artista normalizados).
+- La pantalla tiene filtros por problema y una lista con la etiqueta de cada
+  incidencia. Tocar una pista abre el editor de etiquetas existente; al volver,
+  la salud se recalcula.
+- Acceso desde la tarjeta **Salud de biblioteca** de Home y desde el menú de la
+  biblioteca.
+- Inspirado en Metadator, pero **sin copiar código AGPL**: usa MediaStore,
+  TagLib y las pantallas de edición que Elyvaen ya tenía. El autoarreglo por
+  lotes con MusicBrainz/Deezer/LRCLIB queda para una fase posterior.
+
 ## Decisiones pendientes
 
 1. **Deezer primero**: ¿catálogo + playback nativo en el DAP, o puente NAS
