@@ -98,6 +98,7 @@ import com.mardous.booming.ui.screen.library.genres.GenreDetailViewModel
 import com.mardous.booming.ui.screen.library.home.HomeViewModel
 import com.mardous.booming.ui.screen.health.MetadataHealthViewModel
 import com.mardous.booming.ui.screen.hub.AudioEngineViewModel
+import com.mardous.booming.ui.screen.hub.DapModeViewModel
 import com.mardous.booming.ui.screen.hub.HubViewModel
 import com.mardous.booming.ui.screen.hub.SalaViewModel
 import com.mardous.booming.ui.screen.hub.NasBrowserViewModel
@@ -410,6 +411,10 @@ private val viewModule = module {
             queueStateHolder = get(),
             visualizerState = get()
         )
+    }
+
+    viewModel {
+        DapModeViewModel(context = androidContext())
     }
 
     viewModel {

@@ -63,6 +63,7 @@ import com.mardous.booming.ui.component.base.AbsSlidingMusicPanelActivity
 import com.mardous.booming.ui.screen.library.search.SearchFragment
 import com.mardous.booming.ui.screen.link.LinkResolverFragment
 import com.mardous.booming.ui.screen.link.extractMusicUrl
+import com.mardous.booming.ui.screen.hub.DapAssistantAction
 import com.mardous.booming.ui.screen.update.UpdateDialog
 import com.mardous.booming.ui.screen.update.UpdateSearchResult
 import com.mardous.booming.ui.screen.update.UpdateViewModel
@@ -92,6 +93,7 @@ class MainActivity : AbsSlidingMusicPanelActivity(), MediaController.Listener {
         applyDapAudioDefaults()
         Uac2Control.ensureService(this)
         applyPreferredDisplayMode()
+        applyDapKeepScreenOn()
 
         updateTabs()
         setupNavigationController()
@@ -457,15 +459,87 @@ class MainActivity : AbsSlidingMusicPanelActivity(), MediaController.Listener {
 
     @Suppress("DEPRECATION")
     private fun applyPreferredDisplayMode() {
+        val preferences = PreferenceManager.getDefaultSharedPreferences(this)
+        val requestedRate = preferences.getInt("dap_refresh_rate", 90)
         val modes = windowManager.defaultDisplay.supportedModes
-        // 90 Hz is the sweet spot for this DAP: noticeably smoother than 60 Hz
-        // without the thermal/frame-budget pressure of 120 Hz.
-        val bestMode = modes.firstOrNull { kotlin.math.abs(it.refreshRate - 90f) < 1f }
-            ?: modes.firstOrNull { kotlin.math.abs(it.refreshRate - 60f) < 1f }
-            ?: modes.maxByOrNull { it.refreshRate }
+        val bestMode = modes.firstOrNull {
+            kotlin.math.abs(it.refreshRate - requestedRate) < 1f
+        } ?: modes.firstOrNull {
+            kotlin.math.abs(it.refreshRate - 90f) < 1f
+        } ?: modes.firstOrNull {
+            kotlin.math.abs(it.refreshRate - 60f) < 1f
+        } ?: modes.maxByOrNull { it.refreshRate }
             ?: return
         window.attributes = window.attributes.apply {
             preferredDisplayModeId = bestMode.modeId
+        }
+    }
+
+    fun setDapRefreshRate(rate: Int) {
+        PreferenceManager.getDefaultSharedPreferences(this)
+            .edit()
+            .putInt("dap_refresh_rate", rate)
+            .apply()
+        applyPreferredDisplayMode()
+    }
+
+    fun setDapKeepScreenOn(enabled: Boolean) {
+        PreferenceManager.getDefaultSharedPreferences(this)
+            .edit()
+            .putBoolean("dap_keep_screen_on", enabled)
+            .apply()
+        applyDapKeepScreenOn()
+    }
+
+    private fun applyDapKeepScreenOn() {
+        val enabled = PreferenceManager.getDefaultSharedPreferences(this)
+            .getBoolean("dap_keep_screen_on", false)
+        if (enabled) {
+            window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
+
+    private fun handleAssistantButton(): Boolean {
+        val action = runCatching {
+            DapAssistantAction.valueOf(
+                PreferenceManager.getDefaultSharedPreferences(this)
+                    .getString("dap_assistant_action", DapAssistantAction.PLAY_PAUSE.name)
+                    ?: DapAssistantAction.PLAY_PAUSE.name
+            )
+        }.getOrDefault(DapAssistantAction.PLAY_PAUSE)
+        return when (action) {
+            DapAssistantAction.PLAY_PAUSE -> {
+                playerViewModel.togglePlayPause()
+                true
+            }
+
+            DapAssistantAction.NEXT -> {
+                playerViewModel.seekToNext()
+                true
+            }
+
+            DapAssistantAction.PREVIOUS -> {
+                playerViewModel.seekToPrevious()
+                true
+            }
+
+            DapAssistantAction.OPEN_PLAYER -> {
+                expandPanel()
+                true
+            }
+
+            DapAssistantAction.TOGGLE_KIOSK -> {
+                if (getSystemService<ActivityManager>()?.isInLockTaskMode == true) {
+                    exitKioskMode()
+                } else {
+                    enterKioskMode()
+                }
+                true
+            }
+
+            DapAssistantAction.NONE -> false
         }
     }
 
@@ -490,7 +564,20 @@ class MainActivity : AbsSlidingMusicPanelActivity(), MediaController.Listener {
         }
     }
 
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus && PreferenceManager.getDefaultSharedPreferences(this)
+                .getBoolean("dap_kiosk_enabled", false)) {
+            enterKioskFullscreen()
+        }
+    }
+
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        if (keyCode == KeyEvent.KEYCODE_CAMERA || keyCode == KeyEvent.KEYCODE_ASSIST) {
+            if (event.repeatCount == 0 && handleAssistantButton()) {
+                return true
+            }
+        }
         if (keyCode == KeyEvent.KEYCODE_VOLUME_UP && event.repeatCount >= 20) {
             exitKioskMode()
             return true

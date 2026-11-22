@@ -425,7 +425,7 @@ depende del PC para cargar archivos.
 | H3 | Servidor DLNA/UPnP + WebDAV + control remoto web · **implementado 2026-11-22** | El DAP sirve a la casa |
 | H4 | Motor de audio: UAC2 exclusivo, frecuencia nativa, EQ paramétrico, convolución, crossfeed, DoP · **DSP, EQ, crossfeed, convolución y estado UAC2 implementados 2026-11-22; DoP pendiente de kernel/USB DSD** | Nivel audiófilo |
 | H5 | AudioVisual: visualizador, letras/karaoke, vídeo local, Cast/DLNA · **visualizador, karaoke, vídeo local y envío DLNA implementados 2026-11-22; Chromecast nativo pendiente** | Experiencia de sala |
-| H6 | Modo DAP: batería, térmica, botones, modo dedicado | Sensación de hardware dedicado |
+| H6 | Modo DAP: batería, térmica, botones, modo dedicado · **implementado 2026-11-22** | Sensación de hardware dedicado |
 | **H7** | **Tailscale + NAS directa**: estado de Tailscale, MagicDNS, SMB/WebDAV/SFTP y sync/backup sobre la tailnet | Acceso al NAS sin abrir puertos |
 
 ## Fase H7 — Tailscale + NAS directa
@@ -804,6 +804,69 @@ vídeo local y envío DLNA a TVs o altavoces.
 - La TV física debe probarse en casa; el descubrimiento SSDP ya está
   implementado y se validó el caso sin dispositivos.
 - La lista de vídeo es básica (sin miniaturas, subtítulos ni cast de vídeo).
+
+## Fase H6 — Modo DAP (2026-11-22)
+
+La tarjeta **Elyvaen Hub → Modo DAP** reúne el estado real del hardware y los
+controles de dedicación del DAP.
+
+### Implementado
+
+- **Batería real**: nivel, estado (cargando/completa/descargando), salud,
+  temperatura, voltaje y corriente. Usa el *sticky broadcast* de Android y
+  recurre a `/sys/class/power_supply/battery` si el intent no está disponible.
+- **Térmica y CPU**: estado térmico de Android, zona más caliente y governor
+  actual (`schedutil`). La app solo lee; no escribe en `/sys`.
+- **Modo dedicado**:
+  - kiosco / app fijada con `startLockTask()` y confirmación del sistema;
+  - mantener pantalla encendida (`FLAG_KEEP_SCREEN_ON`, apagado por defecto);
+  - refresco 60/90/120 Hz aplicado a la ventana, con 90 Hz por defecto.
+- **Botones**:
+  - el botón de asistente/cámara (scancode 766 → `CAMERA`) se puede remapear a
+    play/pausa, siguiente, anterior, abrir player, kiosco o nada;
+  - el botón multimedia conserva una pulsación play/pausa y dos pulsaciones
+    siguiente;
+  - mantener Volumen arriba sale del kiosco.
+- **Auto-refresco** cada 3 s mientras la pantalla está visible, para que el
+  estado de batería, temperatura y kiosco no quede obsoleto tras el diálogo de
+  fijación.
+- No se pide root al abrir la pantalla. La app no escribe en sysfs ni cambia
+  governors: el módulo Magisk del DAP sigue siendo el único que aplica el límite
+  de carga y el perfil de CPU.
+
+### Verificación en el Moto G51
+
+- Batería: **100%**, **31.8–32.5 °C**, **4359–4360 mV**, salud **Buena**, estado
+  **Completa · conectado**.
+- Térmica: estado **Normal**, zona más caliente **37–41 °C**, governor
+  **schedutil**.
+- Refresco: 60 Hz → `modeId 1`, 90 Hz → `modeId 3`, 120 Hz → `modeId 2` en
+  `dumpsys display`.
+- Pantalla encendida: la ventana pasó a mostrar `fl=KEEP_SCREEN_ON`; el ajuste
+  se guarda y se vuelve a aplicar al abrir la app.
+- Kiosco: **Activar** mostró el diálogo de fijación, `mLockTaskModeState=PINNED`
+  y el estado pasó a **Activo · app fijada**. **Salir** dejó el estado en
+  `NONE`.
+- Botón cámara: con la acción **Play/Pausa** alternó `state=2` y `state=3`;
+  con **Siguiente** y **Anterior** cambió la pista activa. La acción elegida se
+  conserva.
+- Botón multimedia: una pulsación alternó reproducción y dos pulsaciones
+  avanzaron de pista.
+- La captura final está en `docs/ui-v2/screens/dap-mode.png`; la tarjeta de
+  botones, en `docs/ui-v2/screens/dap-buttons.png`.
+
+### Límites de H6
+
+- El límite de carga del módulo (`charge_control_limit`) no es legible desde la
+  app sin root por SELinux; la fila muestra **Controlado por Magisk** como
+  respaldo. El límite de 80% sigue aplicándose por el módulo.
+- El kiosco usa *screen pinning*, no device owner: la primera vez Android pide
+  confirmación. Si se cancela, la app queda en inmersivo pero sin fijar.
+- No hay control de governor desde la app, solo lectura, para no interferir con
+  la política térmica del módulo.
+- El remapeo del botón de asistente depende del keylayout del módulo Magisk.
+- Triple pulsación no se anuncia porque esta versión de Media3 no la expone de
+  forma fiable; una y dos pulsaciones están verificadas.
 
 ## NAS general y OMV (2026-11-22)
 

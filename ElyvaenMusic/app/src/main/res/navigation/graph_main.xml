@@ -61,6 +61,11 @@
         android:label="SalaFragment"/>
 
     <fragment
+        android:id="@+id/nav_dap_mode"
+        android:name="com.mardous.booming.ui.screen.hub.DapModeFragment"
+        android:label="DapModeFragment"/>
+
+    <fragment
         android:id="@+id/nav_songs"
         android:name="com.mardous.booming.ui.screen.library.songs.SongListFragment"
         android:label="SongsFragment"/>
