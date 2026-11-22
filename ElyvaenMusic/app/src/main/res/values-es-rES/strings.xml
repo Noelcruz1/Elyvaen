@@ -765,6 +765,13 @@
     <string name="whitelist_summary">En la fonoteca solo se muestra el contenido de las carpetas incluidas en la lista blanca.</string>
     <string name="blacklist_title">Lista negra</string>
     <string name="blacklist_summary">El contenido de las carpetas en la lista negra se oculta de la fonoteca.</string>
+    <string name="action_hide_from_library">Ocultar de la biblioteca</string>
+    <string name="hidden_content_title">Contenido oculto</string>
+    <string name="hidden_content_summary">Archivado sin borrar archivos. Restaura lo que quieras volver a ver.</string>
+    <string name="hidden_content_empty">No hay contenido oculto</string>
+    <string name="hidden_content_restore">Restaurar</string>
+    <string name="hidden_content_restore_all">Restaurar todo</string>
+    <string name="hidden_from_library">Oculto de la biblioteca</string>
     <string name="artist_min_songs_title">Recuento mínimo de canciones del artista</string>
     <string name="artist_min_songs_summary">Cuántas canciones (como mínimo) debe tener un artista para que aparezca en la fonoteca.</string>
     <string name="album_min_songs_title">Número mínimo de canciones del álbum</string>

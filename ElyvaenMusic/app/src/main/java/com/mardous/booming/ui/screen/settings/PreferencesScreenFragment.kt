@@ -68,6 +68,7 @@ import com.mardous.booming.ui.component.preferences.dialog.SongClickActionPrefer
 import com.mardous.booming.ui.dialogs.library.BlacklistWhitelistDialog
 import com.mardous.booming.ui.screen.backup.BackupActivity
 import com.mardous.booming.ui.screen.library.LibraryViewModel
+import com.mardous.booming.ui.screen.library.hidden.HiddenContentFragment
 import com.mardous.booming.ui.screen.lyrics.LyricsViewModel
 import com.mardous.booming.ui.screen.scrobbling.ScrobblingServiceLoginFragment
 import com.mardous.booming.ui.screen.update.UpdateSearchResult
@@ -131,6 +132,10 @@ class PlaybackPreferencesFragment : PreferenceScreenFragment() {
 class LibraryPreferencesFragment : PreferenceScreenFragment() {
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
         addPreferencesFromResource(R.xml.preferences_screen_library)
+        findPreference<Preference>("hidden_content")?.setOnPreferenceClickListener {
+            HiddenContentFragment().show(childFragmentManager, "HIDDEN_CONTENT")
+            true
+        }
     }
 }
 

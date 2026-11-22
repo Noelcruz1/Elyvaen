@@ -27,6 +27,9 @@
         android:id="@+id/action_tag_editor"
         android:title="@string/action_tag_editor"/>
     <item
+        android:id="@+id/action_hide_from_library"
+        android:title="@string/action_hide_from_library"/>
+    <item
         android:id="@+id/action_play_info"
         android:title="@string/play_info"/>
     <item

@@ -94,6 +94,13 @@
             app:widgetLayout="@layout/preference_switch"
             app:key="blacklist_enabled"/>
 
+        <Preference
+            app:icon="@drawable/ic_blacklist_24dp"
+            app:title="@string/hidden_content_title"
+            app:summary="@string/hidden_content_summary"
+            app:layout="@layout/list_item_view"
+            app:key="hidden_content"/>
+
         <SeekBarPreference
             app:iconSpaceReserved="true"
             app:title="@string/min_song_duration_title"

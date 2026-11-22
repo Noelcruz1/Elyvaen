@@ -24,6 +24,7 @@ import androidx.lifecycle.lifecycleScope
 import com.mardous.booming.R
 import com.mardous.booming.core.model.shuffle.OpenShuffleMode
 import com.mardous.booming.data.local.EditTarget
+import com.mardous.booming.data.local.HiddenLibraryStore
 import com.mardous.booming.data.local.room.PlaylistWithSongs
 import com.mardous.booming.data.mapper.toSongs
 import com.mardous.booming.data.model.Album
@@ -44,6 +45,7 @@ import com.mardous.booming.ui.dialogs.playlists.DeletePlaylistDialog
 import com.mardous.booming.ui.dialogs.playlists.EditPlaylistDialog
 import com.mardous.booming.ui.dialogs.songs.DeleteSongsDialog
 import com.mardous.booming.ui.screen.library.LibraryViewModel
+import com.mardous.booming.ui.screen.library.ReloadType
 import com.mardous.booming.ui.screen.player.PlayerViewModel
 import com.mardous.booming.ui.screen.tageditor.AlbumTagEditorActivity
 import com.mardous.booming.ui.screen.tageditor.ArtistTagEditorActivity
@@ -109,6 +111,13 @@ fun Song.onSongMenu(
                     .getShareSongIntent(this)
                     .toChooser(fragment.getString(R.string.action_share))
             )
+            true
+        }
+
+        R.id.action_hide_from_library -> {
+            HiddenLibraryStore.hideSongs(listOf(this))
+            fragment.reloadAfterHiddenChange()
+            fragment.showToast(R.string.hidden_from_library)
             true
         }
 
@@ -189,6 +198,13 @@ fun List<Song>.onSongsMenu(fragment: Fragment, menuItem: MenuItem): Boolean {
             true
         }
 
+        R.id.action_hide_from_library -> {
+            HiddenLibraryStore.hideSongs(this)
+            fragment.reloadAfterHiddenChange()
+            fragment.showToast(R.string.hidden_from_library)
+            true
+        }
+
         R.id.action_delete_from_device -> {
             DeleteSongsDialog.create(this).show(fragment.childFragmentManager, "DELETE_SONGS")
             true
@@ -214,11 +230,24 @@ fun Album.onAlbumMenu(fragment: Fragment, menuItem: MenuItem): Boolean {
             true
         }
 
+        R.id.action_hide_from_library -> {
+            HiddenLibraryStore.hideAlbums(listOf(this))
+            fragment.reloadAfterHiddenChange()
+            fragment.showToast(R.string.hidden_from_library)
+            true
+        }
+
         else -> sortedSongs.onSongsMenu(fragment, menuItem)
     }
 }
 
 fun List<Album>.onAlbumsMenu(fragment: Fragment, menuItem: MenuItem): Boolean {
+    if (menuItem.itemId == R.id.action_hide_from_library) {
+        HiddenLibraryStore.hideAlbums(this)
+        fragment.reloadAfterHiddenChange()
+        fragment.showToast(R.string.hidden_from_library)
+        return true
+    }
     fragment.lifecycleScope.launch(Dispatchers.IO) {
         val songs = flatMap { it.sortedSongs }
         withContext(Dispatchers.Main) {
@@ -237,11 +266,24 @@ fun Artist.onArtistMenu(fragment: Fragment, menuItem: MenuItem): Boolean {
             true
         }
 
+        R.id.action_hide_from_library -> {
+            HiddenLibraryStore.hideArtists(listOf(this))
+            fragment.reloadAfterHiddenChange()
+            fragment.showToast(R.string.hidden_from_library)
+            true
+        }
+
         else -> sortedSongs.onSongsMenu(fragment, menuItem)
     }
 }
 
 fun List<Artist>.onArtistsMenu(fragment: Fragment, menuItem: MenuItem): Boolean {
+    if (menuItem.itemId == R.id.action_hide_from_library) {
+        HiddenLibraryStore.hideArtists(this)
+        fragment.reloadAfterHiddenChange()
+        fragment.showToast(R.string.hidden_from_library)
+        return true
+    }
     fragment.lifecycleScope.launch(Dispatchers.IO) {
         val songs = flatMap { it.sortedSongs }
         withContext(Dispatchers.Main) {
@@ -303,3 +345,12 @@ fun List<PlaylistWithSongs>.onPlaylistsMenu(fragment: Fragment, menuItem: MenuIt
     return flatMap { it.songs.toSongs() }.onSongsMenu(fragment, menuItem)
 }
 
+
+private fun Fragment.reloadAfterHiddenChange() {
+    val libraryViewModel = getActivityViewModel<LibraryViewModel>()
+    libraryViewModel.forceReload(ReloadType.Songs)
+    libraryViewModel.forceReload(ReloadType.Albums)
+    libraryViewModel.forceReload(ReloadType.Artists)
+    libraryViewModel.forceReload(ReloadType.Genres)
+    libraryViewModel.forceReload(ReloadType.Years)
+}

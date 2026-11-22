@@ -32,6 +32,7 @@ import android.provider.OpenableColumns
 import android.util.Log
 import androidx.media3.common.MediaItem
 import com.mardous.booming.core.sort.SongSortMode
+import com.mardous.booming.data.local.HiddenLibraryStore
 import com.mardous.booming.data.local.MediaQueryDispatcher
 import com.mardous.booming.data.local.room.InclExclDao
 import com.mardous.booming.data.local.room.InclExclEntity
@@ -300,6 +301,38 @@ class RealSongRepository(
                 val (selection, arguments) = generateLibraryFilterPattern(blacklisted, operator = "AND", mode = "NOT LIKE")
                 if (blacklisted.isNotEmpty()) {
                     queryDispatcher.addSelectionWithArguments(selection, *arguments)
+                }
+            }
+
+            // Content archived from the library (files stay on the device)
+            val hidden = HiddenLibraryStore.current
+            if (hidden.isNotEmpty()) {
+                val hiddenAlbums = hidden
+                    .filter { it.type == HiddenLibraryStore.TYPE_ALBUM }
+                    .map { it.id.toString() }
+                if (hiddenAlbums.isNotEmpty()) {
+                    queryDispatcher.addSelectionWithArguments(
+                        "${AudioColumns.ALBUM_ID} NOT IN (${hiddenAlbums.joinToString(",") { "?" }})",
+                        *hiddenAlbums.toTypedArray()
+                    )
+                }
+                val hiddenArtists = hidden
+                    .filter { it.type == HiddenLibraryStore.TYPE_ARTIST && it.name.isNotBlank() }
+                    .map { it.name }
+                if (hiddenArtists.isNotEmpty()) {
+                    queryDispatcher.addSelectionWithArguments(
+                        "${AudioColumns.ARTIST} NOT IN (${hiddenArtists.joinToString(",") { "?" }})",
+                        *hiddenArtists.toTypedArray()
+                    )
+                }
+                val hiddenTracks = hidden
+                    .filter { it.type == HiddenLibraryStore.TYPE_TRACK }
+                    .map { it.id.toString() }
+                if (hiddenTracks.isNotEmpty()) {
+                    queryDispatcher.addSelectionWithArguments(
+                        "${AudioColumns._ID} NOT IN (${hiddenTracks.joinToString(",") { "?" }})",
+                        *hiddenTracks.toTypedArray()
+                    )
                 }
             }
         }

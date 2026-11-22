@@ -48,6 +48,7 @@ import com.mardous.booming.extensions.topLevelTransition
 import com.mardous.booming.extensions.whichFragment
 import com.mardous.booming.ui.IScrollHelper
 import com.mardous.booming.ui.dialogs.playlists.ImportPlaylistDialog
+import com.mardous.booming.ui.screen.library.hidden.HiddenContentFragment
 import com.mardous.booming.ui.screen.other.ShuffleModeFragment
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -235,6 +236,8 @@ abstract class AbsRecyclerViewFragment<A : RecyclerView.Adapter<*>, LM : Recycle
             R.id.action_settings -> findNavController().navigate(R.id.nav_settings)
             R.id.action_scan -> mainActivity.scanAllPaths()
             R.id.action_equalizer -> findNavController().navigate(R.id.nav_equalizer)
+            R.id.action_hidden_content -> HiddenContentFragment()
+                .show(childFragmentManager, "HIDDEN_CONTENT")
             R.id.action_import_playlist -> ImportPlaylistDialog().show(childFragmentManager, "IMPORT_PLAYLIST")
         }
         return false
