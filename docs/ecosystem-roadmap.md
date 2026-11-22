@@ -13,10 +13,10 @@ UAC2 ni la biblioteca existente.
 | [ArchiveTune](https://github.com/rukamori/ArchiveTune) | Android · Kotlin/Compose | GPL-3.0 | Referencia de UI móvil: bottom nav, tarjetas, estadísticas, letras, temas, player. No es fuente Deezer (es YouTube Music + local). |
 | [Sonora](https://github.com/sonorahq/sonora) | Desktop · Rust/GPUI | GPL-3.0 | **Mejor referencia de UI de escritorio** (sidebar, cola/letras, barra now-playing, tablas densas) y **referencia técnica de Deezer**: ARL, gateway, descifrado BF_CBC_STRIPE, playlists, descargas. |
 | [Redomi](https://github.com/acszo/Redomi) | Android · Compose | GPL-3.0 | Cliente de song.link/Odesli. Sirve para resolver enlaces Deezer/Spotify/YouTube y abrir o descargar la canción equivalente. No descarga audio. |
-| [Metadator](https://github.com/BobbyESP/Metadator) | Android · Compose | GPL-3.0 | Editor de etiquetas, portadas y letras con búsqueda en MusicBrainz/Deezer y LRCLIB. Referencia para “salud de biblioteca” y enriquecimiento. |
+| [Metadator](https://github.com/BobbyESP/Metadator) | Android · Compose | **AGPL-3.0** | Editor de etiquetas, portadas y letras con búsqueda en MusicBrainz/Deezer y LRCLIB. Referencia para “salud de biblioteca” y enriquecimiento. **No copiar código**: AGPL obligaría a relicenciar Elyvaen; reimplementar las ideas. |
 | [Elixium](https://github.com/jaylex32/Elixium) | Node/TS · CLI/Web | MIT | Descargador Deezer/Qobuz con watchlists y Web UI. Buen backend para el puente del NAS. |
 | [streamrip](https://github.com/nathom/streamrip) | Python CLI | GPL-3.0 | Descargador Deezer/Qobuz/Tidal/SoundCloud, bases de datos de descargas y automatización. Alternativa al puente. |
-| [Music Presence](https://github.com/ungive/discord-music-presence) | Desktop C++ | No open source (source-available) | Referencia de Rich Presence. **No se puede ejecutar en Android** y no se puede reutilizar su código; sirve para el protocolo/idea y para un companion en PC. |
+| [Music Presence](https://github.com/ungive/discord-music-presence) | Desktop C++ | Source-available, sin licencia reutilizable | Referencia de Rich Presence. **No se puede ejecutar en Android** y no se puede reutilizar su código; sirve para el protocolo/idea y para un companion en PC. |
 
 ## Lo importante de cada una
 
@@ -324,6 +324,26 @@ mini-player/90 Hz verificados.
   lo que se quiera.
 - Para escucha suelta: tras archivar los álbumes que no interesan, la pestaña
   **Canciones**, favoritos y listas propias quedan como biblioteca curada.
+
+## Extras evaluados (2026-11-22)
+
+| Extra propuesto | Base | Licencia | ¿Integrable? | Esfuerzo | Veredicto |
+|---|---|---|---|---|---|
+| Resolvedor de enlaces Deezer/Spotify/YouTube | Redomi | GPL-3.0 | Sí, nativo | Medio | **Hacer primero**: share sheet → Odesli/song.link → buscar en biblioteca local o Deezer, abrir o descargar. |
+| Salud de biblioteca y edición por lotes | Metadator | AGPL-3.0 | Solo reimplementar | Medio-alto | **Muy útil** para las 896 pistas: detectar sin portada/título/artista/álbum/letra, duplicados y tags raros; usar TagLib + MusicBrainz + Deezer + LRCLIB. No copiar código AGPL. |
+| Cola/letras/Flow y listas inteligentes | Sonora | GPL-3.0 | Portar conceptos | Medio | Sonora es Rust/GPUI de escritorio; no se embebe. Su lógica Deezer ya está portada. Añadir Flow/mezcla por similitud y panel de cola/letras. |
+| Quick picks, temas, letras, sleep timer | ArchiveTune | GPL-3.0 | Ideas/portes pequeños | Bajo | Su backend es YouTube Music, no Deezer. Solo adaptar UI y funciones; no traer su motor. |
+| Descargas masivas y watchlists | Elixium / streamrip | MIT / GPL-3.0 | Servicio externo | Alto | No son librerías Android: corren en NAS/Termux. Integrar por REST/SSH o carpeta compartida en una fase de puente. |
+| Rich Presence de Discord | Music Presence | Source-available | No reutilizable | Bajo / Alto | Discord Android no acepta RPC de terceros. Webhook desde la app es fácil; presencia real requiere companion en PC. |
+| “Sueltas” / Flow local | Propio | GPL-3.0 | Sí | Bajo-medio | Sección o playlist automática con pistas sueltas, favoritas y no silenciadas; encaja con tu forma de escuchar. |
+
+### Orden recomendado
+
+1. **Resolvedor de enlaces** (Redomi): valor inmediato y bajo riesgo.
+2. **Salud de biblioteca** (ideas de Metadator, reimplementadas): limpia los tags desconocidos que ya aparecen en la biblioteca.
+3. **“Sueltas”/Flow local**: aprovecha el archivado y el silenciado que acabamos de añadir.
+4. **Webhook de Discord** y, más adelante, companion de PC.
+5. **Puente NAS** con Elixium/streamrip cuando haya servidor.
 
 ## Decisiones pendientes
 
