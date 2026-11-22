@@ -207,7 +207,8 @@ Qobuz/Tidal/Bandcamp o la compra directa son mejores fuentes.
 | 4 | Deezer downloads + metadata/lyrics | Offline real |
 | 5 | Puente NAS (streamrip/Elixium) + sync | Descargas masivas |
 | 6 | Discord webhook + companion PC + stats | Social |
-| 7 | Subsonic/Navidrome y otras fuentes | Ecosistema |
+| 7 | **Tailscale + NAS directa (SMB/WebDAV)** | Hub fuera de casa |
+| 8 | Subsonic/Navidrome y otras fuentes | Ecosistema |
 
 ## Implementado en esta iteración (UI v3 · fase 1)
 
@@ -411,6 +412,88 @@ mini-player/90 Hz verificados.
   ahora el webhook es la opción portable.
 - La integración queda lista para configurar, pero no se pudo publicar en un
   canal real sin una URL de webhook del usuario.
+
+## Elyvaen Hub: fases propias
+
+Objetivo: que el DAP sea un hub completo de música, no solo un reproductor que
+depende del PC para cargar archivos.
+
+| Fase | Entregable | Valor |
+|---|---|---|
+| H1 | Hub de ingesta: USB OTG + subida por Wi-Fi con QR + gestor de almacenamiento | Elimina el PC del día a día |
+| H2 | Fuentes NAS: SMB, WebDAV, SFTP, Subsonic/Navidrome; sync y backup | Biblioteca en red |
+| H3 | Servidor DLNA/UPnP + WebDAV + control remoto web | El DAP sirve a la casa |
+| H4 | Motor de audio: UAC2 exclusivo, frecuencia nativa, EQ paramétrico, convolución, crossfeed, DoP | Nivel audiófilo |
+| H5 | AudioVisual: visualizador, letras/karaoke, vídeo local, Cast/DLNA | Experiencia de sala |
+| H6 | Modo DAP: batería, térmica, botones, modo dedicado | Sensación de hardware dedicado |
+| **H7** | **Tailscale + NAS directa**: estado de Tailscale, MagicDNS, SMB/WebDAV/SFTP y sync/backup sobre la tailnet | Acceso al NAS sin abrir puertos |
+
+## Fase H7 — Tailscale + NAS directa
+
+**Sí es posible.** La forma recomendada no es embeber Tailscale dentro de
+Elyvaen, sino usar la **app oficial de Tailscale en Android** y que Elyvaen
+consuma el NAS a través de la VPN del sistema.
+
+### Arquitectura recomendada
+
+1. **Tailscale oficial** (`com.tailscale.ipn`) inicia sesión y mantiene la
+   tailnet. Elyvaen detecta:
+   - si la app está instalada (`PackageManager`);
+   - si hay una VPN activa (`NetworkCapabilities.TRANSPORT_VPN`);
+   - el estado de conexión y un botón para abrir Tailscale.
+2. **MagicDNS**: Elyvaen usa el nombre del NAS (`nas.tailnet.ts.net`) o su IP
+   `100.x.y.z`. No hace falta DDNS ni abrir puertos.
+3. **Protocolos NAS**:
+   - **SMB2/3** con SMBJ para compartir carpetas;
+   - **WebDAV** con Sardine/OkHttp para Synology, Nextcloud, etc.;
+   - **SFTP** con sshj para servidores SSH;
+   - **Subsonic/Navidrome** por REST como fuente de streaming.
+4. **Tailscale Serve** (opcional): publica WebDAV/HTTPS dentro de la tailnet con
+   certificado válido. Evitar Funnel salvo necesidad; expone el servicio a
+   Internet.
+5. **Sync/backup**: elegir carpeta local ↔ carpeta NAS, manual o programado,
+   con política de conflictos y caché offline. Respaldar biblioteca, playlists,
+   ajustes y base de datos.
+
+### Seguridad
+
+- Las credenciales del NAS se guardan con **EncryptedSharedPreferences /
+  Android Keystore**, nunca en texto plano ni en logs.
+- Elyvaen **no almacena claves de auth de Tailscale**: el login y las ACLs
+  viven en la app oficial.
+- Validar host y certificado; no aceptar cualquier certificado por conveniencia.
+- Para SMB, usar SMB2/3; evitar SMB1.
+- Limitar el servidor de subida Wi-Fi a la red local y usar un token temporal.
+
+### Límites reales
+
+- Android permite **una VPN activa**; Tailscale y otra VPN no conviven.
+- La app oficial debe estar conectada; si el usuario la cierra, el NAS deja de
+  ser accesible fuera de casa.
+- Embeber Tailscale con `tsnet`/gomobile es posible pero pesado: permisos de VPN,
+  batería, binarios y mantenimiento. Se deja como opción avanzada, no inicial.
+- El rendimiento SMB sobre la tailnet depende de la CPU, la batería y la red;
+  para bibliotecas grandes conviene caché local.
+- Sin root no hay modo “USB DAC” del DAP hacia el PC; Tailscale/NAS es la vía
+  limpia para compartir música.
+
+### Dependencias previstas
+
+- `com.hierynomus:smbj` (SMB2/3)
+- `com.github.lookfirst:sardine` o cliente WebDAV sobre OkHttp
+- `com.hierynomus:sshj` (SFTP)
+- Cliente REST para Subsonic/Navidrome
+- `EncryptedSharedPreferences` / Keystore
+
+### Criterios de aceptación de H7
+
+- La pantalla Hub muestra “Tailscale conectado / desconectado” y abre la app.
+- Un asistente permite añadir el NAS por MagicDNS con SMB o WebDAV.
+- “Probar conexión” funciona con Tailscale activo y falla con un mensaje claro
+  sin él.
+- Se puede explorar el NAS, descargar una carpeta y reproducir sin PC.
+- El backup de biblioteca/playlists se puede enviar al NAS.
+- Nada de credenciales en logs; sin root; sin abrir puertos en el router.
 
 ## Decisiones pendientes
 
