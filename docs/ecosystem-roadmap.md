@@ -317,11 +317,11 @@ mini-player/90 Hz verificados.
   pista `:)` los quita de Álbumes/Canciones; el archivo sigue en MediaStore y
   vuelve al restaurarlo. También se ocultaron y restauraron los 46 álbumes de
   Mili con **Restaurar todo**.
-- En esta biblioteca Mili aparece dividida en tres artistas: **Mili** (46
-  álbumes, 164 canciones), **Binary Haze Interactive & Mili** (50 canciones) y
-  **Mili & KIHOW** (2 canciones). Para limpiar toda la música de Mili hay que
-  usar la acción de ocultar álbumes en esos tres artistas y luego restaurar lo
-  que se quiera.
+- MediaStore puede dividir a Mili en varias entradas de artista (por ejemplo
+  **Mili** y **Mili & KIHOW**, y a veces **Binary Haze Interactive & Mili**).
+  Para limpiar toda la discografía hay que aplicar **Silenciar todos sus
+  álbumes** o **Ocultar todos sus álbumes** en cada entrada y luego restaurar
+  lo que se quiera.
 - Para escucha suelta: tras archivar los álbumes que no interesan, la pestaña
   **Canciones**, favoritos y listas propias quedan como biblioteca curada.
 
