@@ -68,6 +68,7 @@ Estado: **fase 1 y 2 implementadas y verificadas en el Moto G51** (2026-11-17).
 - `screens/metadata-health.png` — salud de biblioteca con incidencias y filtros.
 - `screens/discord-webhook.png` — ajustes del webhook de Discord.
 - `screens/nas-settings.png` — formulario NAS y Tailscale con credenciales cifradas.
+- `screens/nas-browser.png` — navegador NAS con descarga por carpeta y resumen.
 - `screens/hub.png` — Elyvaen Hub con importación USB, Wi-Fi y almacenamiento.
 - `screens/hub-wifi.png` — subida por Wi-Fi con QR y enlace temporal.
 - `screens/hub-usb-import.png` — importación SAF completada con progreso y resumen.

@@ -156,17 +156,30 @@ class NasSettingsViewModel(
         return null
     }
 
-    private fun NasSettingsUiState.toSettings(): NasSettings = NasSettings(
-        protocol = protocol,
-        host = host.trim(),
-        port = port.toIntOrNull() ?: 0,
-        share = share.trim(),
-        path = path.trim(),
-        username = username,
-        password = password,
-        domain = domain.trim(),
-        useTls = useTls
-    )
+    private fun NasSettingsUiState.toSettings(): NasSettings {
+        val rawHost = host.trim()
+        val useHttpsScheme = rawHost.startsWith("https://", ignoreCase = true)
+        val normalizedHost = rawHost
+            .let {
+                when {
+                    it.startsWith("https://", ignoreCase = true) -> it.substring(8)
+                    it.startsWith("http://", ignoreCase = true) -> it.substring(7)
+                    else -> it
+                }
+            }
+            .substringBefore('/')
+        return NasSettings(
+            protocol = protocol,
+            host = normalizedHost,
+            port = port.toIntOrNull() ?: 0,
+            share = share.trim(),
+            path = path.trim(),
+            username = username,
+            password = password,
+            domain = domain.trim(),
+            useTls = useTls || useHttpsScheme
+        )
+    }
 
     private fun update(block: (NasSettingsUiState) -> NasSettingsUiState) {
         _state.value = block(_state.value)

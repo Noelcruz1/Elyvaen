@@ -421,7 +421,7 @@ depende del PC para cargar archivos.
 | Fase | Entregable | Valor |
 |---|---|---|
 | H1 | Hub de ingesta: USB OTG + subida por Wi-Fi con QR + gestor de almacenamiento · **implementado 2026-11-22** | Elimina el PC del día a día |
-| H2 | Fuentes NAS: SMB, WebDAV, SFTP, Subsonic/Navidrome; sync y backup | Biblioteca en red |
+| H2 | Fuentes NAS: SMB, WebDAV, SFTP, Subsonic/Navidrome; sync y backup · **SMB/WebDAV + descarga implementados 2026-11-22; sync/backup y SFTP/Subsonic pendientes** | Biblioteca en red |
 | H3 | Servidor DLNA/UPnP + WebDAV + control remoto web | El DAP sirve a la casa |
 | H4 | Motor de audio: UAC2 exclusivo, frecuencia nativa, EQ paramétrico, convolución, crossfeed, DoP | Nivel audiófilo |
 | H5 | AudioVisual: visualizador, letras/karaoke, vídeo local, Cast/DLNA | Experiencia de sala |
@@ -557,6 +557,56 @@ llevando al formulario SMB/WebDAV.
 - QR y enlace visibles; servicio en primer plano, notificación y parada
   verificadas. La caché se limpió (11,01 MB) sin tocar las importaciones.
 - El kiosco sigue en `PINNED` y el root de Magisk sigue activo.
+
+## Fase H2a — explorar y descargar del NAS (2026-11-22)
+
+Con el formulario NAS ya validado, el Hub añade una pantalla para navegar por
+la biblioteca remota y traer música al DAP sin PC.
+
+### Lo implementado
+
+- **SMB2/3** con SMBJ y **WebDAV** con OkHttp. Se abre una sola sesión por
+  operación: listar una carpeta, descargar un archivo o descargar una carpeta
+  completa de forma recursiva.
+- La pantalla **NAS** muestra carpetas y archivos, tamaño/fecha, ruta actual y
+  migas de pan. Se entra desde **Elyvaen Hub → Explorar NAS** o desde el icono
+  de ajustes del navegador.
+- Tocar un audio lo descarga; **Descargar esta carpeta** recorre la carpeta y
+  trae solo formatos compatibles, conservando subcarpetas bajo
+  `Music/Elyvaen/NAS/…`.
+- Las descargas se publican en MediaStore con el mismo gestor de importación
+  de H1. Los nombres existentes no se sobrescriben: se añade un sufijo.
+- Progreso por archivo, cancelación, resumen de descargados/errores/ignorados
+  y detección de credenciales rechazadas, ruta inexistente o timeout.
+- El formulario acepta pegar `http://` o `https://` en el host y lo normaliza;
+  el interruptor HTTPS se respeta y se activa solo si el host ya era HTTPS.
+- Se habilitó **tráfico HTTP local** en el manifiesto: un NAS doméstico suele
+  publicar WebDAV sin TLS en la LAN o en la tailnet. Para exponerlo fuera hace
+  falta HTTPS/Tailscale Serve o un proxy con certificado.
+
+### Verificación en el Moto G51
+
+- Se levantó un **Samba 4.24** de prueba en el PC, con un recurso `Music` y
+  tres WAV en `Albums/Miku` y `Albums/Orange Range`, más un `cover.txt`.
+- Se levantó un **WebDAV** de prueba con Basic auth. El formulario del Hub
+  guardó host/puerto/credenciales cifrados y **Probar conexión** devolvió
+  “Conexión correcta” en ambos protocolos.
+- El navegador listó `/`, `/Albums` y las dos carpetas de artista. La descarga
+  de `/Albums` por WebDAV y por SMB terminó con **3 archivos, 0 errores,
+  529 KB** y **1 archivo no reproducible ignorado**.
+- Los WAV quedaron en `Music/Elyvaen/NAS/Albums/…`; en la segunda descarga se
+  crearon variantes `(2)` en vez de sobrescribir. La biblioteca los indexó.
+- El menú de ajustes del navegador conserva los datos; el host y las
+  credenciales de prueba se borraron del dispositivo al terminar.
+
+### Pendiente de H2
+
+- **Sync/backup** de biblioteca, playlists y ajustes hacia el NAS (incluye
+  generar el `.bmgbak` y subirlo por SMB/WebDAV).
+- SFTP con sshj, Subsonic/Navidrome por REST y sincronización bidireccional
+  con política de conflictos.
+- Validar contra el OMV real cuando Tailscale esté instalado y el usuario
+  introduzca sus credenciales.
 
 ## NAS general y OMV (2026-11-22)
 

@@ -115,6 +115,7 @@ class HubFragment : Fragment() {
                         wifi = wifi,
                         onBack = { findNavController().navigateUp() },
                         onOpenNas = { findNavController().navigate(R.id.nav_nas_settings) },
+                        onBrowseNas = { findNavController().navigate(R.id.nav_nas_browser) },
                         onImportTree = { uri -> importTree(uri) },
                         onCancelImport = viewModel::cancelImport,
                         onStartWifi = viewModel::startWifi,
@@ -149,6 +150,7 @@ private fun HubScreen(
     wifi: WifiUploadState,
     onBack: () -> Unit,
     onOpenNas: () -> Unit,
+    onBrowseNas: () -> Unit,
     onImportTree: (Uri) -> Unit,
     onCancelImport: () -> Unit,
     onStartWifi: () -> Unit,
@@ -258,7 +260,8 @@ private fun HubScreen(
                 item {
                     NasCard(
                         state = state,
-                        onOpen = onOpenNas
+                        onOpenSettings = onOpenNas,
+                        onBrowse = onBrowseNas
                     )
                 }
                 item {
@@ -657,7 +660,11 @@ private fun WifiEventRow(event: WifiUploadEvent) {
 }
 
 @Composable
-private fun NasCard(state: HubUiState, onOpen: () -> Unit) {
+private fun NasCard(
+    state: HubUiState,
+    onOpenSettings: () -> Unit,
+    onBrowse: () -> Unit
+) {
     HubCard(
         icon = R.drawable.ic_cloud_24dp,
         title = stringResource(R.string.hub_nas_title),
@@ -671,13 +678,19 @@ private fun NasCard(state: HubUiState, onOpen: () -> Unit) {
             "$protocol · ${state.nas.host}${state.nas.path.takeIf { it.isNotBlank() }?.let { " · $it" }.orEmpty()}"
         }
     ) {
-        Button(onClick = onOpen, modifier = Modifier.fillMaxWidth()) {
-            Text(
-                stringResource(
-                    if (state.nas.host.isBlank()) R.string.hub_nas_configure
-                    else R.string.hub_nas_open
-                )
-            )
+        if (state.nas.host.isBlank()) {
+            Button(onClick = onOpenSettings, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.hub_nas_configure))
+            }
+        } else {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Button(onClick = onBrowse, modifier = Modifier.weight(1f)) {
+                    Text(stringResource(R.string.hub_nas_browse))
+                }
+                OutlinedButton(onClick = onOpenSettings, modifier = Modifier.weight(1f)) {
+                    Text(stringResource(R.string.nas_browser_settings))
+                }
+            }
         }
     }
 }

@@ -41,6 +41,11 @@
         android:label="NasSettingsFragment"/>
 
     <fragment
+        android:id="@+id/nav_nas_browser"
+        android:name="com.mardous.booming.ui.screen.hub.NasBrowserFragment"
+        android:label="NasBrowserFragment"/>
+
+    <fragment
         android:id="@+id/nav_songs"
         android:name="com.mardous.booming.ui.screen.library.songs.SongListFragment"
         android:label="SongsFragment"/>

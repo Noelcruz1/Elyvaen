@@ -42,7 +42,9 @@ import com.mardous.booming.data.remote.lastfm.LastFmService
 import com.mardous.booming.data.remote.discord.DiscordWebhookService
 import com.mardous.booming.data.remote.listenbrainz.ListenBrainzService
 import com.mardous.booming.data.remote.odesli.OdesliClient
+import com.mardous.booming.data.remote.nas.NasClient
 import com.mardous.booming.data.remote.nas.NasConnectionTester
+import com.mardous.booming.data.remote.nas.NasDownloadManager
 import com.mardous.booming.data.remote.lyrics.LyricsDownloadService
 import com.mardous.booming.data.remote.musicbrainz.MusicBrainzService
 import com.mardous.booming.data.remote.provideOkHttp
@@ -89,6 +91,7 @@ import com.mardous.booming.ui.screen.library.genres.GenreDetailViewModel
 import com.mardous.booming.ui.screen.library.home.HomeViewModel
 import com.mardous.booming.ui.screen.health.MetadataHealthViewModel
 import com.mardous.booming.ui.screen.hub.HubViewModel
+import com.mardous.booming.ui.screen.hub.NasBrowserViewModel
 import com.mardous.booming.ui.screen.hub.NasSettingsViewModel
 import com.mardous.booming.ui.screen.link.LinkResolverViewModel
 import com.mardous.booming.ui.screen.library.playlists.PlaylistDetailViewModel
@@ -128,6 +131,8 @@ val networkModule = module {
     single { DiscordWebhookService(client = get()) }
     single { NasSettingsStore(context = androidContext()) }
     single { NasConnectionTester(client = get()) }
+    single { NasClient(okHttpClient = get()) }
+    single { NasDownloadManager(context = androidContext(), importer = get()) }
     single { AudioImportManager(context = androidContext()) }
     single { StorageOverview(context = androidContext()) }
     single { WifiUploadController(context = androidContext()) }
@@ -352,6 +357,14 @@ private val viewModule = module {
             context = androidContext(),
             store = get(),
             tester = get()
+        )
+    }
+
+    viewModel {
+        NasBrowserViewModel(
+            store = get(),
+            client = get(),
+            downloadManager = get()
         )
     }
 
