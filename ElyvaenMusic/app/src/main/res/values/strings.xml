@@ -994,8 +994,8 @@
     <string name="hidden_from_library">Hidden from library</string>
     <string name="metadata_health_title">Library health</string>
     <string name="metadata_health_scanning">Scanning library…</string>
-    <string name="metadata_health_summary">%1$d of %2$d tracks have complete metadata</string>
-    <string name="metadata_health_unhealthy">%1$d tracks need attention</string>
+    <string name="metadata_health_summary">%1$d of %2$d tracks have complete identity</string>
+    <string name="metadata_health_unhealthy">%1$d tracks with issues</string>
     <string name="metadata_health_all">All</string>
     <string name="metadata_health_duplicates">Duplicates</string>
     <string name="metadata_health_issue_title">No title</string>
@@ -1009,6 +1009,16 @@
     <string name="metadata_health_duplicate_badge">Duplicate</string>
     <string name="metadata_health_edit">Edit tags</string>
     <string name="metadata_health_refresh">Refresh</string>
+    <string name="metadata_health_issue_cover">No artwork</string>
+    <string name="metadata_health_autofix">Autofill</string>
+    <string name="metadata_health_scan_covers">Detect artwork</string>
+    <string name="metadata_health_autofix_title">Autofill metadata</string>
+    <string name="metadata_health_autofix_message">Only empty album and year fields will be filled for up to %1$d tracks with a known artist using MusicBrainz. Existing tags are never overwritten.</string>
+    <string name="metadata_health_autofix_confirm">Autofill</string>
+    <string name="metadata_health_autofix_running">Updating %1$d of %2$d…</string>
+    <string name="metadata_health_autofix_done">%1$d tracks updated, %2$d with no match, %3$d failed.</string>
+    <string name="metadata_health_autofix_none">There are no tracks to autofill.</string>
+    <string name="metadata_health_autofix_error">Could not autofill metadata</string>
     <string name="discord_title">Discord</string>
     <string name="discord_webhook_url_title">Webhook URL</string>
     <string name="discord_webhook_url_summary">Paste your channel webhook URL. It is stored only on this device and never written to logs.</string>

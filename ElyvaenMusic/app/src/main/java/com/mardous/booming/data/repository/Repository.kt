@@ -47,6 +47,7 @@ import com.mardous.booming.data.model.search.SearchQuery
 import com.mardous.booming.data.remote.deezer.model.DeezerAlbum
 import com.mardous.booming.data.remote.deezer.model.DeezerArtist
 import com.mardous.booming.data.remote.deezer.model.DeezerTrack
+import com.mardous.booming.data.remote.deezer.model.DeezerMetadata
 import com.mardous.booming.data.remote.lastfm.model.LastFmAlbum
 import com.mardous.booming.data.remote.lastfm.model.LastFmArtist
 import com.mardous.booming.data.remote.musicbrainz.model.MusicBrainzRecording
@@ -147,6 +148,7 @@ interface Repository {
     suspend fun scrobble(service: ScrobblingService, song: Song, timestamp: Long): ScrobblingResult
     suspend fun updateNowPlaying(service: ScrobblingService, song: Song): ScrobblingResult
     suspend fun deezerTrack(artist: String, title: String): DeezerTrack?
+    suspend fun deezerMetadata(artist: String, title: String): DeezerMetadata?
     suspend fun deezerArtist(name: String, limit: Int, index: Int): DeezerArtist?
     suspend fun deezerAlbum(artist: String, name: String): DeezerAlbum?
     suspend fun musicBrainzRecording(title: String, artist: String): MusicBrainzSearchResponse?
@@ -567,6 +569,9 @@ class RealRepository(
 
     override suspend fun deezerTrack(artist: String, title: String) =
         networkRepository.deezerTrack(artist, title)
+
+    override suspend fun deezerMetadata(artist: String, title: String) =
+        networkRepository.deezerMetadata(artist, title)
 
     override suspend fun deezerArtist(name: String, limit: Int, index: Int) =
         networkRepository.deezerArtist(name, limit, index)

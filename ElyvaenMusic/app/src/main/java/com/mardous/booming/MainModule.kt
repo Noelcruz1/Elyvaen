@@ -322,7 +322,7 @@ private val viewModule = module {
     }
 
     viewModel {
-        MetadataHealthViewModel(repository = get())
+        MetadataHealthViewModel(context = androidContext(), repository = get())
     }
 
     viewModel {

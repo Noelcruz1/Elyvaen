@@ -29,7 +29,11 @@ import io.ktor.client.request.parameter
 class MusicBrainzService(private val client: HttpClient) {
 
     suspend fun searchRecording(title: String, artist: String): MusicBrainzSearchResponse {
-        val query = "recording:\"$title\" AND artist:\"$artist\""
+        val query = if (artist.isBlank()) {
+            "recording:\"$title\""
+        } else {
+            "recording:\"$title\" AND artist:\"$artist\""
+        }
         val body = client.get("${BASE_URL}recording") {
             parameter("query", query)
             parameter("fmt", "json")

@@ -783,8 +783,8 @@
     <string name="hidden_from_library">Oculto de la biblioteca</string>
     <string name="metadata_health_title">Salud de biblioteca</string>
     <string name="metadata_health_scanning">Analizando biblioteca…</string>
-    <string name="metadata_health_summary">%1$d de %2$d pistas tienen metadatos completos</string>
-    <string name="metadata_health_unhealthy">%1$d pistas necesitan atención</string>
+    <string name="metadata_health_summary">%1$d de %2$d pistas tienen identidad completa</string>
+    <string name="metadata_health_unhealthy">%1$d pistas con incidencias</string>
     <string name="metadata_health_all">Todas</string>
     <string name="metadata_health_duplicates">Duplicados</string>
     <string name="metadata_health_issue_title">Sin título</string>
@@ -798,6 +798,16 @@
     <string name="metadata_health_duplicate_badge">Duplicado</string>
     <string name="metadata_health_edit">Editar etiquetas</string>
     <string name="metadata_health_refresh">Actualizar</string>
+    <string name="metadata_health_issue_cover">Sin carátula</string>
+    <string name="metadata_health_autofix">Autocompletar</string>
+    <string name="metadata_health_scan_covers">Detectar carátulas</string>
+    <string name="metadata_health_autofix_title">Autocompletar metadatos</string>
+    <string name="metadata_health_autofix_message">Se rellenarán solo álbum y año vacíos de hasta %1$d pistas con artista conocido usando MusicBrainz. Nunca se sobrescriben etiquetas existentes.</string>
+    <string name="metadata_health_autofix_confirm">Autocompletar</string>
+    <string name="metadata_health_autofix_running">Actualizando %1$d de %2$d…</string>
+    <string name="metadata_health_autofix_done">%1$d pistas actualizadas, %2$d sin coincidencia, %3$d con error.</string>
+    <string name="metadata_health_autofix_none">No hay pistas para autocompletar.</string>
+    <string name="metadata_health_autofix_error">No se pudo autocompletar</string>
     <string name="discord_title">Discord</string>
     <string name="discord_webhook_url_title">URL del webhook</string>
     <string name="discord_webhook_url_summary">Pega la URL del webhook de tu canal. Solo se guarda en este dispositivo y nunca se escribe en los registros.</string>

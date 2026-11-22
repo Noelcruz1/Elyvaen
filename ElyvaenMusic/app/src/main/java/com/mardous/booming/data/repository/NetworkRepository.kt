@@ -16,6 +16,7 @@ import com.mardous.booming.data.remote.deezer.DeezerService
 import com.mardous.booming.data.remote.deezer.model.DeezerAlbum
 import com.mardous.booming.data.remote.deezer.model.DeezerArtist
 import com.mardous.booming.data.remote.deezer.model.DeezerTrack
+import com.mardous.booming.data.remote.deezer.model.DeezerMetadata
 import com.mardous.booming.data.remote.lastfm.LastFmService
 import com.mardous.booming.data.remote.lastfm.model.LastFmAlbum
 import com.mardous.booming.data.remote.lastfm.model.LastFmArtist
@@ -54,6 +55,7 @@ interface NetworkRepository {
     suspend fun artistInfo(name: String, lang: String?, cache: String?): LastFmArtist?
     suspend fun albumInfo(artist: String, album: String, lang: String?): LastFmAlbum?
     suspend fun deezerTrack(artist: String, title: String): DeezerTrack?
+    suspend fun deezerMetadata(artist: String, title: String): DeezerMetadata?
     suspend fun deezerArtist(name: String, limit: Int, index: Int): DeezerArtist?
     suspend fun deezerAlbum(artist: String, name: String): DeezerAlbum?
     suspend fun musicBrainzRecording(title: String, artist: String): MusicBrainzSearchResponse?
@@ -165,6 +167,15 @@ class NetworkRepositoryImpl(
             deezerService.track(artist, title)
         } catch (e: Exception) {
             Log.e(TAG, "Deezer: track info couldn't be retrieved!", e)
+            null
+        }
+    }
+
+    override suspend fun deezerMetadata(artist: String, title: String): DeezerMetadata? {
+        return try {
+            deezerService.trackMetadata(artist, title)
+        } catch (e: Exception) {
+            Log.e(TAG, "Deezer: metadata couldn't be retrieved!", e)
             null
         }
     }

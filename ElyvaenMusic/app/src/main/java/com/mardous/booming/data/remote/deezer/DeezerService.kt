@@ -22,6 +22,7 @@ import com.mardous.booming.data.remote.deezer.model.DeezerAlbumDetail
 import com.mardous.booming.data.remote.deezer.model.DeezerAlbumItem
 import com.mardous.booming.data.remote.deezer.model.DeezerArtist
 import com.mardous.booming.data.remote.deezer.model.DeezerArtistItem
+import com.mardous.booming.data.remote.deezer.model.DeezerMetadata
 import com.mardous.booming.data.remote.deezer.model.DeezerPage
 import com.mardous.booming.data.remote.deezer.model.DeezerPlaylistDetail
 import com.mardous.booming.data.remote.deezer.model.DeezerPlaylistItem
@@ -84,6 +85,29 @@ class DeezerService(private val client: HttpClient) {
             parameter("q", query)
             parameter("limit", limit)
         }.body()
+
+    /**
+     * Conservative lookup used by the library-health autofill. Only an exact
+     * title plus a matching artist is accepted; the release year comes from
+     * the album endpoint.
+     */
+    suspend fun trackMetadata(artistName: String, title: String): DeezerMetadata? {
+        val tracks = searchTracks("$artistName $title", limit = 5).data
+        val track = tracks.firstOrNull {
+            it.title.equals(title, ignoreCase = true) &&
+                    it.artistName.contains(artistName, ignoreCase = true)
+        } ?: return null
+        val album = track.album
+        val year = album?.id
+            ?.takeIf { it > 0 }
+            ?.let { id -> runCatching { albumDetail(id).releaseDate }.getOrNull() }
+            ?.take(4)
+            ?.toIntOrNull()
+        return DeezerMetadata(
+            album = album?.title?.takeIf { it.isNotBlank() },
+            year = year
+        )
+    }
 
     suspend fun searchAlbums(query: String, limit: Int = 30): DeezerPage<DeezerAlbumItem> =
         client.get("https://api.deezer.com/search/album") {

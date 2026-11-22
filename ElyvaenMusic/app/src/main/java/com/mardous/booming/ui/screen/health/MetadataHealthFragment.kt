@@ -45,15 +45,18 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -99,10 +102,15 @@ class MetadataHealthFragment : Fragment() {
             setContent {
                 BoomingMusicTheme {
                     val state by viewModel.state.collectAsStateWithLifecycle()
+                    val autoFixState by viewModel.autoFixState.collectAsStateWithLifecycle()
                     MetadataHealthScreen(
                         state = state,
+                        autoFixState = autoFixState,
                         onBack = { findNavController().navigateUp() },
                         onRefresh = viewModel::refresh,
+                        onScanCovers = viewModel::scanCovers,
+                        onAutoFix = viewModel::autoFixFields,
+                        onClearAutoFix = viewModel::clearAutoFixState,
                         onEdit = ::openTagEditor
                     )
                 }
@@ -137,11 +145,16 @@ private sealed interface HealthFilter {
 @Composable
 private fun MetadataHealthScreen(
     state: MetadataHealthState,
+    autoFixState: AutoFixState,
     onBack: () -> Unit,
     onRefresh: () -> Unit,
+    onScanCovers: () -> Unit,
+    onAutoFix: () -> Unit,
+    onClearAutoFix: () -> Unit,
     onEdit: (Song) -> Unit
 ) {
     var filter by remember { mutableStateOf<HealthFilter>(HealthFilter.All) }
+    var showAutoFixDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -188,11 +201,90 @@ private fun MetadataHealthScreen(
                 HealthContent(
                     state = state,
                     filter = filter,
+                    autoFixState = autoFixState,
                     onFilterChange = { filter = it },
+                    onScanCovers = onScanCovers,
+                    onAutoFixRequest = { showAutoFixDialog = true },
                     onEdit = onEdit
                 )
             }
         }
+    }
+
+    if (showAutoFixDialog) {
+        AlertDialog(
+            onDismissRequest = { showAutoFixDialog = false },
+            title = { Text(text = stringResource(R.string.metadata_health_autofix_title)) },
+            text = {
+                Text(
+                    text = stringResource(
+                        R.string.metadata_health_autofix_message,
+                        MetadataHealthViewModel.MAX_AUTO_FIX
+                    )
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showAutoFixDialog = false
+                        onAutoFix()
+                    }
+                ) {
+                    Text(text = stringResource(R.string.metadata_health_autofix_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAutoFixDialog = false }) {
+                    Text(text = stringResource(R.string.action_cancel))
+                }
+            }
+        )
+    }
+
+    when (autoFixState) {
+        is AutoFixState.Finished -> {
+            AlertDialog(
+                onDismissRequest = onClearAutoFix,
+                title = { Text(text = stringResource(R.string.metadata_health_autofix_title)) },
+                text = {
+                    Text(
+                        text = if (autoFixState.fixed == 0 &&
+                            autoFixState.skipped == 0 &&
+                            autoFixState.failed == 0
+                        ) {
+                            stringResource(R.string.metadata_health_autofix_none)
+                        } else {
+                            stringResource(
+                                R.string.metadata_health_autofix_done,
+                                autoFixState.fixed,
+                                autoFixState.skipped,
+                                autoFixState.failed
+                            )
+                        }
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = onClearAutoFix) {
+                        Text(text = stringResource(R.string.close_action))
+                    }
+                }
+            )
+        }
+
+        is AutoFixState.Error -> {
+            AlertDialog(
+                onDismissRequest = onClearAutoFix,
+                title = { Text(text = stringResource(R.string.metadata_health_autofix_error)) },
+                text = { Text(text = autoFixState.message.orEmpty()) },
+                confirmButton = {
+                    TextButton(onClick = onClearAutoFix) {
+                        Text(text = stringResource(R.string.close_action))
+                    }
+                }
+            )
+        }
+
+        else -> Unit
     }
 }
 
@@ -254,7 +346,10 @@ private fun MetadataHealthTopBar(
 private fun HealthContent(
     state: MetadataHealthState,
     filter: HealthFilter,
+    autoFixState: AutoFixState,
     onFilterChange: (HealthFilter) -> Unit,
+    onScanCovers: () -> Unit,
+    onAutoFixRequest: () -> Unit,
     onEdit: (Song) -> Unit
 ) {
     val filters = buildList {
@@ -271,7 +366,12 @@ private fun HealthContent(
         modifier = Modifier.fillMaxSize()
     ) {
         item {
-            HealthSummaryCard(state)
+            HealthSummaryCard(
+                state = state,
+                autoFixState = autoFixState,
+                onScanCovers = onScanCovers,
+                onAutoFixRequest = onAutoFixRequest
+            )
         }
         item {
             Row(
@@ -377,7 +477,12 @@ private fun HealthContent(
 }
 
 @Composable
-private fun HealthSummaryCard(state: MetadataHealthState) {
+private fun HealthSummaryCard(
+    state: MetadataHealthState,
+    autoFixState: AutoFixState,
+    onScanCovers: () -> Unit,
+    onAutoFixRequest: () -> Unit
+) {
     Surface(
         shape = RoundedCornerShape(22.dp),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -430,6 +535,54 @@ private fun HealthSummaryCard(state: MetadataHealthState) {
                     text = stringResource(R.string.metadata_health_empty_all),
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(
+                    onClick = onAutoFixRequest,
+                    enabled = !state.loading &&
+                            autoFixState !is AutoFixState.Running &&
+                            state.unhealthy > 0,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(text = stringResource(R.string.metadata_health_autofix))
+                }
+                OutlinedButton(
+                    onClick = onScanCovers,
+                    enabled = !state.scanningCovers && !state.loading,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    if (state.scanningCovers) {
+                        CircularProgressIndicator(
+                            strokeWidth = 2.dp,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    } else {
+                        Text(text = stringResource(R.string.metadata_health_scan_covers))
+                    }
+                }
+            }
+
+            if (autoFixState is AutoFixState.Running) {
+                LinearProgressIndicator(
+                    progress = {
+                        if (autoFixState.total == 0) 0f
+                        else autoFixState.done.toFloat() / autoFixState.total.toFloat()
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(6.dp)
+                        .clip(RoundedCornerShape(3.dp))
+                )
+                Text(
+                    text = stringResource(
+                        R.string.metadata_health_autofix_running,
+                        autoFixState.done,
+                        autoFixState.total
+                    ),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
