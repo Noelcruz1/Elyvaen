@@ -495,6 +495,38 @@ consuma el NAS a través de la VPN del sistema.
 - El backup de biblioteca/playlists se puede enviar al NAS.
 - Nada de credenciales en logs; sin root; sin abrir puertos en el router.
 
+## NAS general y OMV (2026-11-22)
+
+- Se añadió un formulario **NAS y Tailscale** con protocolo SMB o WebDAV, host,
+  puerto, recurso/ruta, usuario, contraseña, dominio y HTTPS. **No hay host ni
+  credenciales por defecto**: el usuario las escribe y se guardan con
+  `EncryptedSharedPreferences` respaldado por Android Keystore.
+- La tarjeta de Tailscale detecta si la app oficial está instalada y si hay una
+  VPN activa; ofrece abrirla o instalarla. Tailscale es opcional: sin él se usa
+  la IP local del NAS.
+- **SMB** es mejor para OMV/Samba en LAN o tailnet: SMB2/3, carpetas y archivos
+  grandes. **WebDAV** es mejor para HTTPS, Tailscale Serve y servidores tipo
+  Nextcloud; suele ser más lento para bibliotecas enormes.
+- OMV puede exponer SMB (Samba) y/o WebDAV (plugin openmediavault-webdav).
+  Para sincronización masiva se recomienda SMB; para acceso remoto sencillo por
+  HTTPS, WebDAV.
+- Pendiente de H2: explorar el NAS, descargar carpetas, sync/backup y probar
+  contra un OMV real. H7 añadirá el estado de Tailscale, MagicDNS y sync sobre
+  la tailnet.
+
+## Root: estado y decisión
+
+- El bootloader del Moto G51 ya está **desbloqueado**
+  (`ro.boot.flash.locked=0`, `ro.boot.verifiedbootstate=orange`).
+- No hay root instalado: no existe `su`; SELinux sigue enforcing.
+- No se rooteó porque las funciones actuales (UAC2, MediaStore, NAS, Tailscale,
+  kiosco) usan APIs públicas y porque root implica parchear el boot, romper OTA,
+  Play Integrity/Widevine y asumir riesgo de brick. Para un DAP dedicado es
+  asumible si se aprueba; permitiría tocar kernel/Aqstic y modo USB gadget,
+  pero no es requisito para el Hub.
+- Cualquier root futuro debe hacerse con backup, boot stock guardado y
+  aprobación explícita; nada de SELinux permisivo ni tocar módem/EFS/persist.
+
 ## Decisiones pendientes
 
 1. **Deezer primero**: ¿catálogo + playback nativo en el DAP, o puente NAS
