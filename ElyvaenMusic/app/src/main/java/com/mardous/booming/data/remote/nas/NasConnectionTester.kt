@@ -73,7 +73,7 @@ class NasConnectionTester(private val client: OkHttpClient) {
                 }
             }
         } catch (e: Exception) {
-            NasTestResult.Failure(e.message ?: "Error de red")
+            failure(e)
         }
     }
 
@@ -100,7 +100,21 @@ class NasConnectionTester(private val client: OkHttpClient) {
                 NasTestResult.Success
             }
         } catch (e: Exception) {
-            NasTestResult.Failure(e.message ?: "Error SMB")
+            failure(e)
+        }
+    }
+
+    private fun failure(e: Exception): NasTestResult.Failure {
+        val message = e.message.orEmpty()
+        return when {
+            message.contains("UnknownHost", true) ||
+                    message.contains("unable to resolve", true) ||
+                    message.contains("nodename nor servname", true) ->
+                NasTestResult.Failure(
+                    "No se pudo resolver el host. Activa Tailscale si usas MagicDNS."
+                )
+            message.isBlank() -> NasTestResult.Failure("Error de red")
+            else -> NasTestResult.Failure(message)
         }
     }
 }

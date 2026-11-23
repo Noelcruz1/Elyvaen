@@ -426,7 +426,7 @@ depende del PC para cargar archivos.
 | H4 | Motor de audio: UAC2 exclusivo, frecuencia nativa, EQ paramétrico, convolución, crossfeed, DoP · **DSP, EQ, crossfeed, convolución y estado UAC2 implementados 2026-11-22; DoP pendiente de kernel/USB DSD** | Nivel audiófilo |
 | H5 | AudioVisual: visualizador, letras/karaoke, vídeo local, Cast/DLNA · **visualizador, karaoke, vídeo local y envío DLNA implementados 2026-11-22; Chromecast nativo pendiente** | Experiencia de sala |
 | H6 | Modo DAP: batería, térmica, botones, modo dedicado · **implementado 2026-11-22** | Sensación de hardware dedicado |
-| **H7** | **Tailscale + NAS directa**: estado de Tailscale, MagicDNS, SMB/WebDAV/SFTP y sync/backup sobre la tailnet | Acceso al NAS sin abrir puertos |
+| **H7** | **Tailscale + NAS directa**: estado de Tailscale, MagicDNS, SMB/WebDAV/SFTP y sync/backup sobre la tailnet · **estado Tailscale/MagicDNS y guardas implementados 2026-11-23; conexión real pendiente de credenciales** | Acceso al NAS sin abrir puertos |
 
 ## Fase H7 — Tailscale + NAS directa
 
@@ -494,6 +494,49 @@ consuma el NAS a través de la VPN del sistema.
 - Se puede explorar el NAS, descargar una carpeta y reproducir sin PC.
 - El backup de biblioteca/playlists se puede enviar al NAS.
 - Nada de credenciales en logs; sin root; sin abrir puertos en el router.
+
+### Implementación H7 (2026-11-23)
+
+- **Detección de Tailscale** en `TailscaleStatus`: app oficial instalada,
+  transporte VPN activo y dirección de tailnet en el rango `100.64.0.0/10`.
+- **Hub**: la tarjeta NAS muestra el estado de Tailscale
+  (`No instalado`, `Instalado · VPN inactiva`, `Conectado · 100.x`) y permite
+  abrir o instalar la app oficial.
+- **MagicDNS**: el formulario reconoce hosts `*.ts.net`, muestra un aviso y
+  `Probar conexión` se detiene antes de la red si Tailscale no está instalado
+  o conectado. El navegador NAS aplica la misma guarda a explorar, descargar,
+  sincronizar y subir copias de seguridad.
+- **Mensajes claros**: “Instala Tailscale y conéctate para usar MagicDNS” o
+  “Activa Tailscale para acceder a este host”, sin exponer credenciales.
+- **Sin cambios en el almacenamiento**: las credenciales siguen cifradas con
+  `EncryptedSharedPreferences`; H7 no añade hosts, usuarios ni contraseñas por
+  defecto. El NAS real sigue usando SMB/WebDAV de H2b.
+
+### Verificación en el Moto G51
+
+- `pm list packages` no mostró Tailscale en el DAP; Hub y ajustes muestran
+  **No instalado** y el botón **Instalar Tailscale**.
+- Con el host de prueba `elyvaen-demo.ts.net`, el formulario mostró
+  **MagicDNS detectado** y **Probar conexión** devolvió
+  “Instala Tailscale y conéctate para usar MagicDNS” de inmediato, sin tocar
+  la red y sin modificar el host real guardado.
+- No se pudo validar el estado **Conectado** ni la resolución MagicDNS real
+  porque falta instalar e iniciar sesión en la app oficial de Tailscale.
+- La conexión SMB/WebDAV real, la descarga y el backup quedan pendientes de que
+  el usuario introduzca las credenciales del NAS. El formulario del dispositivo
+  conserva el host y recurso reales con usuario/contraseña vacíos.
+- Captura de referencia: `docs/ui-v2/screens/nas-tailscale.png` (host y recurso
+  de demostración; sin datos reales).
+
+### Límites de H7
+
+- Se usa la app oficial de Tailscale; no se embebe `tsnet`/gomobile.
+- “Conectado” exige VPN activa y una IPv4 en `100.64.0.0/10`. Otra VPN que use
+  el mismo rango podría dar un falso positivo, algo poco habitual.
+- MagicDNS se reconoce por el sufijo `.ts.net`; la IPv6 de tailnet no se trata
+  explícitamente.
+- La prueba real de explorar, descargar, sincronizar y restaurar sobre la
+  tailnet requiere credenciales y una sesión de Tailscale activa.
 
 ## Fase H1 — Hub de ingesta (2026-11-22)
 

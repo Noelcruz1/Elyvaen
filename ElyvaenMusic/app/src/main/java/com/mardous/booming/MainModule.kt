@@ -48,6 +48,7 @@ import com.mardous.booming.data.remote.mediaserver.DlnaRendererClient
 import com.mardous.booming.data.remote.nas.NasClient
 import com.mardous.booming.data.remote.nas.NasConnectionTester
 import com.mardous.booming.data.remote.nas.NasDownloadManager
+import com.mardous.booming.data.remote.tailscale.TailscaleStatus
 import com.mardous.booming.data.remote.lyrics.LyricsDownloadService
 import com.mardous.booming.data.remote.musicbrainz.MusicBrainzService
 import com.mardous.booming.data.remote.provideOkHttp
@@ -143,6 +144,7 @@ val networkModule = module {
     single { NasConnectionTester(client = get()) }
     single { NasClient(okHttpClient = get()) }
     single { NasDownloadManager(context = androidContext(), importer = get()) }
+    single { TailscaleStatus(context = androidContext()) }
     single { AudioImportManager(context = androidContext()) }
     single { StorageOverview(context = androidContext()) }
     single { WifiUploadController(context = androidContext()) }
@@ -373,15 +375,16 @@ private val viewModule = module {
             storageOverview = get(),
             importer = get(),
             nasStore = get(),
-            wifiController = get()
+            wifiController = get(),
+            tailscaleStatus = get()
         )
     }
 
     viewModel {
         NasSettingsViewModel(
-            context = androidContext(),
             store = get(),
-            tester = get()
+            tester = get(),
+            tailscaleStatus = get()
         )
     }
 
@@ -391,7 +394,8 @@ private val viewModule = module {
             store = get(),
             client = get(),
             downloadManager = get(),
-            backupManager = get()
+            backupManager = get(),
+            tailscaleStatus = get()
         )
     }
 

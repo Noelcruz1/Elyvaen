@@ -846,6 +846,7 @@
     <string name="hub_nas_configure">Configurar NAS</string>
     <string name="hub_nas_open">Abrir ajustes del NAS</string>
     <string name="hub_nas_browse">Explorar NAS</string>
+    <string name="hub_nas_tailscale_required">Este host necesita Tailscale activo.</string>
     <string name="hub_media_server_title">Transmitir a la casa</string>
     <string name="hub_media_server_subtitle">DLNA/UPnP para TV, WebDAV y control web</string>
     <string name="hub_media_server_open">Abrir servidor multimedia</string>
@@ -973,10 +974,12 @@
     <string name="nas_tailscale_title">Tailscale</string>
     <string name="nas_tailscale_not_installed">No instalado</string>
     <string name="nas_tailscale_vpn_active">Instalado · VPN activa</string>
+    <string name="nas_tailscale_connected">Conectado · %1$s</string>
     <string name="nas_tailscale_vpn_inactive">Instalado · VPN inactiva</string>
     <string name="nas_tailscale_open">Abrir Tailscale</string>
     <string name="nas_tailscale_install">Instalar Tailscale</string>
     <string name="nas_tailscale_hint">Tailscale es opcional. Si no lo usas, escribe la IP local del NAS.</string>
+    <string name="nas_magicdns_hint">MagicDNS detectado. Requiere Tailscale activo.</string>
     <string name="nas_browser_title">NAS</string>
     <string name="nas_browser_subtitle">Explorar y descargar</string>
     <string name="nas_browser_unconfigured">Configura el NAS en Elyvaen Hub para explorar su música.</string>

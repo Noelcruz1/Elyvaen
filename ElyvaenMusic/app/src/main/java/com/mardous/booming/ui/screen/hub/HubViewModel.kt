@@ -31,6 +31,8 @@ import com.mardous.booming.data.local.NasSettings
 import com.mardous.booming.data.local.NasSettingsStore
 import com.mardous.booming.data.local.StorageOverview
 import com.mardous.booming.data.local.WifiUploadController
+import com.mardous.booming.data.remote.tailscale.TailscaleInfo
+import com.mardous.booming.data.remote.tailscale.TailscaleStatus
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -44,6 +46,8 @@ data class HubUiState(
     val loading: Boolean = true,
     val storage: HubStorageSummary = HubStorageSummary(),
     val nas: NasSettings = NasSettings(),
+    val tailscale: TailscaleInfo = TailscaleInfo(),
+    val nasRequiresTailscale: Boolean = false,
     val importing: Boolean = false,
     val progress: ImportProgress? = null,
     val result: ImportResult? = null,
@@ -57,7 +61,8 @@ class HubViewModel(
     private val storageOverview: StorageOverview,
     private val importer: AudioImportManager,
     private val nasStore: NasSettingsStore,
-    private val wifiController: WifiUploadController
+    private val wifiController: WifiUploadController,
+    private val tailscaleStatus: TailscaleStatus
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(HubUiState())
@@ -76,14 +81,26 @@ class HubViewModel(
 
     fun refresh() {
         viewModelScope.launch {
-            val (summary, nas) = withContext(Dispatchers.IO) {
-                storageOverview.snapshot() to nasStore.load()
+            val (summary, nas, tailscale) = withContext(Dispatchers.IO) {
+                Triple(
+                    storageOverview.snapshot(),
+                    nasStore.load(),
+                    tailscaleStatus.snapshot()
+                )
             }
             _state.update {
-                it.copy(loading = false, storage = summary, nas = nas)
+                it.copy(
+                    loading = false,
+                    storage = summary,
+                    nas = nas,
+                    tailscale = tailscale,
+                    nasRequiresTailscale = tailscaleStatus.requiresTailscale(nas.host)
+                )
             }
         }
     }
+
+    fun openTailscale() = tailscaleStatus.openApp()
 
     fun importTree(uri: Uri) {
         if (_state.value.importing) return

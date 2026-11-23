@@ -90,6 +90,7 @@ import com.mardous.booming.data.local.HubStorageSummary
 import com.mardous.booming.data.local.NasProtocol
 import com.mardous.booming.data.local.StorageVolumeInfo
 import com.mardous.booming.data.local.WifiUploadState
+import com.mardous.booming.data.remote.tailscale.TailscaleInfo
 import com.mardous.booming.data.remote.wifi.WifiUploadEvent
 import com.mardous.booming.ui.theme.BoomingMusicTheme
 import com.mardous.booming.util.QrCodes
@@ -116,6 +117,7 @@ class HubFragment : Fragment() {
                         onBack = { findNavController().navigateUp() },
                         onOpenNas = { findNavController().navigate(R.id.nav_nas_settings) },
                         onBrowseNas = { findNavController().navigate(R.id.nav_nas_browser) },
+                        onOpenTailscale = viewModel::openTailscale,
                         onMediaServer = { findNavController().navigate(R.id.nav_media_server) },
                         onAudioEngine = { findNavController().navigate(R.id.nav_audio_engine) },
                         onSala = { findNavController().navigate(R.id.nav_sala) },
@@ -155,6 +157,7 @@ private fun HubScreen(
     onBack: () -> Unit,
     onOpenNas: () -> Unit,
     onBrowseNas: () -> Unit,
+    onOpenTailscale: () -> Unit,
     onMediaServer: () -> Unit,
     onAudioEngine: () -> Unit,
     onSala: () -> Unit,
@@ -269,7 +272,8 @@ private fun HubScreen(
                     NasCard(
                         state = state,
                         onOpenSettings = onOpenNas,
-                        onBrowse = onBrowseNas
+                        onBrowse = onBrowseNas,
+                        onOpenTailscale = onOpenTailscale
                     )
                 }
                 item {
@@ -675,7 +679,8 @@ private fun WifiEventRow(event: WifiUploadEvent) {
 private fun NasCard(
     state: HubUiState,
     onOpenSettings: () -> Unit,
-    onBrowse: () -> Unit
+    onBrowse: () -> Unit,
+    onOpenTailscale: () -> Unit
 ) {
     HubCard(
         icon = R.drawable.ic_cloud_24dp,
@@ -690,6 +695,41 @@ private fun NasCard(
             "$protocol · ${state.nas.host}${state.nas.path.takeIf { it.isNotBlank() }?.let { " · $it" }.orEmpty()}"
         }
     ) {
+        val tailscale = state.tailscale
+        val tailscaleText = tailscaleLabel(tailscale)
+        val tailscaleColor = when {
+            tailscale.connected -> MaterialTheme.colorScheme.primary
+            state.nasRequiresTailscale -> MaterialTheme.colorScheme.error
+            else -> MaterialTheme.colorScheme.onSurfaceVariant
+        }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = tailscaleText,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = tailscaleColor
+                )
+                if (state.nasRequiresTailscale && !tailscale.vpnActive) {
+                    Text(
+                        text = stringResource(R.string.hub_nas_tailscale_required),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+            TextButton(onClick = onOpenTailscale) {
+                Text(
+                    stringResource(
+                        if (tailscale.installed) R.string.nas_tailscale_open
+                        else R.string.nas_tailscale_install
+                    )
+                )
+            }
+        }
+        Spacer(Modifier.height(4.dp))
         if (state.nas.host.isBlank()) {
             Button(onClick = onOpenSettings, modifier = Modifier.fillMaxWidth()) {
                 Text(stringResource(R.string.hub_nas_configure))
@@ -705,6 +745,17 @@ private fun NasCard(
             }
         }
     }
+}
+
+@Composable
+private fun tailscaleLabel(info: TailscaleInfo): String = when {
+    !info.installed -> stringResource(R.string.nas_tailscale_not_installed)
+    !info.vpnActive -> stringResource(R.string.nas_tailscale_vpn_inactive)
+    info.tailnetAddress != null -> stringResource(
+        R.string.nas_tailscale_connected,
+        info.tailnetAddress
+    )
+    else -> stringResource(R.string.nas_tailscale_vpn_active)
 }
 
 @Composable

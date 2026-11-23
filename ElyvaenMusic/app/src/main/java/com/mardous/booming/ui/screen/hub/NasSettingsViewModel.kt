@@ -17,11 +17,6 @@
 
 package com.mardous.booming.ui.screen.hub
 
-import android.content.Context
-import android.content.Intent
-import android.net.ConnectivityManager
-import android.net.NetworkCapabilities
-import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mardous.booming.data.local.NasProtocol
@@ -29,6 +24,7 @@ import com.mardous.booming.data.local.NasSettings
 import com.mardous.booming.data.local.NasSettingsStore
 import com.mardous.booming.data.remote.nas.NasConnectionTester
 import com.mardous.booming.data.remote.nas.NasTestResult
+import com.mardous.booming.data.remote.tailscale.TailscaleStatus
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -45,6 +41,8 @@ data class NasSettingsUiState(
     val useTls: Boolean = true,
     val tailscaleInstalled: Boolean = false,
     val vpnActive: Boolean = false,
+    val tailnetAddress: String? = null,
+    val magicDnsHost: Boolean = false,
     val testing: Boolean = false,
     val testResult: NasTestResult? = null,
     val saved: Boolean = false,
@@ -53,9 +51,9 @@ data class NasSettingsUiState(
 )
 
 class NasSettingsViewModel(
-    private val context: Context,
     private val store: NasSettingsStore,
-    private val tester: NasConnectionTester
+    private val tester: NasConnectionTester,
+    private val tailscaleStatus: TailscaleStatus
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(NasSettingsUiState())
@@ -63,6 +61,7 @@ class NasSettingsViewModel(
 
     init {
         val saved = store.load()
+        val tailscale = tailscaleStatus.snapshot()
         _state.value = NasSettingsUiState(
             protocol = saved.protocol,
             host = saved.host,
@@ -73,14 +72,22 @@ class NasSettingsViewModel(
             password = saved.password,
             domain = saved.domain,
             useTls = saved.useTls,
-            tailscaleInstalled = isTailscaleInstalled(),
-            vpnActive = isVpnActive(),
+            tailscaleInstalled = tailscale.installed,
+            vpnActive = tailscale.vpnActive,
+            tailnetAddress = tailscale.tailnetAddress,
+            magicDnsHost = tailscaleStatus.isMagicDnsHost(saved.host),
             storageAvailable = store.isAvailable
         )
     }
 
     fun setProtocol(protocol: NasProtocol) = update { it.copy(protocol = protocol, testResult = null) }
-    fun setHost(host: String) = update { it.copy(host = host, testResult = null) }
+    fun setHost(host: String) = update {
+        it.copy(
+            host = host,
+            magicDnsHost = tailscaleStatus.isMagicDnsHost(host),
+            testResult = null
+        )
+    }
     fun setPort(port: String) = update { it.copy(port = port.filter(Char::isDigit), testResult = null) }
     fun setShare(share: String) = update { it.copy(share = share, testResult = null) }
     fun setPath(path: String) = update { it.copy(path = path, testResult = null) }
@@ -90,9 +97,12 @@ class NasSettingsViewModel(
     fun setUseTls(useTls: Boolean) = update { it.copy(useTls = useTls, testResult = null) }
 
     fun refreshTailscale() = update {
+        val tailscale = tailscaleStatus.snapshot()
         it.copy(
-            tailscaleInstalled = isTailscaleInstalled(),
-            vpnActive = isVpnActive()
+            tailscaleInstalled = tailscale.installed,
+            vpnActive = tailscale.vpnActive,
+            tailnetAddress = tailscale.tailnetAddress,
+            magicDnsHost = tailscaleStatus.isMagicDnsHost(it.host)
         )
     }
 
@@ -119,6 +129,17 @@ class NasSettingsViewModel(
             return
         }
         if (state.value.testing) return
+        val tailscaleError = tailscaleStatus.connectionError(settings.host)
+        if (tailscaleError != null) {
+            update {
+                it.copy(
+                    testing = false,
+                    testResult = NasTestResult.Failure(tailscaleError),
+                    validationError = null
+                )
+            }
+            return
+        }
         viewModelScope.launch {
             update { it.copy(testing = true, testResult = null, validationError = null) }
             val result = tester.test(settings)
@@ -128,24 +149,7 @@ class NasSettingsViewModel(
 
     fun clearMessages() = update { it.copy(saved = false, validationError = null, testResult = null) }
 
-    fun openTailscale() {
-        val launchIntent = context.packageManager
-            .getLaunchIntentForPackage(TAILSCALE_PACKAGE)
-        if (launchIntent != null) {
-            context.startActivity(launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-        } else {
-            val market = Intent(
-                Intent.ACTION_VIEW,
-                Uri.parse("market://details?id=$TAILSCALE_PACKAGE")
-            ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            val web = Intent(
-                Intent.ACTION_VIEW,
-                Uri.parse("https://play.google.com/store/apps/details?id=$TAILSCALE_PACKAGE")
-            ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            runCatching { context.startActivity(market) }
-                .recoverCatching { context.startActivity(web) }
-        }
-    }
+    fun openTailscale() = tailscaleStatus.openApp()
 
     private fun validate(settings: NasSettings): String? {
         if (settings.host.isBlank()) return "Escribe el host o la IP del NAS"
@@ -183,21 +187,5 @@ class NasSettingsViewModel(
 
     private fun update(block: (NasSettingsUiState) -> NasSettingsUiState) {
         _state.value = block(_state.value)
-    }
-
-    private fun isTailscaleInstalled(): Boolean = runCatching {
-        context.packageManager.getPackageInfo(TAILSCALE_PACKAGE, 0)
-        true
-    }.getOrDefault(false)
-
-    private fun isVpnActive(): Boolean {
-        val manager = context.getSystemService(ConnectivityManager::class.java) ?: return false
-        val network = manager.activeNetwork ?: return false
-        return manager.getNetworkCapabilities(network)
-            ?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true
-    }
-
-    companion object {
-        private const val TAILSCALE_PACKAGE = "com.tailscale.ipn"
     }
 }

@@ -30,6 +30,7 @@ import com.mardous.booming.data.remote.nas.NasDownloadProgress
 import com.mardous.booming.data.remote.nas.NasDownloadResult
 import com.mardous.booming.data.remote.nas.NasEntry
 import com.mardous.booming.data.remote.nas.NasSyncResult
+import com.mardous.booming.data.remote.tailscale.TailscaleStatus
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -65,7 +66,8 @@ class NasBrowserViewModel(
     private val store: NasSettingsStore,
     private val client: NasClient,
     private val downloadManager: NasDownloadManager,
-    private val backupManager: BackupManager
+    private val backupManager: BackupManager,
+    private val tailscaleStatus: TailscaleStatus
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(NasBrowserUiState())
@@ -107,6 +109,23 @@ class NasBrowserViewModel(
             return
         }
         loadJob?.cancel()
+        val tailscaleError = tailscaleStatus.connectionError(settings.host)
+        if (tailscaleError != null) {
+            _state.update {
+                it.copy(
+                    configured = true,
+                    loading = false,
+                    settings = settings,
+                    currentPath = path,
+                    entries = emptyList(),
+                    error = tailscaleError,
+                    result = null,
+                    syncResult = null,
+                    backupResult = null
+                )
+            }
+            return
+        }
         loadJob = viewModelScope.launch {
             _state.update {
                 it.copy(
@@ -157,6 +176,10 @@ class NasBrowserViewModel(
             _state.update { it.copy(configured = false, error = "Configura el NAS primero") }
             return
         }
+        tailscaleStatus.connectionError(settings.host)?.let { error ->
+            _state.update { it.copy(error = error) }
+            return
+        }
         val path = _state.value.currentPath
         downloadJob = viewModelScope.launch {
             _state.update {
@@ -200,6 +223,10 @@ class NasBrowserViewModel(
             _state.update { it.copy(configured = false, error = "Configura el NAS primero") }
             return
         }
+        tailscaleStatus.connectionError(settings.host)?.let { error ->
+            _state.update { it.copy(error = error) }
+            return
+        }
         val path = _state.value.currentPath
         downloadJob = viewModelScope.launch {
             _state.update {
@@ -241,6 +268,10 @@ class NasBrowserViewModel(
         val settings = store.load()
         if (settings.host.isBlank()) {
             _state.update { it.copy(configured = false, error = "Configura el NAS primero") }
+            return
+        }
+        tailscaleStatus.connectionError(settings.host)?.let { error ->
+            _state.update { it.copy(error = error) }
             return
         }
         val path = _state.value.currentPath
@@ -293,6 +324,10 @@ class NasBrowserViewModel(
     private fun downloadFile(entry: NasEntry) {
         if (_state.value.downloading || _state.value.backingUp) return
         val settings = store.load()
+        tailscaleStatus.connectionError(settings.host)?.let { error ->
+            _state.update { it.copy(error = error) }
+            return
+        }
         downloadJob = viewModelScope.launch {
             _state.update {
                 it.copy(downloading = true, progress = null, result = null, error = null)
@@ -340,6 +375,10 @@ class NasBrowserViewModel(
             message.contains("STATUS_OBJECT_NAME_NOT_FOUND", true) -> "Ruta no encontrada"
             message.contains("STATUS_ACCESS_DENIED", true) -> "Acceso denegado"
             message.contains("timeout", true) -> "El NAS no respondió a tiempo"
+            message.contains("UnknownHost", true) ||
+                    message.contains("unable to resolve", true) ||
+                    message.contains("nodename nor servname", true) ->
+                "No se pudo resolver el host. Activa Tailscale si usas MagicDNS."
             message.isBlank() -> "No se pudo conectar con el NAS"
             else -> message
         }

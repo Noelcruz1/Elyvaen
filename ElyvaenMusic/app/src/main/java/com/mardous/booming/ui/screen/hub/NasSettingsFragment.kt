@@ -194,6 +194,7 @@ private fun NasSettingsScreen(
                     TailscaleCard(
                         installed = state.tailscaleInstalled,
                         vpnActive = state.vpnActive,
+                        tailnetAddress = state.tailnetAddress,
                         onOpen = onOpenTailscale
                     )
                 }
@@ -225,6 +226,20 @@ private fun NasSettingsScreen(
                         label = { Text(stringResource(R.string.nas_host)) },
                         placeholder = { Text("192.168.1.10 o nas.tailnet.ts.net") },
                         singleLine = true,
+                        supportingText = if (state.magicDnsHost) {
+                            {
+                                Text(
+                                    text = stringResource(R.string.nas_magicdns_hint),
+                                    color = if (state.vpnActive) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.error
+                                    }
+                                )
+                            }
+                        } else {
+                            null
+                        },
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
@@ -390,6 +405,7 @@ private fun NasSettingsScreen(
 private fun TailscaleCard(
     installed: Boolean,
     vpnActive: Boolean,
+    tailnetAddress: String?,
     onOpen: () -> Unit
 ) {
     Surface(
@@ -424,11 +440,19 @@ private fun TailscaleCard(
             Text(
                 text = when {
                     !installed -> stringResource(R.string.nas_tailscale_not_installed)
-                    vpnActive -> stringResource(R.string.nas_tailscale_vpn_active)
-                    else -> stringResource(R.string.nas_tailscale_vpn_inactive)
+                    !vpnActive -> stringResource(R.string.nas_tailscale_vpn_inactive)
+                    tailnetAddress != null -> stringResource(
+                        R.string.nas_tailscale_connected,
+                        tailnetAddress
+                    )
+                    else -> stringResource(R.string.nas_tailscale_vpn_active)
                 },
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = if (vpnActive && tailnetAddress != null) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                }
             )
             Text(
                 text = stringResource(R.string.nas_tailscale_hint),

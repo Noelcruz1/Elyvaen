@@ -76,6 +76,7 @@ Estado: **fase 1 y 2 implementadas y verificadas en el Moto G51** (2026-11-17).
 - `screens/sala.png` — H5 con visualizador, envío a TV y vídeo local.
 - `screens/dap-mode.png` — H6 con batería, térmica y modo dedicado.
 - `screens/dap-buttons.png` — H6 con el remapeo del botón de asistente.
+- `screens/nas-tailscale.png` — H7 con estado de Tailscale y MagicDNS (datos de demostración).
 - `screens/hub.png` — Elyvaen Hub con importación USB, Wi-Fi y almacenamiento.
 - `screens/hub-wifi.png` — subida por Wi-Fi con QR y enlace temporal.
 - `screens/hub-usb-import.png` — importación SAF completada con progreso y resumen.
