@@ -22,6 +22,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mardous.booming.data.local.NasSettings
 import com.mardous.booming.data.local.NasSettingsStore
+import com.mardous.booming.data.local.NasProtocol
 import com.mardous.booming.data.local.backup.BackupContent
 import com.mardous.booming.data.local.backup.BackupManager
 import com.mardous.booming.data.remote.nas.NasClient
@@ -109,7 +110,7 @@ class NasBrowserViewModel(
             return
         }
         loadJob?.cancel()
-        val tailscaleError = tailscaleStatus.connectionError(settings.host)
+        val tailscaleError = connectionGuard(settings)
         if (tailscaleError != null) {
             _state.update {
                 it.copy(
@@ -176,7 +177,7 @@ class NasBrowserViewModel(
             _state.update { it.copy(configured = false, error = "Configura el NAS primero") }
             return
         }
-        tailscaleStatus.connectionError(settings.host)?.let { error ->
+        connectionGuard(settings)?.let { error ->
             _state.update { it.copy(error = error) }
             return
         }
@@ -223,7 +224,7 @@ class NasBrowserViewModel(
             _state.update { it.copy(configured = false, error = "Configura el NAS primero") }
             return
         }
-        tailscaleStatus.connectionError(settings.host)?.let { error ->
+        connectionGuard(settings)?.let { error ->
             _state.update { it.copy(error = error) }
             return
         }
@@ -270,7 +271,7 @@ class NasBrowserViewModel(
             _state.update { it.copy(configured = false, error = "Configura el NAS primero") }
             return
         }
-        tailscaleStatus.connectionError(settings.host)?.let { error ->
+        connectionGuard(settings)?.let { error ->
             _state.update { it.copy(error = error) }
             return
         }
@@ -324,7 +325,7 @@ class NasBrowserViewModel(
     private fun downloadFile(entry: NasEntry) {
         if (_state.value.downloading || _state.value.backingUp) return
         val settings = store.load()
-        tailscaleStatus.connectionError(settings.host)?.let { error ->
+        connectionGuard(settings)?.let { error ->
             _state.update { it.copy(error = error) }
             return
         }
@@ -368,9 +369,19 @@ class NasBrowserViewModel(
         }
     }
 
+    private fun connectionGuard(settings: NasSettings): String? {
+        if (settings.protocol == NasProtocol.SFTP && settings.hostKey.isBlank()) {
+            return "Falta la huella SSH; configura el NAS"
+        }
+        return tailscaleStatus.connectionError(settings.host)
+    }
+
     private fun readableError(t: Throwable): String {
         val message = t.message.orEmpty()
         return when {
+            message.contains("fingerprint", true) ||
+                    message.contains("host key", true) ->
+                "La huella SSH no coincide con el servidor"
             message.contains("STATUS_LOGON_FAILURE", true) -> "Credenciales rechazadas"
             message.contains("STATUS_OBJECT_NAME_NOT_FOUND", true) -> "Ruta no encontrada"
             message.contains("STATUS_ACCESS_DENIED", true) -> "Acceso denegado"

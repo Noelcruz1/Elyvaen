@@ -93,5 +93,13 @@
 # http://stackoverflow.com/questions/3308010/what-is-the-ignoring-innerclasses-attribute-warning-output-during-compilation
 -keepattributes EnclosingMethod
 
+# sshj / BouncyCastle
+-keep class net.schmizz.** { *; }
+-keep class org.bouncycastle.** { *; }
+-dontwarn org.bouncycastle.**
+-dontwarn net.i2p.crypto.eddsa.**
+-dontwarn org.slf4j.**
+-dontwarn javax.security.auth.login.LoginContext
+
 # Prevent R8 from merging widget classes and mixing their IDs.
 -keepnames class com.mardous.booming.core.appwidgets.widget.**

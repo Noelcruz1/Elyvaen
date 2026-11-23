@@ -30,6 +30,9 @@ import com.mardous.booming.data.local.NasProtocol
 import com.mardous.booming.data.local.NasSettings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import net.schmizz.sshj.sftp.OpenMode
+import net.schmizz.sshj.sftp.SFTPClient
+import net.schmizz.sshj.transport.verification.FingerprintVerifier
 import okhttp3.Credentials
 import okhttp3.HttpUrl
 import okhttp3.MediaType
@@ -77,6 +80,7 @@ class NasClient(private val okHttpClient: OkHttpClient) {
         val session: NasSession = when (settings.protocol) {
             NasProtocol.SMB -> SmbNasSession(settings)
             NasProtocol.WEBDAV -> WebDavNasSession(settings, okHttpClient)
+            NasProtocol.SFTP -> SftpNasSession(settings)
         }
         try {
             block(session)
@@ -409,6 +413,98 @@ private class WebDavNasSession(
     <d:resourcetype/>
   </d:prop>
 </d:propfind>"""
+    }
+}
+
+private class SftpNasSession(settings: NasSettings) : NasSession {
+
+    private val ssh = newSshClient()
+    private val sftp: SFTPClient = try {
+        require(settings.hostKey.isNotBlank()) { "Falta la huella SSH del servidor" }
+        ssh.addHostKeyVerifier(FingerprintVerifier.getInstance(settings.hostKey.trim()))
+        ssh.connect(
+            settings.host.trim(),
+            settings.port.takeIf { it > 0 } ?: 22
+        )
+        ssh.authPassword(settings.username, settings.password)
+        ssh.newSFTPClient()
+    } catch (t: Throwable) {
+        runCatching { ssh.close() }
+        throw t
+    }
+    private val basePath = settings.path.trim().trimEnd('/')
+
+    override suspend fun list(path: String): List<NasEntry> {
+        return sftp.ls(remote(path))
+            .asSequence()
+            .filter { it.name != "." && it.name != ".." }
+            .mapNotNull { info ->
+                val name = info.name?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                NasEntry(
+                    name = name,
+                    path = join(path, name),
+                    isDirectory = info.isDirectory,
+                    size = info.attributes.size,
+                    modified = info.attributes.mtime * 1000L
+                )
+            }
+            .sortedWith(
+                compareBy<NasEntry> { !it.isDirectory }
+                    .thenBy { it.name.lowercase(Locale.ROOT) }
+            )
+            .toList()
+    }
+
+    override suspend fun download(path: String, output: OutputStream): Long {
+        sftp.open(remote(path)).use { file ->
+            file.RemoteFileInputStream().use { input ->
+                return input.copyTo(output, DEFAULT_BUFFER_SIZE)
+            }
+        }
+    }
+
+    override suspend fun upload(input: InputStream, path: String, size: Long) {
+        val target = remote(path)
+        val parent = target.substringBeforeLast('/', "")
+        if (parent.isNotBlank() && parent != target) {
+            sftp.mkdirs(parent)
+        }
+        sftp.open(
+            target,
+            setOf(OpenMode.WRITE, OpenMode.CREAT, OpenMode.TRUNC)
+        ).use { file ->
+            file.RemoteFileOutputStream().use { output ->
+                input.copyTo(output, DEFAULT_BUFFER_SIZE)
+            }
+        }
+    }
+
+    override suspend fun mkdir(path: String) {
+        val target = remote(path)
+        if (target.isNotBlank() && target != ".") {
+            sftp.mkdirs(target)
+        }
+    }
+
+    override fun close() {
+        runCatching { sftp.close() }
+        runCatching { ssh.close() }
+    }
+
+    private fun remote(path: String): String {
+        val child = path.trim('/')
+        return when {
+            basePath.isBlank() && child.isBlank() -> "."
+            basePath.isBlank() -> child
+            child.isBlank() -> basePath
+            else -> "$basePath/$child"
+        }
+    }
+
+    private fun join(base: String, child: String): String {
+        return listOf(base.trim('/'), child.trim('/'))
+            .filter { it.isNotBlank() }
+            .joinToString("/")
     }
 }
 

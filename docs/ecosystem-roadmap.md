@@ -421,7 +421,7 @@ depende del PC para cargar archivos.
 | Fase | Entregable | Valor |
 |---|---|---|
 | H1 | Hub de ingesta: USB OTG + subida por Wi-Fi con QR + gestor de almacenamiento · **implementado 2026-11-22** | Elimina el PC del día a día |
-| H2 | Fuentes NAS: SMB, WebDAV, SFTP, Subsonic/Navidrome; sync y backup · **SMB/WebDAV + descarga + sync/backup implementados 2026-11-22; SFTP/Subsonic pendientes** | Biblioteca en red |
+| H2 | Fuentes NAS: SMB, WebDAV, SFTP, Subsonic/Navidrome; sync y backup · **SMB/WebDAV/SFTP + descarga + sync/backup implementados 2026-11-23; Subsonic pendiente** | Biblioteca en red |
 | H3 | Servidor DLNA/UPnP + WebDAV + control remoto web · **implementado 2026-11-22** | El DAP sirve a la casa |
 | H4 | Motor de audio: UAC2 exclusivo, frecuencia nativa, EQ paramétrico, convolución, crossfeed, DoP · **DSP, EQ, crossfeed, convolución y estado UAC2 implementados 2026-11-22; DoP pendiente de kernel/USB DSD** | Nivel audiófilo |
 | H5 | AudioVisual: visualizador, letras/karaoke, vídeo local, Cast/DLNA · **visualizador, karaoke, vídeo local y envío DLNA implementados 2026-11-22; Chromecast nativo pendiente** | Experiencia de sala |
@@ -664,8 +664,8 @@ la biblioteca remota y traer música al DAP sin PC.
   carpeta NAS que se está explorando.
 - Usa el mismo `BackupManager` de la app: la copia se puede restaurar después
   desde la pantalla de backup local eligiendo el archivo descargado.
-- El archivo se crea en caché, se sube por SMB o WebDAV y se borra de caché al
-  terminar. No se guarda ninguna credencial ni ruta en el repositorio.
+- El archivo se crea en caché, se sube por SMB, WebDAV o SFTP y se borra de
+  caché al terminar. No se guarda ninguna credencial ni ruta en el repositorio.
 - La copia se muestra en el navegador NAS como archivo no reproducible; se
   puede descargar a mano para restaurarla.
 
@@ -686,12 +686,57 @@ la biblioteca remota y traer música al DAP sin PC.
 
 ### Pendiente de H2
 
-- SFTP con sshj y Subsonic/Navidrome por REST.
+- Subsonic/Navidrome por REST como fuente de streaming.
 - Restauración directa desde el navegador NAS (hoy se descarga el `.bmgbak`
   y se usa la pantalla de backup existente).
 - Sincronización programada y política de conflictos configurable.
 - Validar contra el OMV real cuando Tailscale esté instalado y el usuario
   introduzca sus credenciales; **ningún host real se versiona**.
+
+## Fase H2c — SFTP con huella verificada (2026-11-23)
+
+El NAS añade un tercer protocolo para servidores OpenSSH/OMV, con verificación
+estricta de la clave del servidor.
+
+### Implementado
+
+- **SFTP con sshj**: puerto 22 por defecto, autenticación por usuario y
+  contraseña, listado, descarga, subida, creación de carpetas, sync y backup.
+- **Huella SSH SHA256 obligatoria**: se puede pegar o capturar con **Detectar
+  huella**. La conexión usa `FingerprintVerifier`; si la huella no coincide, no
+  se autentica. La huella se guarda cifrada junto a las credenciales.
+- **Compatibilidad Android**: Android incluye un BouncyCastle antiguo que no
+  soporta X25519/EC. La app registra el BouncyCastle moderno incluido en el APK
+  antes de abrir SSH; sin esto OpenSSH moderno rechaza la negociación.
+- El guard de Tailscale/MagicDNS de H7 también se aplica a hosts `*.ts.net`.
+- La ruta SFTP puede ser relativa al home del usuario o absoluta.
+
+### Verificación en el Moto G51
+
+- Servidor OpenSSH 10.3 local por `adb reverse` (`127.0.0.1:2222`), usuario de
+  prueba y carpeta `/Music` con `Test/` y `demo.flac`; **sin datos reales en el
+  repositorio**.
+- **Detectar huella** devolvió la misma `SHA256:…` que `ssh-keygen -lf`.
+- Huella alterada → **La huella SSH no coincide con el servidor**; no hubo
+  autenticación.
+- Huella correcta → **Conexión correcta**.
+- **Explorar NAS** listó `/Music`, `Test/` y `demo.flac` (10 B).
+- **Subir copia de seguridad** subió un `.bmgbak` de **5,98 KB** por SFTP.
+- El servidor, usuario, host key, archivos y credenciales de prueba se
+  borraron. La configuración real del dispositivo se restauró desde una copia
+  cifrada y sigue mostrando SMB.
+- Capturas: `docs/ui-v2/screens/nas-sftp.png` y
+  `docs/ui-v2/screens/sftp-browser.png` (datos de demostración).
+- La app queda en **1.13.0**.
+
+### Límites de H2c
+
+- Solo contraseña; claves SSH y `ssh-agent` quedan pendientes.
+- La confianza es TOFU: “Detectar” captura la huella de la primera conexión y
+  el usuario debe compararla con el servidor antes de guardar.
+- El servidor debe exponer el subsistema `sftp`; no hay fallback SCP.
+- Sigue el modelo de descarga/sync, no streaming directo.
+- La conexión contra el OMV real queda pendiente de credenciales.
 
 ## Fase H3 — DLNA/UPnP, WebDAV y control web (2026-11-22)
 

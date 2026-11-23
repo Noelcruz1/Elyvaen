@@ -691,6 +691,7 @@ private fun NasCard(
             val protocol = when (state.nas.protocol) {
                 NasProtocol.SMB -> "SMB"
                 NasProtocol.WEBDAV -> "WebDAV"
+                NasProtocol.SFTP -> "SFTP"
             }
             "$protocol · ${state.nas.host}${state.nas.path.takeIf { it.isNotBlank() }?.let { " · $it" }.orEmpty()}"
         }

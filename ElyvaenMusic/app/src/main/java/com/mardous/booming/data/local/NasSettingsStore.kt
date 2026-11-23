@@ -24,7 +24,8 @@ import androidx.security.crypto.MasterKey
 
 enum class NasProtocol {
     SMB,
-    WEBDAV
+    WEBDAV,
+    SFTP
 }
 
 data class NasSettings(
@@ -36,7 +37,8 @@ data class NasSettings(
     val username: String = "",
     val password: String = "",
     val domain: String = "",
-    val useTls: Boolean = true
+    val useTls: Boolean = true,
+    val hostKey: String = ""
 )
 
 /**
@@ -75,7 +77,8 @@ class NasSettingsStore(context: Context) {
             username = prefs.getString(KEY_USERNAME, "").orEmpty(),
             password = prefs.getString(KEY_PASSWORD, "").orEmpty(),
             domain = prefs.getString(KEY_DOMAIN, "").orEmpty(),
-            useTls = prefs.getBoolean(KEY_USE_TLS, true)
+            useTls = prefs.getBoolean(KEY_USE_TLS, true),
+            hostKey = prefs.getString(KEY_HOST_KEY, "").orEmpty()
         )
     }
 
@@ -90,6 +93,7 @@ class NasSettingsStore(context: Context) {
             ?.putString(KEY_PASSWORD, settings.password)
             ?.putString(KEY_DOMAIN, settings.domain.trim())
             ?.putBoolean(KEY_USE_TLS, settings.useTls)
+            ?.putString(KEY_HOST_KEY, settings.hostKey.trim())
             ?.apply()
     }
 
@@ -108,5 +112,6 @@ class NasSettingsStore(context: Context) {
         private const val KEY_PASSWORD = "password"
         private const val KEY_DOMAIN = "domain"
         private const val KEY_USE_TLS = "use_tls"
+        private const val KEY_HOST_KEY = "host_key"
     }
 }

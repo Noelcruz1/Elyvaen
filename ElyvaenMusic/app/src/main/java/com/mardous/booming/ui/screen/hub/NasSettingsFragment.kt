@@ -100,6 +100,8 @@ class NasSettingsFragment : Fragment() {
                         onPassword = viewModel::setPassword,
                         onDomain = viewModel::setDomain,
                         onUseTls = viewModel::setUseTls,
+                        onHostKey = viewModel::setHostKey,
+                        onDetectHostKey = viewModel::detectSftpHostKey,
                         onSave = viewModel::save,
                         onTest = viewModel::test,
                         onOpenTailscale = viewModel::openTailscale
@@ -128,6 +130,8 @@ private fun NasSettingsScreen(
     onPassword: (String) -> Unit,
     onDomain: (String) -> Unit,
     onUseTls: (Boolean) -> Unit,
+    onHostKey: (String) -> Unit,
+    onDetectHostKey: () -> Unit,
     onSave: () -> Unit,
     onTest: () -> Unit,
     onOpenTailscale: () -> Unit
@@ -216,6 +220,11 @@ private fun NasSettingsScreen(
                             selected = state.protocol == NasProtocol.WEBDAV,
                             onClick = { onProtocol(NasProtocol.WEBDAV) },
                             label = { Text(stringResource(R.string.nas_webdav)) }
+                        )
+                        FilterChip(
+                            selected = state.protocol == NasProtocol.SFTP,
+                            onClick = { onProtocol(NasProtocol.SFTP) },
+                            label = { Text(stringResource(R.string.nas_sftp)) }
                         )
                     }
                 }
@@ -317,6 +326,49 @@ private fun NasSettingsScreen(
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                         modifier = Modifier.fillMaxWidth()
                     )
+                }
+                if (state.protocol == NasProtocol.SFTP) {
+                    item {
+                        OutlinedTextField(
+                            value = state.hostKey,
+                            onValueChange = onHostKey,
+                            label = { Text(stringResource(R.string.nas_sftp_host_key)) },
+                            placeholder = { Text("SHA256:...") },
+                            singleLine = true,
+                            supportingText = {
+                                Text(stringResource(R.string.nas_sftp_host_key_hint))
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                    item {
+                        OutlinedButton(
+                            onClick = onDetectHostKey,
+                            enabled = !state.detectingHostKey,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            if (state.detectingHostKey) {
+                                CircularProgressIndicator(
+                                    strokeWidth = 2.dp,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            } else {
+                                Text(stringResource(R.string.nas_sftp_detect))
+                            }
+                        }
+                        state.hostKeyMessage?.let { message ->
+                            Text(
+                                text = message,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (state.hostKeyError) {
+                                    MaterialTheme.colorScheme.error
+                                } else {
+                                    MaterialTheme.colorScheme.primary
+                                },
+                                modifier = Modifier.padding(top = 6.dp)
+                            )
+                        }
+                    }
                 }
                 item {
                     Text(

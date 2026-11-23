@@ -35,6 +35,8 @@ coil = "3.6.3"
 ktor = "3.6.0"
 securityCrypto = "1.1.0"
 smbj = "0.15.0"
+sshj = "0.38.0"
+bouncycastle = "1.75"
 zxing = "3.5.3"
 nanohttpd = "2.3.1"
 
@@ -125,6 +127,9 @@ ktor-client-encoding = { group = "io.ktor", name = "ktor-client-encoding", versi
 ktor-serialization-json = { group = "io.ktor", name = "ktor-serialization-kotlinx-json", version.ref = "ktor" }
 androidx-security-crypto = { module = "androidx.security:security-crypto", version.ref = "securityCrypto" }
 smbj = { module = "com.hierynomus:smbj", version.ref = "smbj" }
+sshj = { module = "com.hierynomus:sshj", version.ref = "sshj" }
+bcprov = { module = "org.bouncycastle:bcprov-jdk18on", version.ref = "bouncycastle" }
+bcpkix = { module = "org.bouncycastle:bcpkix-jdk18on", version.ref = "bouncycastle" }
 zxing-core = { module = "com.google.zxing:core", version.ref = "zxing" }
 nanohttpd = { module = "org.nanohttpd:nanohttpd", version.ref = "nanohttpd" }
 

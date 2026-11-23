@@ -957,6 +957,10 @@
     <string name="nas_protocol">Protocolo</string>
     <string name="nas_smb">SMB</string>
     <string name="nas_webdav">WebDAV</string>
+    <string name="nas_sftp">SFTP</string>
+    <string name="nas_sftp_host_key">Huella SSH (SHA256)</string>
+    <string name="nas_sftp_host_key_hint">Pega la huella o pulsa Detectar. Compárala con el servidor; se guarda cifrada.</string>
+    <string name="nas_sftp_detect">Detectar huella</string>
     <string name="nas_host">Host o IP</string>
     <string name="nas_port">Puerto (opcional)</string>
     <string name="nas_share">Recurso compartido</string>

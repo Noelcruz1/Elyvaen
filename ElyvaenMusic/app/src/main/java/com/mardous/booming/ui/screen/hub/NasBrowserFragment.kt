@@ -347,6 +347,7 @@ private fun FolderHeader(
                         text = when (state.settings.protocol) {
                             NasProtocol.SMB -> "SMB"
                             NasProtocol.WEBDAV -> "WebDAV"
+                            NasProtocol.SFTP -> "SFTP"
                         },
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary,

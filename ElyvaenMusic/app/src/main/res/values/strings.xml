@@ -1168,6 +1168,10 @@
     <string name="nas_protocol">Protocol</string>
     <string name="nas_smb">SMB</string>
     <string name="nas_webdav">WebDAV</string>
+    <string name="nas_sftp">SFTP</string>
+    <string name="nas_sftp_host_key">SSH fingerprint (SHA256)</string>
+    <string name="nas_sftp_host_key_hint">Paste the fingerprint or tap Detect. Compare it with the server; it is stored encrypted.</string>
+    <string name="nas_sftp_detect">Detect fingerprint</string>
     <string name="nas_host">Host or IP</string>
     <string name="nas_port">Port (optional)</string>
     <string name="nas_share">Share</string>

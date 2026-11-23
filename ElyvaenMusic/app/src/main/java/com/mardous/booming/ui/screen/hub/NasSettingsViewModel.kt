@@ -39,10 +39,14 @@ data class NasSettingsUiState(
     val password: String = "",
     val domain: String = "",
     val useTls: Boolean = true,
+    val hostKey: String = "",
     val tailscaleInstalled: Boolean = false,
     val vpnActive: Boolean = false,
     val tailnetAddress: String? = null,
     val magicDnsHost: Boolean = false,
+    val detectingHostKey: Boolean = false,
+    val hostKeyMessage: String? = null,
+    val hostKeyError: Boolean = false,
     val testing: Boolean = false,
     val testResult: NasTestResult? = null,
     val saved: Boolean = false,
@@ -72,6 +76,7 @@ class NasSettingsViewModel(
             password = saved.password,
             domain = saved.domain,
             useTls = saved.useTls,
+            hostKey = saved.hostKey,
             tailscaleInstalled = tailscale.installed,
             vpnActive = tailscale.vpnActive,
             tailnetAddress = tailscale.tailnetAddress,
@@ -95,6 +100,61 @@ class NasSettingsViewModel(
     fun setPassword(password: String) = update { it.copy(password = password, testResult = null) }
     fun setDomain(domain: String) = update { it.copy(domain = domain, testResult = null) }
     fun setUseTls(useTls: Boolean) = update { it.copy(useTls = useTls, testResult = null) }
+    fun setHostKey(hostKey: String) = update {
+        it.copy(
+            hostKey = hostKey,
+            hostKeyMessage = null,
+            hostKeyError = false,
+            testResult = null
+        )
+    }
+
+    fun detectSftpHostKey() {
+        if (state.value.detectingHostKey) return
+        val host = state.value.host.trim()
+        if (host.isBlank()) {
+            update {
+                it.copy(
+                    hostKeyMessage = "Escribe el host SFTP antes de detectar la huella",
+                    hostKeyError = true
+                )
+            }
+            return
+        }
+        val port = state.value.port.toIntOrNull() ?: 0
+        viewModelScope.launch {
+            update {
+                it.copy(
+                    detectingHostKey = true,
+                    hostKeyMessage = null,
+                    hostKeyError = false
+                )
+            }
+            tester.detectSftpHostKey(host, port)
+                .onSuccess { fingerprint ->
+                    update {
+                        it.copy(
+                            detectingHostKey = false,
+                            hostKey = fingerprint,
+                            hostKeyMessage =
+                                "Huella detectada. Compárala con el servidor antes de guardar.",
+                            hostKeyError = false,
+                            testResult = null
+                        )
+                    }
+                }
+                .onFailure { error ->
+                    update {
+                        it.copy(
+                            detectingHostKey = false,
+                            hostKeyMessage =
+                                error.message ?: "No se pudo obtener la huella SSH",
+                            hostKeyError = true
+                        )
+                    }
+                }
+        }
+    }
 
     fun refreshTailscale() = update {
         val tailscale = tailscaleStatus.snapshot()
@@ -147,7 +207,15 @@ class NasSettingsViewModel(
         }
     }
 
-    fun clearMessages() = update { it.copy(saved = false, validationError = null, testResult = null) }
+    fun clearMessages() = update {
+        it.copy(
+            saved = false,
+            validationError = null,
+            testResult = null,
+            hostKeyMessage = null,
+            hostKeyError = false
+        )
+    }
 
     fun openTailscale() = tailscaleStatus.openApp()
 
@@ -156,6 +224,15 @@ class NasSettingsViewModel(
         if (settings.port != 0 && settings.port !in 1..65535) return "Puerto no válido"
         if (settings.protocol == NasProtocol.SMB && settings.share.isBlank()) {
             return "Escribe el recurso compartido SMB"
+        }
+        if (settings.protocol == NasProtocol.SFTP) {
+            if (settings.username.isBlank()) return "Escribe el usuario SFTP"
+            if (settings.hostKey.isBlank()) {
+                return "Falta la huella SSH; pulsa Detectar huella"
+            }
+            if (!settings.hostKey.startsWith("SHA256:")) {
+                return "La huella SSH debe empezar por SHA256:"
+            }
         }
         return null
     }
@@ -172,6 +249,10 @@ class NasSettingsViewModel(
                 }
             }
             .substringBefore('/')
+        val normalizedHostKey = hostKey.trim()
+            .split(Regex("\\s+"))
+            .firstOrNull { it.startsWith("SHA256:") }
+            ?: hostKey.trim()
         return NasSettings(
             protocol = protocol,
             host = normalizedHost,
@@ -181,7 +262,8 @@ class NasSettingsViewModel(
             username = username,
             password = password,
             domain = domain.trim(),
-            useTls = useTls || useHttpsScheme
+            useTls = useTls || useHttpsScheme,
+            hostKey = normalizedHostKey
         )
     }
 
