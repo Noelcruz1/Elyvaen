@@ -51,6 +51,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -117,6 +118,7 @@ import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import com.mardous.booming.R
 import com.mardous.booming.data.remote.deezer.DeezerAccount
+import com.mardous.booming.data.remote.deezer.DeezerAudioQuality
 import com.mardous.booming.data.remote.deezer.DeezerDownloadEntry
 import com.mardous.booming.data.remote.deezer.DeezerDownloadState
 import com.mardous.booming.data.remote.deezer.model.DeezerAlbumDetail
@@ -500,6 +502,8 @@ fun DeezerScreen(
         DeezerAccountDialog(
             account = state.account!!,
             streamingActive = state.streamingActive,
+            streamingQuality = state.streamingQuality,
+            onQualityChange = viewModel::setStreamingQuality,
             onActivateStreaming = {
                 showAccountDialog = false
                 showStreamingDialog = true
@@ -785,6 +789,8 @@ private fun DeezerConnectDialog(
 private fun DeezerAccountDialog(
     account: DeezerAccount,
     streamingActive: Boolean,
+    streamingQuality: DeezerAudioQuality,
+    onQualityChange: (DeezerAudioQuality) -> Unit,
     onActivateStreaming: () -> Unit,
     onDisconnectStreaming: () -> Unit,
     onDismiss: () -> Unit,
@@ -794,7 +800,10 @@ private fun DeezerAccountDialog(
         onDismissRequest = onDismiss,
         title = { Text(text = stringResource(R.string.deezer_account_title)) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.verticalScroll(rememberScrollState())
+            ) {
                 Text(
                     text = stringResource(R.string.deezer_connected_as, account.userName),
                     style = MaterialTheme.typography.bodyLarge
@@ -829,6 +838,10 @@ private fun DeezerAccountDialog(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                DeezerQualitySelector(
+                    quality = streamingQuality,
+                    onQualityChange = onQualityChange
+                )
                 TextButton(
                     onClick = if (streamingActive) onDisconnectStreaming else onActivateStreaming
                 ) {
@@ -852,6 +865,42 @@ private fun DeezerAccountDialog(
             }
         }
     )
+}
+
+@Composable
+private fun DeezerQualitySelector(
+    quality: DeezerAudioQuality,
+    onQualityChange: (DeezerAudioQuality) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            text = stringResource(R.string.deezer_streaming_quality),
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            DeezerAudioQuality.entries.forEach { option ->
+                FilterChip(
+                    selected = option == quality,
+                    onClick = { onQualityChange(option) },
+                    label = { Text(stringResource(option.labelRes())) }
+                )
+            }
+        }
+        Text(
+            text = stringResource(R.string.deezer_streaming_quality_hint),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+private fun DeezerAudioQuality.labelRes(): Int {
+    return when (this) {
+        DeezerAudioQuality.FLAC -> R.string.deezer_quality_flac
+        DeezerAudioQuality.MP3_320 -> R.string.deezer_quality_mp3_320
+        DeezerAudioQuality.MP3_128 -> R.string.deezer_quality_mp3_128
+    }
 }
 
 @Composable

@@ -1461,6 +1461,11 @@
     <string name="deezer_streaming_inactive">Activa el streaming con tu cuenta para escuchar pistas completas.</string>
     <string name="deezer_streaming_active">Streaming completo activo</string>
     <string name="deezer_streaming_active_hint">Las pistas no descargadas se reproducen completas.</string>
+    <string name="deezer_streaming_quality">Calidad de streaming</string>
+    <string name="deezer_streaming_quality_hint">FLAC usa más datos. Si la pista no está en esa calidad, se usa la siguiente disponible.</string>
+    <string name="deezer_quality_flac">FLAC</string>
+    <string name="deezer_quality_mp3_320">MP3 320</string>
+    <string name="deezer_quality_mp3_128">MP3 128</string>
     <string name="deezer_streaming_activate">Activar</string>
     <string name="deezer_streaming_deactivate">Desactivar</string>
     <string name="deezer_streaming_dialog_title">Activar streaming completo</string>

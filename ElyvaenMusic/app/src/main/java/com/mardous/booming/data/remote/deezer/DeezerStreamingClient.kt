@@ -43,7 +43,36 @@ data class DeezerStreamUrls(
 ) {
     val bestUrl: String?
         get() = flac ?: mp3_320 ?: mp3_128
+
+    /**
+     * Picks the requested quality, falling back to the next available one.
+     * The returned tier is the one actually used, not necessarily the requested one.
+     */
+    fun select(preferred: DeezerAudioQuality): DeezerStreamSelection? {
+        return when (preferred) {
+            DeezerAudioQuality.FLAC -> flac?.asSelection(DeezerAudioQuality.FLAC)
+                ?: mp3_320?.asSelection(DeezerAudioQuality.MP3_320)
+                ?: mp3_128?.asSelection(DeezerAudioQuality.MP3_128)
+
+            DeezerAudioQuality.MP3_320 -> mp3_320?.asSelection(DeezerAudioQuality.MP3_320)
+                ?: mp3_128?.asSelection(DeezerAudioQuality.MP3_128)
+                ?: flac?.asSelection(DeezerAudioQuality.FLAC)
+
+            DeezerAudioQuality.MP3_128 -> mp3_128?.asSelection(DeezerAudioQuality.MP3_128)
+                ?: mp3_320?.asSelection(DeezerAudioQuality.MP3_320)
+                ?: flac?.asSelection(DeezerAudioQuality.FLAC)
+        }
+    }
+
+    private fun String.asSelection(tier: DeezerAudioQuality): DeezerStreamSelection? {
+        return takeIf { it.isNotBlank() }?.let { DeezerStreamSelection(tier, it) }
+    }
 }
+
+data class DeezerStreamSelection(
+    val quality: DeezerAudioQuality,
+    val url: String
+)
 
 class DeezerStreamingUnauthorizedException :
     IllegalStateException("La sesión de streaming de Deezer ha caducado")

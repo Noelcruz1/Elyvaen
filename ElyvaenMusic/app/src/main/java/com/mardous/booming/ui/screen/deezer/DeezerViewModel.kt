@@ -17,12 +17,15 @@
 
 package com.mardous.booming.ui.screen.deezer
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mardous.booming.data.remote.deezer.DeezerAccount
 import com.mardous.booming.data.remote.deezer.DeezerAccountStore
+import com.mardous.booming.data.remote.deezer.DeezerAudioQuality
 import com.mardous.booming.data.remote.deezer.DeezerDownloadManager
 import com.mardous.booming.data.remote.deezer.DeezerPrivateClient
+import com.mardous.booming.data.remote.deezer.DeezerQualityStore
 import com.mardous.booming.data.remote.deezer.DeezerService
 import com.mardous.booming.data.remote.deezer.DeezerSmartLogin
 import com.mardous.booming.data.remote.deezer.DeezerStreamingClient
@@ -100,6 +103,7 @@ data class DeezerUiState(
     val detailLoading: Boolean = false,
     val detailError: Boolean = false,
     val streamingActive: Boolean = false,
+    val streamingQuality: DeezerAudioQuality = DeezerAudioQuality.FLAC,
     val smartLoginUrl: String? = null,
     val smartLoginCode: String? = null,
     val smartLoginLoading: Boolean = false,
@@ -113,11 +117,15 @@ class DeezerViewModel(
     private val accountStore: DeezerAccountStore,
     private val downloadManager: DeezerDownloadManager,
     private val streamingClient: DeezerStreamingClient,
-    private val tokenStore: DeezerTokenStore
+    private val tokenStore: DeezerTokenStore,
+    private val qualityStore: DeezerQualityStore
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
-        DeezerUiState(streamingActive = tokenStore.isActive)
+        DeezerUiState(
+            streamingActive = tokenStore.isActive,
+            streamingQuality = qualityStore.quality
+        )
     )
     val uiState = _uiState.asStateFlow()
 
@@ -315,6 +323,11 @@ class DeezerViewModel(
         _uiState.update { it.copy(smartLoginError = false) }
     }
 
+    fun setStreamingQuality(quality: DeezerAudioQuality) {
+        qualityStore.quality = quality
+        _uiState.update { it.copy(streamingQuality = quality) }
+    }
+
     suspend fun resolveStreamUrl(trackId: Long): Result<String> {
         val token = tokenStore.accessToken?.takeIf { it.isNotBlank() }
             ?: return Result.failure(IllegalStateException("Activa el streaming completo de Deezer"))
@@ -332,12 +345,17 @@ class DeezerViewModel(
             }
             return Result.failure(error)
         }
-        val url = result.getOrThrow().bestUrl
-        return if (url.isNullOrBlank()) {
-            Result.failure(IllegalStateException("Deezer no devolvió una URL reproducible"))
-        } else {
-            Result.success(url)
-        }
+        val requested = qualityStore.quality
+        val selection = result.getOrThrow().select(requested)
+            ?: return Result.failure(
+                IllegalStateException("Deezer no devolvió una URL reproducible")
+            )
+        Log.d(
+            "ElyvaenStream",
+            "selected track=$trackId requested=${requested.storageValue} " +
+                    "actual=${selection.quality.storageValue}"
+        )
+        return Result.success(selection.url)
     }
 
     fun loadLibrary() {

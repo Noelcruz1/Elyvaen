@@ -37,6 +37,7 @@ import com.mardous.booming.data.model.Genre
 import com.mardous.booming.data.remote.deezer.DeezerAccountStore
 import com.mardous.booming.data.remote.deezer.DeezerDownloadManager
 import com.mardous.booming.data.remote.deezer.DeezerPrivateClient
+import com.mardous.booming.data.remote.deezer.DeezerQualityStore
 import com.mardous.booming.data.remote.deezer.DeezerService
 import com.mardous.booming.data.remote.deezer.DeezerStreamingClient
 import com.mardous.booming.data.remote.deezer.DeezerTokenStore
@@ -129,6 +130,7 @@ val networkModule = module {
     single { DeezerService(client = get()) }
     single { DeezerAccountStore(context = androidContext()) }
     single { DeezerTokenStore(context = androidContext()) }
+    single { DeezerQualityStore(context = androidContext()) }
     single { DeezerStreamingClient(client = get()) }
     single { DeezerPrivateClient(baseClient = get(), store = get()) }
     single {
@@ -432,7 +434,8 @@ private val viewModule = module {
             accountStore = get(),
             downloadManager = get(),
             streamingClient = get(),
-            tokenStore = get()
+            tokenStore = get(),
+            qualityStore = get()
         )
     }
 

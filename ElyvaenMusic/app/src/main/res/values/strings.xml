@@ -1499,6 +1499,11 @@
     <string name="deezer_streaming_inactive">Enable streaming with your account to play full tracks.</string>
     <string name="deezer_streaming_active">Full streaming active</string>
     <string name="deezer_streaming_active_hint">Non-downloaded tracks play in full.</string>
+    <string name="deezer_streaming_quality">Streaming quality</string>
+    <string name="deezer_streaming_quality_hint">FLAC uses more data. If a track is not available at that quality, the next available one is used.</string>
+    <string name="deezer_quality_flac">FLAC</string>
+    <string name="deezer_quality_mp3_320">MP3 320</string>
+    <string name="deezer_quality_mp3_128">MP3 128</string>
     <string name="deezer_streaming_activate">Enable</string>
     <string name="deezer_streaming_deactivate">Disable</string>
     <string name="deezer_streaming_dialog_title">Enable full streaming</string>
