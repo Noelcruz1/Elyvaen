@@ -226,3 +226,36 @@ local de “Miku” y “Torpe”, menús de pista y ficha de álbum. Captura:
 **Límite:** la API oficial de Deezer solo entrega 30 s para pistas no
 descargadas. La reproducción completa sigue reservada a la biblioteca local y
 a las descargas.
+
+## Streaming completo Deezer 1.15.0 (experimental)
+
+La app pasa a **1.15.0** con una vía opcional para reproducir pistas completas
+sin descargarlas. Es una integración no oficial y desactivable:
+
+- **SmartLogin**: `POST connect.deezer.com/2.0/smartlogin` con el `app_id`
+  público `447462` que usa Pixer. Devuelve un código, un enlace `dzr.fm/tv/…`,
+  un QR y un sondeo cada 2 s.
+- El enlace se abre en el WebView interno (`DeezerLoginActivity`), donde el
+  usuario autoriza la aplicación. Deezer la presenta como **Hisense TV - V2**;
+  el diálogo de Elyvaen lo avisa antes de abrirla. La contraseña nunca pasa por
+  la app.
+- El token resultante se guarda cifrado con `EncryptedSharedPreferences`
+  (`DeezerTokenStore`). No se registra en logs. El ARL sigue siendo el almacén
+  de favoritos y descargas.
+- Cada reproducción pide
+  `GET api.deezer.com/platform/gcast/track/{id}/streamUrls` con
+  `Authorization: Bearer`; se prefiere `url_flac`, luego `url_320` y por último
+  `url`. Las URLs firmadas no se guardan ni se registran.
+- El `MediaItem` remoto se reproduce en el reproductor principal de Media3 y
+  se conserva en la cola aunque no exista en la biblioteca local. Si el token
+  caduca o la petición falla, se avisa y se vuelve a la vista previa de 30 s.
+
+**Verificado en el Moto G51:** autorización SmartLogin completada, aviso
+“Streaming completo activo”, reproducción de *City Blue* (Mili) durante más de
+44 s con `AudioTrack` activo y URL FLAC de 21.5 MB con soporte de `Range`.
+
+**Limitaciones:** Deezer puede revocar el token o cambiar los endpoints; la
+identidad mostrada es la de Pixer, no una app propia. La cola remota es de una
+pista por reproducción, no hay caché ni descarga automática, y el mini player
+muestra título/artista (la carátula sigue viniendo de la notificación de
+Media3). Atribución MIT de Pixer en `third_party/pixer/LICENSE` y `NOTICE.md`.

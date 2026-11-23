@@ -4,6 +4,7 @@
 
 - Base stock `S2RYA32.58-13-12-5-1-3` (Android 12) para Moto G51 5G (`cypfq`).
 - Elyvaen DAP / BoomingMusic 1.4.2 personalizado y HeliBoard integrados como apps de sistema.
+- Elyvaen Music 1.15.0: streaming completo opcional de Deezer (SmartLogin + `gcast/streamUrls`), token cifrado, cola remota y atribución MIT de Pixer.
 - Audio 24/192, Pure Audio y LOHIFI en `vendor`.
 - Animación Aurora, keylayout del botón Assistant, DND, batería al 80 %, 120 Hz y kiosco.
 - Debloat conservador de apps; sin tocar librerías ni HALs.

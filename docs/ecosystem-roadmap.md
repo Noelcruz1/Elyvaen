@@ -232,7 +232,11 @@ Qobuz/Tidal/Bandcamp o la compra directa son mejores fuentes.
 
 ### Pendiente inmediato de esta fase
 
-- Cola unificada local + Deezer y streaming sin descarga completa.
+- **Implementado en 1.15.0:** streaming completo opcional mediante SmartLogin y
+  `gcast/streamUrls`, con token cifrado y reproducción en Media3. Queda pulir
+  una cola remota con varias pistas y la carátula del mini player.
+- Unificar visualmente la cola local + Deezer (la pista remota ya se conserva
+  en la cola del reproductor).
 - Mover la cola de descargas a un foreground service/WorkManager.
 - Favoritos de playlists (lectura ya disponible; falta el alta/baja fiable).
 - Verificar listas privadas de la cuenta y letras sincronizadas.
@@ -270,6 +274,9 @@ Se añadió la base del proveedor privado, siguiendo el enfoque de Sonora:
   de la app.
 - Es una integración **no oficial**; puede romperse si Deezer cambia el web
   player. El ARL es personal y no se registra en logs.
+- **Streaming completo 1.15.0:** SmartLogin y `streamUrls` inspirados en Pixer
+  (MIT), token cifrado y fallback a vista previa. Ver `docs/ui-v2.md` y
+  `third_party/pixer/LICENSE`.
 
 También se añadió la pantalla **Descargas** (`ui/screen/deezer/DownloadsScreen.kt`):
 estado vacío, almacenamiento libre/total, descargas en curso, completadas,
