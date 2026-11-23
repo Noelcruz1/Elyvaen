@@ -26,6 +26,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -84,6 +85,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -93,6 +95,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
@@ -108,6 +111,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
@@ -126,7 +130,9 @@ import com.mardous.booming.playback.library.MediaIDs
 import com.mardous.booming.ui.component.compose.EmptyView
 import com.mardous.booming.ui.component.compose.MediaImage
 import com.mardous.booming.ui.screen.player.PlayerViewModel
+import com.mardous.booming.util.QrCodes
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinActivityViewModel
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -178,11 +184,26 @@ fun DeezerScreen(
     var previousDownloads by remember {
         mutableStateOf<Map<Long, DeezerDownloadState>>(emptyMap())
     }
+    var showStreamingDialog by remember { mutableStateOf(false) }
+    var streamLoading by remember { mutableStateOf(false) }
+    var pendingPreviewTrack by remember { mutableStateOf<DeezerTrackItem?>(null) }
     val searchFocusRequester = remember { FocusRequester() }
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(state.account) {
         if (state.account != null) {
             showConnectDialog = false
+        }
+    }
+    LaunchedEffect(state.streamingActive) {
+        if (state.streamingActive) {
+            showStreamingDialog = false
+            pendingPreviewTrack = null
+            Toast.makeText(
+                context,
+                context.getString(R.string.deezer_streaming_active),
+                Toast.LENGTH_SHORT
+            ).show()
         }
     }
     LaunchedEffect(selectedTab) {
@@ -232,8 +253,26 @@ fun DeezerScreen(
             ?.uri?.lastPathSegment?.toLongOrNull()
         if (songId != null) {
             playerViewModel.playMediaId(MediaIDs.getPathId(MediaIDs.SONGS, songId))
+        } else if (state.streamingActive) {
+            streamLoading = true
+            scope.launch {
+                viewModel.resolveStreamUrl(track.id)
+                    .onSuccess { url ->
+                        playerViewModel.playMediaItem(streamingMediaItem(track, url))
+                    }
+                    .onFailure { error ->
+                        Toast.makeText(
+                            context,
+                            error.message ?: context.getString(R.string.deezer_streaming_error),
+                            Toast.LENGTH_SHORT
+                        ).show()
+                        openPreview(track)
+                    }
+                streamLoading = false
+            }
         } else {
-            openPreview(track)
+            pendingPreviewTrack = track
+            showStreamingDialog = true
         }
     }
     val openDownloaded: (DeezerDownloadEntry) -> Unit = { entry ->
@@ -314,6 +353,13 @@ fun DeezerScreen(
                     )
                 )
         ) {
+            if (streamLoading) {
+                LinearProgressIndicator(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.TopCenter)
+                )
+            }
             when {
                 state.detailLoading -> DeezerLoading()
                 state.detailError -> DeezerDetailError(onBack = viewModel::closeDetail)
@@ -388,6 +434,7 @@ fun DeezerScreen(
                     state = state,
                     downloadStateFor = downloadStateFor,
                     downloads = downloads,
+                    streamingActive = state.streamingActive,
                     onPlay = openTrack,
                     onDownload = openDownload,
                     onAlbum = viewModel::openAlbum,
@@ -395,6 +442,7 @@ fun DeezerScreen(
                     onPlaylist = viewModel::openPlaylist,
                     onTab = { selectedTab = it },
                     onConnect = { showConnectDialog = true },
+                    onActivateStreaming = { showStreamingDialog = true },
                     onToggleTrackSaved = viewModel::setTrackSaved,
                     onToggleAlbumSaved = viewModel::setAlbumSaved,
                     onToggleArtistSaved = viewModel::setArtistSaved
@@ -451,10 +499,35 @@ fun DeezerScreen(
     if (showAccountDialog && state.account != null) {
         DeezerAccountDialog(
             account = state.account!!,
+            streamingActive = state.streamingActive,
+            onActivateStreaming = {
+                showAccountDialog = false
+                showStreamingDialog = true
+            },
+            onDisconnectStreaming = viewModel::disconnectStreaming,
             onDismiss = { showAccountDialog = false },
             onDisconnect = {
                 viewModel.disconnect()
                 showAccountDialog = false
+            }
+        )
+    }
+    if (showStreamingDialog) {
+        DeezerStreamingDialog(
+            state = state,
+            canUsePreview = pendingPreviewTrack != null,
+            onDismiss = {
+                showStreamingDialog = false
+                pendingPreviewTrack = null
+                viewModel.cancelSmartLogin()
+            },
+            onGenerate = viewModel::startSmartLogin,
+            onOpenLink = { url -> openStreamingLink(context, url) },
+            onUsePreview = {
+                showStreamingDialog = false
+                pendingPreviewTrack?.let(openPreview)
+                pendingPreviewTrack = null
+                viewModel.cancelSmartLogin()
             }
         )
     }
@@ -711,6 +784,9 @@ private fun DeezerConnectDialog(
 @Composable
 private fun DeezerAccountDialog(
     account: DeezerAccount,
+    streamingActive: Boolean,
+    onActivateStreaming: () -> Unit,
+    onDisconnectStreaming: () -> Unit,
     onDismiss: () -> Unit,
     onDisconnect: () -> Unit
 ) {
@@ -728,6 +804,41 @@ private fun DeezerAccountDialog(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                HorizontalDivider(
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f),
+                    modifier = Modifier.padding(vertical = 6.dp)
+                )
+                Text(
+                    text = stringResource(
+                        if (streamingActive) R.string.deezer_streaming_active
+                        else R.string.deezer_streaming_title
+                    ),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (streamingActive) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    }
+                )
+                Text(
+                    text = stringResource(
+                        if (streamingActive) R.string.deezer_streaming_active_hint
+                        else R.string.deezer_streaming_inactive
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                TextButton(
+                    onClick = if (streamingActive) onDisconnectStreaming else onActivateStreaming
+                ) {
+                    Text(
+                        stringResource(
+                            if (streamingActive) R.string.deezer_streaming_deactivate
+                            else R.string.deezer_streaming_activate
+                        )
+                    )
+                }
             }
         },
         confirmButton = {
@@ -741,6 +852,148 @@ private fun DeezerAccountDialog(
             }
         }
     )
+}
+
+@Composable
+private fun DeezerStreamingDialog(
+    state: DeezerUiState,
+    canUsePreview: Boolean,
+    onDismiss: () -> Unit,
+    onGenerate: () -> Unit,
+    onOpenLink: (String) -> Unit,
+    onUsePreview: () -> Unit
+) {
+    val url = state.smartLoginUrl
+    val qrCode = remember(url) {
+        url?.let { QrCodes.create(it, 512)?.asImageBitmap() }
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.deezer_streaming_dialog_title)) },
+        text = {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text(
+                    text = stringResource(R.string.deezer_streaming_dialog_text),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = stringResource(R.string.deezer_streaming_identity),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.outline
+                )
+                if (url != null) {
+                    qrCode?.let { bitmap ->
+                        Image(
+                            bitmap = bitmap,
+                            contentDescription = null,
+                            modifier = Modifier.size(220.dp)
+                        )
+                    }
+                    Text(
+                        text = stringResource(R.string.deezer_streaming_scan),
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Text(
+                        text = url,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    state.smartLoginCode?.let { code ->
+                        Text(
+                            text = stringResource(R.string.deezer_streaming_code, code),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        CircularProgressIndicator(
+                            strokeWidth = 2.dp,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            text = stringResource(R.string.deezer_streaming_waiting),
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                } else {
+                    if (state.smartLoginLoading) {
+                        CircularProgressIndicator()
+                    } else if (state.smartLoginError) {
+                        Text(
+                            text = stringResource(R.string.deezer_streaming_error),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+                Text(
+                    text = stringResource(R.string.deezer_streaming_preview_hint),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (canUsePreview) {
+                    TextButton(onClick = onUsePreview) {
+                        Text(stringResource(R.string.deezer_preview_short))
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            if (url != null) {
+                TextButton(onClick = { onOpenLink(url) }) {
+                    Text(stringResource(R.string.deezer_streaming_open_link))
+                }
+            } else {
+                TextButton(
+                    onClick = onGenerate,
+                    enabled = !state.smartLoginLoading && !state.smartLoginPolling
+                ) {
+                    Text(stringResource(R.string.deezer_streaming_generate))
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.close_action))
+            }
+        }
+    )
+}
+
+private fun openStreamingLink(context: Context, url: String) {
+    runCatching {
+        val intent = Intent(context, DeezerLoginActivity::class.java)
+            .putExtra(DeezerLoginActivity.EXTRA_START_URL, url)
+            .putExtra(DeezerLoginActivity.EXTRA_SMART_LOGIN, true)
+        if (context !is Activity) {
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(intent)
+    }
+}
+
+private fun streamingMediaItem(track: DeezerTrackItem, url: String): MediaItem {
+    return MediaItem.Builder()
+        .setUri(url)
+        .setMediaId("deezer_stream_${track.id}")
+        .setMediaMetadata(
+            MediaMetadata.Builder()
+                .setTitle(track.title)
+                .setArtist(track.artistName)
+                .setAlbumTitle(track.albumName)
+                .setArtworkUri(track.imageUrl?.let(Uri::parse))
+                .build()
+        )
+        .build()
 }
 
 @Composable
@@ -799,6 +1052,7 @@ private fun DeezerHomeContent(
     state: DeezerUiState,
     downloadStateFor: (DeezerTrackItem) -> DeezerDownloadState?,
     downloads: Map<Long, DeezerDownloadEntry>,
+    streamingActive: Boolean,
     onPlay: (DeezerTrackItem) -> Unit,
     onDownload: (DeezerTrackItem) -> Unit,
     onAlbum: (Long) -> Unit,
@@ -806,6 +1060,7 @@ private fun DeezerHomeContent(
     onPlaylist: (Long) -> Unit,
     onTab: (DeezerTab) -> Unit,
     onConnect: () -> Unit,
+    onActivateStreaming: () -> Unit,
     onToggleTrackSaved: (Long, Boolean) -> Unit,
     onToggleAlbumSaved: (Long, Boolean) -> Unit,
     onToggleArtistSaved: (Long, Boolean) -> Unit
@@ -852,6 +1107,9 @@ private fun DeezerHomeContent(
 
         if (state.account == null) {
             item { DeezerConnectBanner(onConnect = onConnect) }
+        }
+        if (state.account != null && !streamingActive) {
+            item { DeezerStreamingBanner(onActivate = onActivateStreaming) }
         }
 
         item {
@@ -908,6 +1166,7 @@ private fun DeezerHomeContent(
                             downloadState = entry.state,
                             saved = savedTracks.any { it.id == entry.track.id },
                             canFavorite = state.account != null,
+                            showPreviewBadge = false,
                             onPlay = { onPlay(entry.track) },
                             onDownload = { onDownload(entry.track) },
                             onToggleSaved = { onToggleTrackSaved(entry.track.id, it) }
@@ -930,6 +1189,7 @@ private fun DeezerHomeContent(
                             downloadState = downloadStateFor(track),
                             saved = savedTracks.any { it.id == track.id },
                             canFavorite = state.account != null,
+                            showPreviewBadge = !streamingActive,
                             onPlay = { onPlay(track) },
                             onDownload = { onDownload(track) },
                             onToggleSaved = { onToggleTrackSaved(track.id, it) }
@@ -1126,6 +1386,53 @@ private fun DeezerConnectBanner(onConnect: () -> Unit) {
             }
             TextButton(onClick = onConnect) {
                 Text(stringResource(R.string.deezer_connect))
+            }
+        }
+    }
+}
+
+@Composable
+private fun DeezerStreamingBanner(onActivate: () -> Unit) {
+    Surface(
+        shape = RoundedCornerShape(22.dp),
+        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.22f),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.18f),
+                modifier = Modifier.size(42.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_play_circle_24dp),
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.deezer_streaming_title),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = stringResource(R.string.deezer_streaming_inactive),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            TextButton(onClick = onActivate) {
+                Text(stringResource(R.string.deezer_streaming_activate))
             }
         }
     }
@@ -1693,6 +2000,7 @@ private fun DeezerTrackCard(
     downloadState: DeezerDownloadState?,
     saved: Boolean,
     canFavorite: Boolean,
+    showPreviewBadge: Boolean,
     onPlay: () -> Unit,
     onDownload: () -> Unit,
     onToggleSaved: (Boolean) -> Unit
@@ -1784,7 +2092,7 @@ private fun DeezerTrackCard(
                         )
                     }
                 }
-            } else {
+            } else if (showPreviewBadge) {
                 Surface(
                     shape = CircleShape,
                     color = Color.Black.copy(alpha = 0.55f),

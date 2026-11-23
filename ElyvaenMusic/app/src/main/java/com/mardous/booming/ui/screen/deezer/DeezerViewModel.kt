@@ -24,6 +24,10 @@ import com.mardous.booming.data.remote.deezer.DeezerAccountStore
 import com.mardous.booming.data.remote.deezer.DeezerDownloadManager
 import com.mardous.booming.data.remote.deezer.DeezerPrivateClient
 import com.mardous.booming.data.remote.deezer.DeezerService
+import com.mardous.booming.data.remote.deezer.DeezerSmartLogin
+import com.mardous.booming.data.remote.deezer.DeezerStreamingClient
+import com.mardous.booming.data.remote.deezer.DeezerStreamingUnauthorizedException
+import com.mardous.booming.data.remote.deezer.DeezerTokenStore
 import com.mardous.booming.data.remote.deezer.model.DeezerAlbumDetail
 import com.mardous.booming.data.remote.deezer.model.DeezerAlbumItem
 import com.mardous.booming.data.remote.deezer.model.DeezerArtistItem
@@ -94,23 +98,34 @@ data class DeezerUiState(
     val playlists: List<DeezerPlaylistItem> = emptyList(),
     val detail: DeezerDetail? = null,
     val detailLoading: Boolean = false,
-    val detailError: Boolean = false
+    val detailError: Boolean = false,
+    val streamingActive: Boolean = false,
+    val smartLoginUrl: String? = null,
+    val smartLoginCode: String? = null,
+    val smartLoginLoading: Boolean = false,
+    val smartLoginPolling: Boolean = false,
+    val smartLoginError: Boolean = false
 )
 
 class DeezerViewModel(
     private val deezerService: DeezerService,
     private val privateClient: DeezerPrivateClient,
     private val accountStore: DeezerAccountStore,
-    private val downloadManager: DeezerDownloadManager
+    private val downloadManager: DeezerDownloadManager,
+    private val streamingClient: DeezerStreamingClient,
+    private val tokenStore: DeezerTokenStore
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(DeezerUiState())
+    private val _uiState = MutableStateFlow(
+        DeezerUiState(streamingActive = tokenStore.isActive)
+    )
     val uiState = _uiState.asStateFlow()
 
     val downloadStates = downloadManager.states
     val downloads = downloadManager.entries
 
     private var searchJob: Job? = null
+    private var smartLoginJob: Job? = null
 
     init {
         loadChart()
@@ -177,15 +192,151 @@ class DeezerViewModel(
     }
 
     fun disconnect() {
+        smartLoginJob?.cancel()
         privateClient.disconnect()
+        tokenStore.clear()
         _uiState.update {
             it.copy(
                 account = null,
                 connectError = false,
                 library = null,
                 libraryLoading = false,
-                libraryError = false
+                libraryError = false,
+                streamingActive = false,
+                smartLoginUrl = null,
+                smartLoginCode = null,
+                smartLoginLoading = false,
+                smartLoginPolling = false,
+                smartLoginError = false
             )
+        }
+    }
+
+    fun startSmartLogin() {
+        if (_uiState.value.smartLoginLoading || _uiState.value.smartLoginPolling) return
+        smartLoginJob?.cancel()
+        viewModelScope.launch {
+            _uiState.update {
+                it.copy(
+                    smartLoginLoading = true,
+                    smartLoginError = false,
+                    smartLoginUrl = null,
+                    smartLoginCode = null
+                )
+            }
+            streamingClient.requestSmartLogin()
+                .onSuccess { data ->
+                    _uiState.update {
+                        it.copy(
+                            smartLoginLoading = false,
+                            smartLoginPolling = true,
+                            smartLoginUrl = data.url,
+                            smartLoginCode = data.code
+                        )
+                    }
+                    pollSmartLogin(data)
+                }
+                .onFailure {
+                    _uiState.update {
+                        it.copy(
+                            smartLoginLoading = false,
+                            smartLoginPolling = false,
+                            smartLoginError = true
+                        )
+                    }
+                }
+        }
+    }
+
+    private fun pollSmartLogin(data: DeezerSmartLogin) {
+        smartLoginJob = viewModelScope.launch {
+            val interval = data.pollingIntervalSeconds * 1000L
+            val deadline = System.currentTimeMillis() + data.ttlSeconds * 1000L
+            while (System.currentTimeMillis() < deadline) {
+                delay(interval)
+                val token = streamingClient.pollSmartLogin(data.code).getOrNull()
+                if (token != null) {
+                    tokenStore.accessToken = token.accessToken
+                    tokenStore.userId = token.userId
+                    _uiState.update {
+                        it.copy(
+                            streamingActive = true,
+                            smartLoginUrl = null,
+                            smartLoginCode = null,
+                            smartLoginLoading = false,
+                            smartLoginPolling = false,
+                            smartLoginError = false
+                        )
+                    }
+                    return@launch
+                }
+            }
+            _uiState.update {
+                it.copy(
+                    smartLoginUrl = null,
+                    smartLoginCode = null,
+                    smartLoginPolling = false,
+                    smartLoginError = true
+                )
+            }
+        }
+    }
+
+    fun cancelSmartLogin() {
+        smartLoginJob?.cancel()
+        smartLoginJob = null
+        _uiState.update {
+            it.copy(
+                smartLoginUrl = null,
+                smartLoginCode = null,
+                smartLoginLoading = false,
+                smartLoginPolling = false
+            )
+        }
+    }
+
+    fun disconnectStreaming() {
+        smartLoginJob?.cancel()
+        smartLoginJob = null
+        tokenStore.clear()
+        _uiState.update {
+            it.copy(
+                streamingActive = false,
+                smartLoginUrl = null,
+                smartLoginCode = null,
+                smartLoginLoading = false,
+                smartLoginPolling = false,
+                smartLoginError = false
+            )
+        }
+    }
+
+    fun clearStreamingError() {
+        _uiState.update { it.copy(smartLoginError = false) }
+    }
+
+    suspend fun resolveStreamUrl(trackId: Long): Result<String> {
+        val token = tokenStore.accessToken?.takeIf { it.isNotBlank() }
+            ?: return Result.failure(IllegalStateException("Activa el streaming completo de Deezer"))
+        val result = streamingClient.streamUrls(trackId, token)
+        val error = result.exceptionOrNull()
+        if (error != null) {
+            if (error is DeezerStreamingUnauthorizedException) {
+                tokenStore.clear()
+                _uiState.update {
+                    it.copy(
+                        streamingActive = false,
+                        smartLoginError = true
+                    )
+                }
+            }
+            return Result.failure(error)
+        }
+        val url = result.getOrThrow().bestUrl
+        return if (url.isNullOrBlank()) {
+            Result.failure(IllegalStateException("Deezer no devolvió una URL reproducible"))
+        } else {
+            Result.success(url)
         }
     }
 

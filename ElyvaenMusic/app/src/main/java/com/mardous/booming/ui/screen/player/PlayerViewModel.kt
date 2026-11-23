@@ -48,6 +48,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.mapLatest
@@ -61,6 +62,36 @@ import kotlin.time.Duration.Companion.milliseconds
 
 private fun List<Song>.toMediaItems() = mapNotNull { songs ->
     songs.toMediaItem().takeUnless { item -> item == MediaItem.EMPTY }
+}
+
+/**
+ * Minimal display song for streamed media that is not in the local library.
+ * Its negative ID can never collide with a MediaStore song.
+ */
+private fun MediaItem.toStreamSong(): Song {
+    val uri = localConfiguration?.uri
+    if (uri?.scheme != "http" && uri?.scheme != "https") return Song.emptySong
+    val metadata = mediaMetadata
+    val title = metadata.title?.toString()?.takeIf { it.isNotBlank() }
+        ?: return Song.emptySong
+    val id = -((mediaId.hashCode().toLong() and 0x7fffffffL) + 1L)
+    return Song(
+        id = id,
+        data = "",
+        title = title,
+        trackNumber = 0,
+        year = 0,
+        size = 0,
+        duration = 0,
+        dateAdded = 0,
+        rawDateModified = 0,
+        albumId = -1,
+        albumName = metadata.albumTitle?.toString().orEmpty(),
+        artistId = -1,
+        artistName = metadata.artist?.toString().orEmpty(),
+        albumArtistName = null,
+        genreName = null
+    )
 }
 
 @OptIn(FlowPreview::class, ExperimentalAtomicApi::class)
@@ -84,7 +115,14 @@ class PlayerViewModel(
     val repeatModeFlow = queueStateHolder.repeatMode
     val repeatMode get() = repeatModeFlow.value
 
-    val currentSongFlow = queueStateHolder.currentSong.stateIn(
+    private val streamSongFlow = MutableStateFlow(Song.emptySong)
+
+    val currentSongFlow = combine(
+        queueStateHolder.currentSong,
+        streamSongFlow
+    ) { song, streamSong ->
+        if (song != Song.emptySong) song else streamSong
+    }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = Song.emptySong
@@ -145,6 +183,7 @@ class PlayerViewModel(
     fun setMediaController(mediaController: MediaController?) {
         if (this.mediaController == mediaController) return
         this.mediaController = mediaController
+        streamSongFlow.value = mediaController?.currentMediaItem?.toStreamSong() ?: Song.emptySong
         if (mediaController != null) {
             setIsPlaying(mediaController.isPlaying)
             if (progress == C.TIME_UNSET || duration == C.TIME_UNSET) {
@@ -181,6 +220,13 @@ class PlayerViewModel(
     }
 
     override fun onEvents(player: Player, events: Player.Events) {
+        if (events.containsAny(
+                Player.EVENT_MEDIA_ITEM_TRANSITION,
+                Player.EVENT_MEDIA_METADATA_CHANGED
+            )
+        ) {
+            streamSongFlow.value = player.currentMediaItem?.toStreamSong() ?: Song.emptySong
+        }
         val isPlayStateEvent = events.containsAny(
             Player.EVENT_PLAYBACK_STATE_CHANGED,
             Player.EVENT_IS_PLAYING_CHANGED,

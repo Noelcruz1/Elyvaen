@@ -38,6 +38,8 @@ import com.mardous.booming.data.remote.deezer.DeezerAccountStore
 import com.mardous.booming.data.remote.deezer.DeezerDownloadManager
 import com.mardous.booming.data.remote.deezer.DeezerPrivateClient
 import com.mardous.booming.data.remote.deezer.DeezerService
+import com.mardous.booming.data.remote.deezer.DeezerStreamingClient
+import com.mardous.booming.data.remote.deezer.DeezerTokenStore
 import com.mardous.booming.data.remote.github.GitHubService
 import com.mardous.booming.data.remote.jsonHttpClient
 import com.mardous.booming.data.remote.lastfm.LastFmService
@@ -126,6 +128,8 @@ val networkModule = module {
     single { GitHubService(context = androidContext(), client = get()) }
     single { DeezerService(client = get()) }
     single { DeezerAccountStore(context = androidContext()) }
+    single { DeezerTokenStore(context = androidContext()) }
+    single { DeezerStreamingClient(client = get()) }
     single { DeezerPrivateClient(baseClient = get(), store = get()) }
     single {
         DeezerDownloadManager(
@@ -426,7 +430,9 @@ private val viewModule = module {
             deezerService = get(),
             privateClient = get(),
             accountStore = get(),
-            downloadManager = get()
+            downloadManager = get(),
+            streamingClient = get(),
+            tokenStore = get()
         )
     }
 

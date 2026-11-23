@@ -118,6 +118,15 @@ import kotlin.coroutines.resume
 import kotlin.random.Random
 import kotlin.time.Duration.Companion.milliseconds
 
+private const val TAG = "ElyvaenPlayback"
+private val REMOTE_SCHEMES = setOf("http", "https")
+
+private val MediaItem.debugDescription: String
+    get() {
+        val uri = localConfiguration?.uri
+        return "$mediaId(${uri?.scheme}://${uri?.host})"
+    }
+
 @OptIn(UnstableApi::class)
 @kotlin.OptIn(ExperimentalAtomicApi::class)
 class PlaybackService :
@@ -801,8 +810,13 @@ class PlaybackService :
 
     private fun submitReplayGain(currentItem: MediaItem? = player.currentMediaItem) {
         val uri = currentItem?.contentUri ?: return
+        if (uri.scheme != "content" && uri.scheme != "file") return
         serviceScope.launch(IO) {
-            replayGainProcessor.submitGain(uri, ReplayGainTagExtractor.getReplayGain(uri))
+            runCatching {
+                replayGainProcessor.submitGain(uri, ReplayGainTagExtractor.getReplayGain(uri))
+            }.onFailure {
+                Log.w(TAG, "Could not submit replay gain for $uri", it)
+            }
         }
     }
 
@@ -812,13 +826,22 @@ class PlaybackService :
         val nextIndex = player.nextMediaItemIndex
         if (nextIndex == C.INDEX_UNSET) return
         val uri = player.getMediaItemAt(nextIndex).contentUri ?: return
+        if (uri.scheme != "content" && uri.scheme != "file") return
         if (ReplayGainTagExtractor.peek(uri) != null) return
 
         prefetchGainJob?.cancel()
-        prefetchGainJob = serviceScope.launch(IO) { ReplayGainTagExtractor.getReplayGain(uri) }
+        prefetchGainJob = serviceScope.launch(IO) {
+            runCatching { ReplayGainTagExtractor.getReplayGain(uri) }
+                .onFailure { Log.w(TAG, "Could not prefetch replay gain for $uri", it) }
+        }
     }
 
     override fun onPlayerError(error: PlaybackException) {
+        Log.e(
+            TAG,
+            "onPlayerError code=${error.errorCodeName} item=" +
+                    "${player.currentMediaItem?.debugDescription} count=${player.mediaItemCount}"
+        )
         val nextMediaIndex = player.nextMediaItemIndex
         if (nextMediaIndex != C.INDEX_UNSET &&
             errorRecoveryRetryCount < MAX_RETRY_COUNT_AFTER_ERROR) {
@@ -1015,7 +1038,11 @@ class PlaybackService :
                     .let { (songs, mediaItems) -> snapshot.deriveQueueSongs(songs) to mediaItems }
             }
 
-            val missingIds = missingMediaItems.mapTo(mutableSetOf()) { it.mediaId }
+            // Streamed items are not part of the local repository, but they are
+            // valid queue entries; only prune genuinely unresolvable local IDs.
+            val missingIds = missingMediaItems
+                .filterNot { it.localConfiguration?.uri?.scheme in REMOTE_SCHEMES }
+                .mapTo(mutableSetOf()) { it.mediaId }
             withContext(Main) {
                 if (missingIds.isNotEmpty() &&
                     isInTimelineUpdate.compareAndSet(false, newValue = true)) {

@@ -21,11 +21,13 @@ class DeezerLoginActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityDeezerLoginBinding
     private var completed = false
+    private var smartLoginMode = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityDeezerLoginBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        smartLoginMode = intent.getBooleanExtra(EXTRA_SMART_LOGIN, false)
 
         binding.toolbar.setNavigationOnClickListener {
             setResult(RESULT_CANCELED)
@@ -52,10 +54,15 @@ class DeezerLoginActivity : AppCompatActivity() {
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
                 binding.progress.isVisible = false
-                view?.postDelayed({ checkLoginCookie() }, 700)
+                if (!smartLoginMode) {
+                    view?.postDelayed({ checkLoginCookie() }, 700)
+                }
             }
         }
-        binding.webView.loadUrl(LOGIN_URL)
+        binding.webView.loadUrl(
+            intent.getStringExtra(EXTRA_START_URL)?.takeIf { it.isNotBlank() }
+                ?: LOGIN_URL
+        )
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
@@ -100,6 +107,8 @@ class DeezerLoginActivity : AppCompatActivity() {
 
     companion object {
         const val EXTRA_ARL = "com.mardous.booming.extra.DEEZER_ARL"
+        const val EXTRA_START_URL = "com.mardous.booming.extra.DEEZER_START_URL"
+        const val EXTRA_SMART_LOGIN = "com.mardous.booming.extra.DEEZER_SMART_LOGIN"
         private const val LOGIN_URL = "https://www.deezer.com/login"
     }
 }
