@@ -40,7 +40,8 @@ chroot "$CHROOT" env LINT_FLAGS="$LINT_FLAGS" /bin/bash -c '
     cd /tmp/elyvaen-music
     JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 \
     GRADLE_USER_HOME=/root/.gradle \
-        ./gradlew --no-daemon -Dorg.gradle.parallel=false $LINT_FLAGS \
+        ./gradlew --no-daemon --no-configuration-cache \
+        -Dorg.gradle.parallel=false $LINT_FLAGS \
         :app:assembleFdroidRelease
 '
 
