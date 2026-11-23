@@ -83,10 +83,11 @@ cmd_lifecycle() {
 
 cmd_login() {
     [ -f "$AGY_HOME/.env" ] || die "no existe $AGY_HOME/.env"
+    host=$(sed -n 's/^TTYD_HOST=//p' "$AGY_HOME/.env" | head -1)
     user=$(sed -n 's/^TTYD_USER=//p' "$AGY_HOME/.env" | head -1)
     pass=$(sed -n 's/^TTYD_PASSWORD=//p' "$AGY_HOME/.env" | head -1)
     cat <<EOF
-ttyd:     http://192.168.100.25:7681
+ttyd:     http://${host:-<host-del-nas>}:7681
 usuario:  ${user:-agy}
 password: ${pass:-<ver $AGY_HOME/.env>}
 

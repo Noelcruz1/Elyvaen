@@ -47,9 +47,10 @@ agy login
 ## Autenticación
 
 El token está ligado al contenedor. Tras recrear `elyvaen-agy` hay que hacer
-login una vez por ttyd (`http://192.168.100.25:7681`, usuario `agy`,
-password en `/workspace/Android/tools/antigravity/.env`). Después persiste en
-`tools/antigravity/home`.
+login una vez por ttyd (`http://<host-del-nas>:7681`, con el usuario del
+servicio AGY, password en `/workspace/Android/tools/antigravity/.env`). El host
+de ttyd se lee de `TTYD_HOST` en ese `.env`; el repo no lo incluye. Después
+persiste en `tools/antigravity/home`.
 
 ## Instalación
 
