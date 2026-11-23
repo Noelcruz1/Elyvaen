@@ -108,6 +108,7 @@ class DeezerViewModel(
     val uiState = _uiState.asStateFlow()
 
     val downloadStates = downloadManager.states
+    val downloads = downloadManager.entries
 
     private var searchJob: Job? = null
 
@@ -237,6 +238,10 @@ class DeezerViewModel(
 
     fun downloadTrack(track: DeezerTrackItem) {
         downloadManager.downloadTrack(track)
+    }
+
+    fun clearDownloadsHistory() {
+        downloadManager.clearFinished()
     }
 
     fun downloadAll(tracks: List<DeezerTrackItem>) {

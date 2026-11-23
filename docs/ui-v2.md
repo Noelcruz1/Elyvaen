@@ -93,6 +93,7 @@ Estado: **fase 1 y 2 implementadas y verificadas en el Moto G51** (2026-11-17).
 - `screens/deezer-artist.png` — ficha de artista con favorito y descarga.
 - `screens/deezer-offline.png` — pantalla Deezer sin red.
 - `screens/deezer-connect.png` — diálogo con login oficial y alternativa ARL.
+- `screens/deezer-search.png` — rediseño Deezer con pestañas, búsqueda y menús (datos públicos).
 - `screens/downloads.png` — Descargas con historial persistente y reproducción.
 - `screens/downloads-empty.png` — estado vacío de Descargas.
 - `screens/stats.png` — estadísticas de escucha.
@@ -199,3 +200,29 @@ Esto cambia canciones, carpetas, playlists, búsqueda y listas de detalle de
 - Pulir el header de biblioteca con tabs si se quiere acercar aún más a APlayer.
 - Revisar el panel DAP en formato apaisado.
 - Opcional: icono/splash Elyvaen y textos “Booming” residuales del About.
+
+## Rediseño Deezer estilo YT Music (2026-11-23)
+
+La pantalla Deezer deja de ser un catálogo plano y pasa a tener navegación y
+acciones propias:
+
+- pestañas **Inicio / Buscar / Biblioteca / Descargas**;
+- barra superior compacta con avatar de cuenta y buscador;
+- Home con hero de álbum, accesos rápidos a Favoritos/Descargas, estantería de
+  biblioteca, descargas recientes y secciones de catálogo;
+- Biblioteca con pestañas Artistas/Álbumes/Listas/Pistas y menús de tres puntos;
+- Descargas integrada con progreso, reproducción local y limpieza de historial;
+- menús contextuales en tarjetas y filas: reproducir, descargar, favorito,
+  abrir álbum/artista/lista y abrir en Deezer;
+- las descargas antiguas se cruzan por título/artista/álbum para que el
+  catálogo marque las pistas ya descargadas;
+- el botón **Reproducir** de una ficha reproduce la descarga local si existe;
+  si no, abre la vista previa de 30 s.
+
+Verificado en el Moto G51: búsqueda “Miku”, pestaña Descargas, reproducción
+local de “Miku” y “Torpe”, menús de pista y ficha de álbum. Captura:
+`screens/deezer-search.png` (resultados públicos). La app queda en **1.14.0**.
+
+**Límite:** la API oficial de Deezer solo entrega 30 s para pistas no
+descargadas. La reproducción completa sigue reservada a la biblioteca local y
+a las descargas.
