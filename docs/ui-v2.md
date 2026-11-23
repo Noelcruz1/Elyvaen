@@ -259,3 +259,19 @@ identidad mostrada es la de Pixer, no una app propia. La cola remota es de una
 pista por reproducción, no hay caché ni descarga automática, y el mini player
 muestra título/artista (la carátula sigue viniendo de la notificación de
 Media3). Atribución MIT de Pixer en `third_party/pixer/LICENSE` y `NOTICE.md`.
+
+## Selector de calidad Deezer 1.16.0 (2026-11-23)
+
+El diálogo **Cuenta Deezer** añade tres chips persistentes: **FLAC**,
+**MP3 320** y **MP3 128**. La elección se guarda en
+`elyvaen_deezer_stream_quality` (preferencia plana, no secreta) y se aplica a
+cada consulta de `streamUrls`, con fallback a la siguiente calidad disponible:
+
+- FLAC → `flac` → `url_320` → `url`;
+- MP3 320 → `url_320` → `url` → `flac`;
+- MP3 128 → `url` → `url_320` → `flac`.
+
+La app registra `requested` y `actual` en logcat, sin URLs firmadas. Verificado
+en el Moto G51: MP3 320 usó `c2.android.mp3.decoder`, MP3 128 seleccionó su
+propia URL y FLAC volvió a `c2.android.flac.decoder`. La app queda en
+**1.16.0**.

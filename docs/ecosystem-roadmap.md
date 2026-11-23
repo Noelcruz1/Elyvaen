@@ -235,6 +235,8 @@ Qobuz/Tidal/Bandcamp o la compra directa son mejores fuentes.
 - **Implementado en 1.15.0:** streaming completo opcional mediante SmartLogin y
   `gcast/streamUrls`, con token cifrado y reproducción en Media3. Queda pulir
   una cola remota con varias pistas y la carátula del mini player.
+- **Implementado en 1.16.0:** selector persistente FLAC / MP3 320 / MP3 128 en
+  el diálogo de cuenta, con fallback automático a la siguiente calidad.
 - Unificar visualmente la cola local + Deezer (la pista remota ya se conserva
   en la cola del reproductor).
 - Mover la cola de descargas a un foreground service/WorkManager.
