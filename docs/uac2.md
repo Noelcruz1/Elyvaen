@@ -227,3 +227,37 @@ está en 48 kHz. El daemon corregido está en `payload` y en
 sigue usando el daemon antiguo hasta que se apruebe un flash. En el uso normal
 a 48 kHz basta con la app nueva; para 192 kHz persistente hay que flashear el
 nuevo super o sustituir el binario de `/vendor`.
+
+### Ruido de la carga USB (causa raíz, 2026-11-27)
+
+La comparación de espectrogramas con una pista descargada de Deezer
+(*City Blue*, FLAC 44.1/16) y captura por Line-In dio el diagnóstico:
+
+- fuente limpia: contenido hasta 22 kHz;
+- reproducción local a volumen 6: RMS ≈ −25.6 dBFS y espectro completo;
+- UAC2 a volumen 6: RMS ≈ −25.1 dBFS y espectro prácticamente igual;
+- silencio digital por UAC2 con el teléfono cargando: RMS ≈ −43.6 dBFS,
+  con un tono estable de ~1 kHz y un pico de 0.146;
+- el mismo silencio alimentando el FIFO con ceros, **sin UAC2**: idéntico
+  (~−43.6 dBFS y 1 kHz), así que no lo genera el flujo UAC2;
+- el mismo camino con la carga USB cortada
+  (`echo 0 > /sys/class/power_supply/usb/input_current_limit`):
+  **RMS ≈ −65.9 dBFS y sin el tono de 1 kHz**.
+
+Es acoplamiento de la alimentación/ground del USB, no ruido del puente. La
+solución de software es cortar la carga mientras UAC2 está activo:
+
+- `elyvaen-usb` lee `cut_charging=1` y `restore_charge=500000` de
+  `uac2.conf`, escribe el límite de corriente USB a 0 al enlazar UAC2 y lo
+  restaura al desactivarlo. El dominio `vendor_hal_usb_qti` tiene permiso
+  `write` sobre `vendor_sysfs_usb_supply` (verificado con `sesearch`).
+- El helper/super aún no está flasheado. Para probar ahora sin flash:
+  ```sh
+  adb shell su -c 'echo 0 > /sys/class/power_supply/usb/input_current_limit'
+  # restaurar:
+  adb shell su -c 'echo 500000 > /sys/class/power_supply/usb/input_current_limit'
+  ```
+- Con la carga cortada el teléfono funciona con batería y el USB sigue
+  llevando datos/ADB; el consumo corre por cuenta de la batería.
+- Un cable USB de solo datos con VBUS cortado o un aislador USB también
+  eliminan el lazo, sin depender de root.
