@@ -53,6 +53,9 @@
 #define PROP_STATE "vendor.usb.elyvaen.state"
 #define PROP_UDC "vendor.usb.elyvaen.udc"
 
+#define CHARGE_LIMIT_PATH "/sys/class/power_supply/usb/input_current_limit"
+#define DEFAULT_RESTORE_CHARGE 500000
+
 #define PROP_SOCKET "/dev/socket/property_service"
 #define PROP_NAME_MAX 32
 #define PROP_VALUE_MAX 92
@@ -76,6 +79,8 @@ struct config {
     int auto_mode;
     int poll_ms;
     int heal_max;
+    int cut_charging;
+    int restore_charge;
     char gadget[PATH_MAX];
     char function[64];
     char udc[64];
@@ -91,6 +96,7 @@ struct app {
     char config_path[PATH_MAX];
     unsigned int request_seq;
     int dac_on;
+    int charge_cut;
     int no_props;
     volatile sig_atomic_t stop;
 };
@@ -428,6 +434,48 @@ static int write_attr(const char *dir, const char *name, const char *value)
     return write_text(path, value);
 }
 
+static int set_charge_limit(int value)
+{
+    char buf[32];
+
+    snprintf(buf, sizeof(buf), "%d\n", value);
+    return write_text(CHARGE_LIMIT_PATH, buf);
+}
+
+/*
+ * USB VBUS/charger noise couples into the phone's analog output as a
+ * constant ~1 kHz whine when the UAC2 path keeps the codec/amp active.
+ * The USB HAL domain may write the charger current limit, so cut charging
+ * while UAC2 is bound and restore it when UAC2 is disabled.
+ */
+static void cut_usb_charging(struct app *a)
+{
+    if (!a->cfg.cut_charging || a->charge_cut)
+        return;
+    if (set_charge_limit(0) == 0) {
+        a->charge_cut = 1;
+        klog("USB charging cut for clean UAC2 audio");
+    } else {
+        klog("cannot cut USB charging: %s", strerror(errno));
+    }
+}
+
+static void restore_usb_charging(struct app *a)
+{
+    int value;
+
+    if (!a->charge_cut)
+        return;
+    value = a->cfg.restore_charge >= 0 ? a->cfg.restore_charge :
+            DEFAULT_RESTORE_CHARGE;
+    if (set_charge_limit(value) == 0) {
+        a->charge_cut = 0;
+        klog("USB charging restored to %d", value);
+    } else {
+        klog("cannot restore USB charging: %s", strerror(errno));
+    }
+}
+
 static int write_attr_int(const char *dir, const char *name, int value)
 {
     char buf[32];
@@ -485,6 +533,8 @@ static void config_defaults(struct config *c)
     c->auto_mode = 1;
     c->poll_ms = DEFAULT_POLL_MS;
     c->heal_max = DEFAULT_HEAL_MAX;
+    c->cut_charging = 1;
+    c->restore_charge = DEFAULT_RESTORE_CHARGE;
     copy_str(c->gadget, sizeof(c->gadget), DEFAULT_GADGET);
     copy_str(c->function, sizeof(c->function), DEFAULT_FUNC);
     copy_str(c->udc, sizeof(c->udc), DEFAULT_UDC);
@@ -554,6 +604,10 @@ static int load_config(struct config *c, const char *path)
             parse_int(value, &c->poll_ms);
         } else if (!strcmp(key, "heal_max")) {
             parse_int(value, &c->heal_max);
+        } else if (!strcmp(key, "cut_charging")) {
+            parse_int(value, &c->cut_charging);
+        } else if (!strcmp(key, "restore_charge")) {
+            parse_int(value, &c->restore_charge);
         }
     }
 
@@ -985,6 +1039,7 @@ static int disable_gadget(struct app *a)
     int was_on;
     int ret;
 
+    restore_usb_charging(a);
     was_on = a->dac_on;
     set_dac(a, 0);
     if (was_on && !a->no_props)
@@ -1341,6 +1396,7 @@ static int run_auto(struct app *a)
         publish_state("error:startup");
     } else {
         heals = 0;
+        cut_usb_charging(a);
     }
 
     while (!a->stop) {
@@ -1400,10 +1456,12 @@ static int run_auto(struct app *a)
         }
 
         klog("USB composition changed, re-applying UAC2");
-        if (apply_gadget(a) < 0)
+        if (apply_gadget(a) < 0) {
             publish_state("error:reapply");
-        else
+        } else {
             heals++;
+            cut_usb_charging(a);
+        }
     }
 
     return 0;
@@ -1460,6 +1518,8 @@ int main(int argc, char **argv)
     if (once) {
         if (!strcmp(once, "on") || !strcmp(once, "enable")) {
             ret = apply_gadget(&app);
+            if (ret == 0)
+                cut_usb_charging(&app);
         } else if (!strcmp(once, "off") || !strcmp(once, "disable")) {
             ret = disable_gadget(&app);
         } else if (!strcmp(once, "status")) {
