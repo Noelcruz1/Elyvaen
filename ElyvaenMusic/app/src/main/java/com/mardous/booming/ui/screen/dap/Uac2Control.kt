@@ -144,8 +144,8 @@ object Uac2Control {
     fun refresh(context: Context): LinkStatus {
         val enabled = isEnabled(context)
         var rate = 0
-        var native = true
-        var modeNative = true
+        var native = false
+        var modeNative = false
         var hostVolume = 0
         var hostMute = false
         var streaming = false
@@ -226,6 +226,11 @@ object Uac2Control {
         val playbackService = Intent(context, Uac2PlaybackService::class.java)
         return runCatching {
             if (enabled) {
+                // First start uses the stable 48 kHz compatibility path.
+                // Native host rate remains an explicit opt-in in the panel.
+                if (!File(MODE_FILE).exists()) {
+                    setQuality(context, false)
+                }
                 // Do this before linking UAC2: Windows only loads its audio
                 // driver when the ADB interface is not part of the gadget.
                 applyAdbMode(context, true)

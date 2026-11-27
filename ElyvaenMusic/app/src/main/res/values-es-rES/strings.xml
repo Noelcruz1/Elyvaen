@@ -434,6 +434,7 @@
     <string name="dap_uac2_compat">48 kHz estable</string>
     <string name="dap_uac2_compat_short">48 kHz</string>
     <string name="dap_uac2_quality">Calidad</string>
+    <string name="dap_uac2_quality_hint">48 kHz es el modo estable recomendado. Nativo usa la frecuencia del host (hasta 192 kHz) y necesita un puerto USB 2.0 de alta velocidad.</string>
     <string name="dap_uac2_quality_error">No se pudo cambiar el modo de calidad</string>
     <string name="dap_uac2_linked">Conectado · %1$s · %2$s</string>
     <string name="dap_uac2_waiting_rate">Esperando audio del host · %1$s</string>

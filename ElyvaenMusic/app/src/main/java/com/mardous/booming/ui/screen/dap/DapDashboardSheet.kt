@@ -398,6 +398,11 @@ fun DapDashboardSheet(
                                     }
                                 )
                             }
+                            Text(
+                                text = stringResource(R.string.dap_uac2_quality_hint),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier.fillMaxWidth()

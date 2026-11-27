@@ -11,6 +11,7 @@ import android.media.AudioTrack
 import android.media.PlaybackParams
 import android.os.Build
 import android.os.IBinder
+import android.os.Process
 import android.os.SystemClock
 import android.util.Log
 import java.io.File
@@ -22,14 +23,17 @@ import kotlin.math.abs
 /**
  * Plays the UAC2 FIFO through AudioTrack at the host's native rate.
  *
- * elyvaen-uac2d captures the USB gadget at 44.1/48/96/192 kHz, converts to
+ * elyvaen-uac2d captured the USB gadget at 44.1/48/96/192 kHz, converts to
  * float32 and writes it unchanged to /data/local/tmp/elyvaen_uac2.pcm. The
  * rate is published in /data/local/tmp/elyvaen_uac2.rate. This service
  * creates an AudioTrack at that rate (up to 192 kHz), so the Android HAL and
  * the WCD9370 codec run at the native rate instead of a forced 48 kHz.
  *
- * A small playback-speed trim compensates the host/DAC clock drift; the
- * pitch stays at 1.0 and the correction is limited to ±500 ppm.
+ * The service fills half of a ~200 ms AudioTrack buffer before calling
+ * play(), then keeps the host/DAC clock drift centered with a tiny
+ * pitch-preserving-free speed trim. The trim uses speed == pitch, which
+ * avoids Android's WSOLA time-stretcher; with pitch == speed the correction
+ * is an ordinary low-ratio resample (at most 500 ppm, inaudible).
  */
 class Uac2PlaybackService : Service() {
     companion object {
@@ -42,10 +46,18 @@ class Uac2PlaybackService : Service() {
         private const val CHANNEL_ID = "elyvaen_uac2"
         private const val NOTIFICATION_ID = 225
         private const val MAX_RATE = 192000
+        private const val TARGET_BUFFER_MS = 200
+        private const val PREFILL_DIVISOR = 2
+        private const val RATE_CHECK_MS = 250L
+        private const val TRIM_INTERVAL_MS = 250L
+        private const val TRIM_STEP = 0.0003
+        private const val TRIM_EPSILON = 0.00002
     }
 
     @Volatile
     private var running = false
+    @Volatile
+    private var input: FileInputStream? = null
     private var thread: Thread? = null
     private var track: AudioTrack? = null
 
@@ -88,19 +100,24 @@ class Uac2PlaybackService : Service() {
             .build()
     }
 
-    private fun readRate(): Int {
-        val rate = runCatching {
+    private fun readRateOrNull(): Int? {
+        return runCatching {
             File(RATE_FILE).readText().trim().toInt()
-        }.getOrDefault(FALLBACK_RATE)
-        return if (rate in 8000..MAX_RATE) rate else FALLBACK_RATE
+        }.getOrNull()?.takeIf { it in 8000..MAX_RATE }
     }
+
+    private fun readRate(): Int = readRateOrNull() ?: FALLBACK_RATE
 
     private fun buildTrack(rate: Int): AudioTrack {
         val min = AudioTrack.getMinBufferSize(
             rate,
             AudioFormat.CHANNEL_OUT_STEREO,
             AudioFormat.ENCODING_PCM_FLOAT
-        )
+        ).coerceAtLeast(0)
+        val desired = (rate.toLong() * TARGET_BUFFER_MS / 1000L)
+            .toInt()
+            .coerceAtLeast(1) * FRAME_BYTES
+        val bufferBytes = maxOf(min * 4, desired, 32768)
         return AudioTrack.Builder()
             .setAudioAttributes(
                 AudioAttributes.Builder()
@@ -115,117 +132,154 @@ class Uac2PlaybackService : Service() {
                     .setChannelMask(AudioFormat.CHANNEL_OUT_STEREO)
                     .build()
             )
-            .setBufferSizeInBytes(maxOf(min * 4, 32768))
+            .setBufferSizeInBytes(bufferBytes)
+            .setPerformanceMode(AudioTrack.PERFORMANCE_MODE_POWER_SAVING)
             .setTransferMode(AudioTrack.MODE_STREAM)
             .build()
     }
 
     private fun playLoop() {
+        Process.setThreadPriority(Process.THREAD_PRIORITY_URGENT_AUDIO)
         while (running) {
-            var input: FileInputStream? = null
+            var stream: FileInputStream? = null
             var audio: AudioTrack? = null
+            var watcher: Thread? = null
             var rate = FALLBACK_RATE
             try {
-                // Blocks until the daemon opens the FIFO writer. The daemon
+                // Blocks until the daemon creates/opens the FIFO. The daemon
                 // publishes the rate before opening, so read it afterwards.
                 val inStream = FileInputStream(FIFO)
+                stream = inStream
                 input = inStream
                 rate = readRate()
-                var current = buildTrack(rate)
-                audio = current
-                synchronized(this) { track = current }
-                current.play()
+
+                val player = buildTrack(rate)
+                audio = player
+                synchronized(this) { track = player }
                 Log.i(TAG, "fifo connected at $rate Hz")
 
-                val buf = ByteArray(32768)
+                watcher = Thread({
+                    while (running && !Thread.currentThread().isInterrupted) {
+                        try {
+                            Thread.sleep(RATE_CHECK_MS)
+                        } catch (_: InterruptedException) {
+                            break
+                        }
+                        val newRate = readRateOrNull()
+                        if (newRate != null && newRate != rate) {
+                            Log.i(TAG, "host rate $rate -> $newRate")
+                            // Unblock the reader; the loop reopens with the new
+                            // rate and a freshly prefilled AudioTrack.
+                            runCatching { inStream.close() }
+                            break
+                        }
+                    }
+                }, "elyvaen-uac2-rate").also {
+                    it.isDaemon = true
+                    it.start()
+                }
+
+                val buf = ByteArray(16384)
                 val bb = ByteBuffer.allocateDirect(buf.size)
                     .order(ByteOrder.LITTLE_ENDIAN)
+                var carry = 0
                 var writtenFrames = 0L
-                var lastRateCheck = SystemClock.elapsedRealtime()
+                var started = false
+                var appliedRatio = 1.0
+                var lastTrim = 0L
 
                 while (running) {
-                    val now = SystemClock.elapsedRealtime()
-                    if (now - lastRateCheck >= 200) {
-                        val newRate = readRate()
-                        if (newRate != rate) {
-                            Log.i(TAG, "host rate $rate -> $newRate")
-                            try {
-                                current.stop()
-                            } catch (_: Throwable) {
-                            }
-                            current.release()
-                            // Drop buffered samples of the old rate.
-                            val available = runCatching {
-                                inStream.available()
-                            }.getOrDefault(0)
-                            if (available > 0) {
-                                runCatching { inStream.skip(available.toLong()) }
-                            }
-                            rate = newRate
-                            current = buildTrack(rate)
-                            audio = current
-                            synchronized(this) { track = current }
-                            current.play()
-                            writtenFrames = 0L
-                        }
-                        lastRateCheck = now
-                    }
-
-                    val n = inStream.read(buf)
+                    val n = inStream.read(buf, carry, buf.size - carry)
                     if (n <= 0) {
                         break
                     }
-                    val usable = n and (FRAME_BYTES - 1).inv()
+                    val total = carry + n
+                    val usable = total and (FRAME_BYTES - 1).inv()
+                    carry = total - usable
+                    if (carry > 0) {
+                        System.arraycopy(buf, usable, buf, 0, carry)
+                    }
                     if (usable <= 0) {
                         continue
                     }
+
                     bb.clear()
                     bb.put(buf, 0, usable)
                     bb.flip()
-
-                    // Drift trim: keep the FIFO + AudioTrack queue near half
-                    // of its capacity. The pitch is fixed at 1.0.
-                    val available = runCatching {
-                        inStream.available()
-                    }.getOrDefault(0)
-                    val head = current.playbackHeadPosition.toLong() and
-                            0xffffffffL
-                    val buffered = (writtenFrames - head) and 0xffffffffL
-                    val fill = available / FRAME_BYTES + buffered
-                    val target = (current.bufferSizeInFrames / 2 + 4096)
-                        .toLong().coerceAtLeast(4096L)
-                    val delta = (fill - target).toDouble()
-                    val speed = (1.0 + delta / target.toDouble() * 0.0002)
-                        .coerceIn(0.9995, 1.0005)
-                    if (abs(speed - 1.0) > 1e-6) {
-                        runCatching {
-                            current.playbackParams = PlaybackParams()
-                                .setSpeed(speed.toFloat())
-                                .setPitch(1.0f)
-                        }
-                    }
-
                     while (bb.hasRemaining() && running) {
-                        val written = current.write(
+                        val written = player.write(
                             bb,
                             bb.remaining(),
                             AudioTrack.WRITE_BLOCKING
                         )
                         if (written <= 0) {
-                            break
+                            throw IllegalStateException("AudioTrack.write=$written")
                         }
+                        writtenFrames += written / FRAME_BYTES
                     }
-                    writtenFrames += usable / FRAME_BYTES
+
+                    if (!started) {
+                        val prefillFrames = (player.bufferSizeInFrames / PREFILL_DIVISOR)
+                            .coerceAtLeast(rate / 25)
+                        if (writtenFrames >= prefillFrames) {
+                            player.play()
+                            started = true
+                            Log.i(
+                                TAG,
+                                "playing at $rate Hz, prefill=$prefillFrames frames"
+                            )
+                        }
+                        continue
+                    }
+
+                    val now = SystemClock.elapsedRealtime()
+                    if (now - lastTrim >= TRIM_INTERVAL_MS) {
+                        val cap = player.bufferSizeInFrames.toLong()
+                        val head = player.playbackHeadPosition.toLong() and
+                                0xffffffffL
+                        val diff = writtenFrames - head
+                        val buffered = if (diff in 0..cap * 2L) diff else cap / 2
+                        val low = cap / 4
+                        val high = cap * 3 / 4
+                        val ratio = if (buffered in low..high) {
+                            1.0
+                        } else {
+                            val target = cap / 2.0
+                            val error = (buffered - target) / target
+                            (1.0 + error * TRIM_STEP)
+                                .coerceIn(0.9995, 1.0005)
+                        }
+                        if (abs(ratio - appliedRatio) > TRIM_EPSILON) {
+                            runCatching {
+                                player.playbackParams = PlaybackParams()
+                                    .setSpeed(ratio.toFloat())
+                                    // speed == pitch avoids WSOLA/Sonic; this
+                                    // is a tiny resample, not time-stretch.
+                                    .setPitch(ratio.toFloat())
+                            }
+                            appliedRatio = ratio
+                        }
+                        lastTrim = now
+                    }
                 }
             } catch (t: Throwable) {
-                Log.w(TAG, "fifo error: $t")
+                if (running) {
+                    Log.w(TAG, "fifo error: $t")
+                }
             } finally {
+                watcher?.interrupt()
+                if (input === stream) {
+                    input = null
+                }
                 if (audio != null) {
                     try {
                         audio.stop()
                     } catch (_: Throwable) {
                     }
-                    audio.release()
+                    try {
+                        audio.release()
+                    } catch (_: Throwable) {
+                    }
                     synchronized(this) {
                         if (track === audio) {
                             track = null
@@ -233,7 +287,7 @@ class Uac2PlaybackService : Service() {
                     }
                 }
                 try {
-                    input?.close()
+                    stream?.close()
                 } catch (_: Throwable) {
                 }
             }
@@ -249,15 +303,20 @@ class Uac2PlaybackService : Service() {
 
     override fun onDestroy() {
         running = false
+        runCatching { input?.close() }
+        thread?.interrupt()
+        runCatching { thread?.join(500) }
         synchronized(this) {
             try {
                 track?.stop()
             } catch (_: Throwable) {
             }
-            track?.release()
+            try {
+                track?.release()
+            } catch (_: Throwable) {
+            }
             track = null
         }
-        thread?.interrupt()
         super.onDestroy()
     }
 
