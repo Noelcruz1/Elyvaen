@@ -2300,13 +2300,16 @@ static int write_fifo_all(int fd, const void *buf, size_t len)
 static int write_rate_file(const char *path, int rate)
 {
     char buf[32];
+    char tmp[PATH_MAX];
     int n;
     int fd;
 
     if (!path || !*path)
         return 0;
     n = snprintf(buf, sizeof(buf), "%d\n", rate);
-    fd = open(path, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0666);
+    if (snprintf(tmp, sizeof(tmp), "%s.tmp", path) >= (int)sizeof(tmp))
+        return -1;
+    fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0666);
     if (fd < 0) {
         log_msg("uac2d: rate file %s: %s\n", path, strerror(errno));
         return -1;
@@ -2314,6 +2317,11 @@ static int write_rate_file(const char *path, int rate)
     (void)fchmod(fd, 0666);
     (void)write(fd, buf, (size_t)n);
     close(fd);
+    if (rename(tmp, path) < 0) {
+        log_msg("uac2d: rate file rename %s: %s\n", path, strerror(errno));
+        unlink(tmp);
+        return -1;
+    }
     return 0;
 }
 
@@ -2406,6 +2414,7 @@ static int run_fifo(struct opts *o)
     int card_count;
     int cap_card;
     int cap_fmt = -1;
+    int cap_periods;
     int period;
     int open_rate;
     int ret;
@@ -2431,6 +2440,7 @@ static int run_fifo(struct opts *o)
     time_t next_stats;
     unsigned long long out_frames_total = 0;
     unsigned long long fifo_errors = 0;
+    unsigned long long xruns_in = 0;
     int host_volume = 0;
     int host_mute = 0;
     int32_t host_gain = 32768;
@@ -2452,8 +2462,10 @@ static int run_fifo(struct opts *o)
     }
     mode_state = read_mode_file(mode_file);
     if (mode_state < 0) {
-        if (write_mode_file(mode_file, 1) == 0)
-            mode_state = 1;
+        // Default to the stable 48 kHz compatibility path. Native host rate
+        // is still available from the DAP panel when explicitly selected.
+        if (write_mode_file(mode_file, 0) == 0)
+            mode_state = 0;
     }
     if (mode_state == 0) {
         native_mode = 0;
@@ -2484,13 +2496,24 @@ static int run_fifo(struct opts *o)
         log_msg("uac2d: fifo: live host rate %d (config %d)\n",
                 open_rate, o->rate);
     }
+    // More capture periods give the dwc3/UAC2 path room for USB scheduling
+    // jitter without touching the kernel's 64 KiB ALSA buffer limit.
+    cap_periods = o->periods < 12 ? 12 : o->periods;
     ret = open_pcm(&cap, cap_card, o->capture_device, 1, open_rate,
-                   channels, o->periods, period, 0, FMT_S24_3, &cap_fmt);
+                   channels, cap_periods, period, 0, FMT_S24_3, &cap_fmt);
+    if (ret < 0) {
+        cap_periods = o->periods;
+        ret = open_pcm(&cap, cap_card, o->capture_device, 1, open_rate,
+                       channels, cap_periods, period, 0, FMT_S24_3, &cap_fmt);
+    }
     if (ret < 0) {
         log_msg("uac2d: fifo: cannot open capture card %d: %s\n",
                 cap_card, strerror(-ret));
         return ret;
     }
+    if (pcm_set_sw_params(&cap, 1) < 0)
+        log_msg("uac2d: fifo: capture sw_params failed: %s\n",
+                strerror(errno));
     period = cap.period_frames;
     out_rate = native_mode ? cap.rate : fixed_rate;
     native = native_mode || out_rate == cap.rate;
@@ -2519,8 +2542,8 @@ static int run_fifo(struct opts *o)
     write_status_file(status_file, out_rate, native_mode, native,
                       host_volume, host_mute, 0, 0, 0);
 
-    if (pcm_prepare(&cap) < 0 || pcm_start(&cap) < 0) {
-        log_msg("uac2d: fifo: cannot start capture\n");
+    if (pcm_prepare(&cap) < 0) {
+        log_msg("uac2d: fifo: cannot prepare capture\n");
         free(capbuf);
         free(outbuf);
         close(cap.fd);
@@ -2545,6 +2568,22 @@ static int run_fifo(struct opts *o)
                     log_msg("uac2d: fifo: waiting for reader on %s\n",
                             fifo);
                 msleep(250);
+                continue;
+            }
+            {
+                int pipe_size = fcntl(fifo_fd, F_SETPIPE_SZ, 262144);
+
+                if (pipe_size < 0)
+                    pipe_size = fcntl(fifo_fd, F_SETPIPE_SZ, 131072);
+                if (pipe_size > 0)
+                    log_msg("uac2d: fifo pipe %d bytes\n", pipe_size);
+            }
+            pcm_drop(&cap);
+            pcm_prepare(&cap);
+            if (pcm_start(&cap) < 0) {
+                log_msg("uac2d: fifo: cannot start capture\n");
+                close(fifo_fd);
+                fifo_fd = -1;
                 continue;
             }
             log_msg("uac2d: fifo: reader connected\n");
@@ -2632,6 +2671,7 @@ static int run_fifo(struct opts *o)
                     out_frames_total += (unsigned long long)out_frames;
                 }
             } else if (n == -EPIPE) {
+                xruns_in++;
                 pcm_prepare(&cap);
                 pcm_start(&cap);
             } else if (n < 0 && n != -EAGAIN) {
@@ -2662,16 +2702,25 @@ static int run_fifo(struct opts *o)
             if (live_rate > 0 && live_rate != cap.rate) {
                 log_msg("uac2d: fifo: host rate %d -> %d\n",
                         cap.rate, live_rate);
+                // Close the FIFO first so the app's blocking read sees EOF
+                // and reopens with the new rate instead of staying hung.
+                if (fifo_fd >= 0) {
+                    close(fifo_fd);
+                    fifo_fd = -1;
+                }
                 pcm_drop(&cap);
                 close(cap.fd);
                 cap.fd = -1;
                 ret = open_pcm(&cap, cap_card, o->capture_device, 1,
-                               live_rate, channels, o->periods, 0, 0,
+                               live_rate, channels, cap_periods, 0, 0,
                                FMT_S24_3, &cap_fmt);
                 if (ret < 0) {
                     log_msg("uac2d: fifo: reopen: %s\n", strerror(-ret));
                     break;
                 }
+                if (pcm_set_sw_params(&cap, 1) < 0)
+                    log_msg("uac2d: fifo: reopen sw_params failed: %s\n",
+                            strerror(errno));
                 period = cap.period_frames;
                 out_rate = native_mode ? cap.rate : fixed_rate;
                 native = native_mode || out_rate == cap.rate;
@@ -2688,12 +2737,12 @@ static int run_fifo(struct opts *o)
                     break;
                 memset(&rs, 0, sizeof(rs));
                 write_rate_file(rate_file, out_rate);
-                if (pcm_prepare(&cap) < 0 || pcm_start(&cap) < 0)
+                if (pcm_prepare(&cap) < 0)
                     break;
                 log_msg("uac2d: fifo: now out=%d Hz%s\n", out_rate,
                         native ? " native" : " resampled");
                 write_status_file(status_file, out_rate, native_mode, native,
-                                  host_volume, host_mute, 1,
+                                  host_volume, host_mute, 0,
                                   out_frames_total, fifo_errors);
             }
             if (uac2_control_value(cap.card, "UAC2 Host Volume",
@@ -2708,8 +2757,9 @@ static int run_fifo(struct opts *o)
         }
 
         if (time(NULL) >= next_stats) {
-            log_msg("uac2d: fifo stats out_frames=%llu fifo_errors=%llu\n",
-                    out_frames_total, fifo_errors);
+            log_msg("uac2d: fifo stats out_frames=%llu fifo_errors=%llu "
+                    "xruns_in=%llu\n",
+                    out_frames_total, fifo_errors, xruns_in);
             next_stats = time(NULL) + 60;
         }
     }
