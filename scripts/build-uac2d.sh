@@ -26,19 +26,21 @@ find_cross_cc() {
 
 mkdir -p "$OUT" "$ROOT/payload/vendor/bin/hw"
 
-HOST_CC=${HOST_CC:-}
-if [ -z "$HOST_CC" ]; then
-    if command -v cc >/dev/null 2>&1; then
-        HOST_CC=cc
-    elif [ -x /workspace/Android/tools/bin/hostcc ]; then
-        HOST_CC=/workspace/Android/tools/bin/hostcc
-    else
-        echo "Falta un compilador host (cc o /workspace/Android/tools/bin/hostcc)." >&2
-        exit 1
+if [ "${SKIP_HOST_SELFTEST:-0}" != "1" ]; then
+    HOST_CC=${HOST_CC:-}
+    if [ -z "$HOST_CC" ]; then
+        if command -v cc >/dev/null 2>&1; then
+            HOST_CC=cc
+        elif [ -x /workspace/Android/tools/bin/hostcc ]; then
+            HOST_CC=/workspace/Android/tools/bin/hostcc
+        else
+            echo "Falta un compilador host (cc o /workspace/Android/tools/bin/hostcc)." >&2
+            exit 1
+        fi
     fi
+    $HOST_CC -O2 -Wall -Wextra -Werror -o "$HOST_BIN" "$SRC" -lm
+    "$HOST_BIN" --self-test
 fi
-$HOST_CC -O2 -Wall -Wextra -Werror -o "$HOST_BIN" "$SRC" -lm
-"$HOST_BIN" --self-test
 
 CROSS_CC=$(find_cross_cc) || {
     echo "Falta el cross compiler aarch64-linux-musl-gcc."
