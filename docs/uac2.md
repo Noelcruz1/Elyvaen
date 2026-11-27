@@ -178,3 +178,52 @@ siendo imposible: usar un puerto/cable USB 2.0 de alta velocidad.
 La app ya automatiza esto: al activar UAC2 desde el Panel DAP guarda el
 estado de ADB, lo desactiva y lo restaura al apagar UAC2. Si ADB se reactiva
 manualmente, el panel muestra el aviso.
+
+## Corrección de ruido y 192 kHz (2026-11-27)
+
+El usuario reportó que UAC2 sonaba “sucio”. Los logs del 27-Nov mostraron
+dos problemas distintos:
+
+- a 48 kHz, `AudioTrack` arrancaba sin prefill y el HAL registraba
+  `out_write: underrun(10/11)` y `BUFFER TIMEOUT`;
+- al cambiar el host a 192 kHz, el daemon reabría la captura pero el FIFO
+  seguía abierto; la app quedaba bloqueada en `read()` y el status mostraba
+  `frames=0` durante dos minutos.
+
+También se identificó que el “drift trim” usaba
+`PlaybackParams.setSpeed()` con `setPitch(1.0)`, lo que activa el
+time-stretcher WSOLA/Sonic de AudioFlinger; eso puede sonar metálico o sucio
+aunque no haya underruns.
+
+Cambios aplicados:
+
+- **App (`Uac2PlaybackService`)**: buffer de ~200 ms, prefill del 50 % antes
+  de `play()`, prioridad `THREAD_PRIORITY_URGENT_AUDIO`, contabilidad de
+  frames realmente escritos, watchdog de cambio de tasa y trim con
+  `speed == pitch` y banda muerta (sin WSOLA). El modo por defecto es
+  **48 kHz estable**; el nativo queda como opción explícita.
+- **Daemon (`uac2d.c`)**: modo por defecto 48 kHz, 12 periodos de captura,
+  `pcm_set_sw_params`, pipe FIFO de 256 KiB, arranque de captura solo cuando
+  la app abre el FIFO, cierre del FIFO al cambiar de tasa (EOF limpio),
+  `rate_file` atómico y contador de xruns.
+- **Payload**: nuevo `/vendor/bin/hw/elyvaen-uac2d` y APK **1.16.1**
+  (`a89d946d…`).
+
+Verificación en el Moto G51 con el binario de prueba:
+
+- 48 kHz: `playing at 48000 Hz, prefill=5784 frames`, sin underruns al
+  arrancar; el daemon entregó 241 920 frames en 5 s.
+- 192 kHz: la app detectó el cambio, reabrió el FIFO y reprodujo con
+  `playing at 192000 Hz, prefill=23064 frames`; 912 124 frames y sin
+  underruns. Los 3 `fifo_errors` son los cierres esperados durante el cambio
+  de tasa.
+- El Line-In del NAS no recibió el tono (la captura era solo ruido de fondo),
+  así que la prueba analógica/ground-loop sigue pendiente de un cable
+  conectado al PC correcto.
+
+**Estado de despliegue:** la app 1.16.1 está instalada y el modo de calidad
+está en 48 kHz. El daemon corregido está en `payload` y en
+`/data/local/tmp/elyvaen-uac2d-test` para pruebas manuales; el super actual
+sigue usando el daemon antiguo hasta que se apruebe un flash. En el uso normal
+a 48 kHz basta con la app nueva; para 192 kHz persistente hay que flashear el
+nuevo super o sustituir el binario de `/vendor`.

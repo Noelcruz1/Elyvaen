@@ -6,6 +6,12 @@ Fecha: 2026-11-15. Regla vigente: **no flashear de nuevo sin aprobación explíc
 > flasheado y UAC2 enumerando en el host. Queda la prueba de audio real desde
 > un PC. `docs/handoff-uac2.md` contiene el diagnóstico histórico; no repetirlo.
 >
+> **Actualización 2026-11-27:** UAC2 probado desde PC. Se corrigió el ruido
+> digital del puente (prefill, buffer 200 ms, sin WSOLA, watchdog de tasa) y
+> se preparó un daemon con 12 periodos, FIFO de 256 KiB y cierre limpio al
+> cambiar a 192 kHz. App **1.16.1** instalada; el super con el daemon nuevo
+> sigue pendiente de aprobación de flash. Detalle en `docs/uac2.md`.
+>
 > **Nuevo (2026-11-15):** app Elyvaen (fork de Booming) + puente de
 > propiedades UAC2. Ver "App Elyvaen + puente UAC2" al final del documento.
 > Aún no se ha flasheado.

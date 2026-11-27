@@ -6,6 +6,7 @@
 - Elyvaen DAP / BoomingMusic 1.4.2 personalizado y HeliBoard integrados como apps de sistema.
 - Elyvaen Music 1.15.0: streaming completo opcional de Deezer (SmartLogin + `gcast/streamUrls`), token cifrado, cola remota y atribución MIT de Pixer.
 - Elyvaen Music 1.16.0: selector persistente de calidad Deezer (FLAC, MP3 320 y MP3 128) con fallback automático.
+- Elyvaen Music 1.16.1: corrección del puente UAC2 (prefill, buffer de 200 ms, sin WSOLA, watchdog de tasa, 48 kHz estable por defecto) y daemon con captura de 12 periodos, FIFO de 256 KiB y cierre limpio al cambiar de frecuencia.
 - Audio 24/192, Pure Audio y LOHIFI en `vendor`.
 - Animación Aurora, keylayout del botón Assistant, DND, batería al 80 %, 120 Hz y kiosco.
 - Debloat conservador de apps; sin tocar librerías ni HALs.
